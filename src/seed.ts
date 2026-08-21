@@ -1,7 +1,7 @@
-import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, Person, Rule, Task, TrackerEntry } from "./types";
+import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
@@ -382,6 +382,148 @@ const audit: AppState["audit"] = [
   { id: "a11", at: ts(-7), by: "hfmm-16", module: "EIBOR", action: "EIBOR published", target: d(-1), detail: "3M fix updated from Central Bank UAE feed" },
 ];
 
+/* ================================================================
+   VRM PIPELINE REGISTER (dataset 2) — merged into cases & leads.
+   Amounts are finance amounts; property value derived at 80% LTV.
+   ================================================================ */
+const TD_LAST = TRACKER_DATES[TRACKER_DATES.length - 1];
+let ax = 0;
+
+type Reg = { n: string; b: string; dl?: string; st?: string; loan?: number; opened?: number; vrm?: string; spo?: string; pa?: string; rename?: string; hold?: boolean; note?: string };
+const REG: Reg[] = [
+  { n: "Dharpan Randhawa", b: "b-adib", loan: 1328445, vrm: "hfmm-09", spo: "hfmm-03", rename: "Dharpan Randhawa & Mrs. Amanda", note: "Off-plan handover — waiting for the title deed." },
+  { n: "Chandan Marianathan Rajah", b: "b-dib", loan: 3960000, vrm: "hfmm-07", spo: "hfmm-06", pa: "24 Jun 2026", note: "Resale — property not finalised." },
+  { n: "Parvez Ahmed", b: "b-dib", loan: 1120000, vrm: "hfmm-09", spo: "hfmm-06", pa: "2 Aug 2026", note: "As per realtor, liability letter will be shared maximum by tomorrow." },
+  { n: "Parvez Ahmed", b: "b-adib", loan: 920000, vrm: "hfmm-09", spo: "hfmm-03", pa: "13 Jul 2026", note: "Buyout + Equity — FOL signing done 10-Aug-2026." },
+  { n: "Yash Pandya", b: "b-dib", vrm: "hfmm-07", spo: "hfmm-06", hold: true, note: "Case on hold — property not finalised." },
+  { n: "Anna Larina", b: "b-rak", loan: 1128000, vrm: "hfmm-09", spo: "hfmm-05", note: "Loan settlement done — waiting for the title deed." },
+  { n: "Ihab Abdulla Jawad", b: "b-cbd", dl: "80% Resale", loan: 3200000, vrm: "hfmm-09", spo: "hfmm-05", note: "Pre-approval in credit — LMF2807260657." },
+  { n: "Ihab Abdulla Jawad", b: "b-cbd", dl: "419", loan: 1320000, vrm: "hfmm-09", spo: "hfmm-05" },
+  { n: "Ihab Abdulla Jawad", b: "b-cbd", dl: "420", loan: 1320000, vrm: "hfmm-09", spo: "hfmm-05" },
+  { n: "Ihab Abdulla Jawad", b: "b-enbd", dl: "80% Resale", loan: 3200000, vrm: "hfmm-09", spo: "hfmm-03", note: "Query received — replied by Kiran Sir." },
+  { n: "Ihab Abdulla Jawad", b: "b-adib", loan: 3200000, vrm: "hfmm-09", spo: "hfmm-03", note: "Pre-approval received for 65%." },
+  { n: "Ihab Abdulla Jawad", b: "b-fab", dl: "80% Resale", loan: 3200000, vrm: "hfmm-11", spo: "hfmm-03", note: "Follow-up mail sent for pre-approval." },
+  { n: "Ihab Abdulla Jawad", b: "b-mashreq", dl: "80%", loan: 3200000, vrm: "hfmm-09", spo: "hfmm-05", note: "Follow-up mail sent for pre-approval." },
+  { n: "Mohamed Hengazy", b: "b-adib", loan: 1200000, opened: -38, vrm: "hfmm-07", spo: "hfmm-03", pa: "13 Jul 2026", rename: "Mohammed Hegazy Ibrahim (Tariq Ref)", note: "Handover payment — account opening pending, will be done tomorrow." },
+  { n: "Rona Nadeem", b: "b-adib", loan: 1072000, opened: -58, vrm: "hfmm-08", spo: "hfmm-03", note: "Resale handover — waiting for the seller's title deed." },
+  { n: "Avinash Nagar", b: "b-adib", st: "BOOKING", loan: 2640000, opened: -57, vrm: "hfmm-07", spo: "hfmm-03", pa: "9 Jul 2026", note: "Buyout + Equity — settlement at CBD on 14-Aug-2026." },
+  { n: "Avinash Nagar", b: "b-adib", st: "VALUATION", loan: 1200000, opened: -57, vrm: "hfmm-07", spo: "hfmm-03", pa: "7 Jul 2026", note: "New purchase — on hold: handover notice pending from developer." },
+  { n: "Akram Shah", b: "b-adib", loan: 2800000, opened: -40, vrm: "hfmm-07", spo: "hfmm-06", hold: true, note: "Hold until AECB issue is resolved (31-Jul)." },
+  { n: "Akram Shah", b: "b-cbd", loan: 2800000, opened: -40, vrm: "hfmm-07", spo: "hfmm-06", note: "Hold until AECB issue is resolved (31-Jul)." },
+  { n: "Karolina & Angie", b: "b-dib", loan: 1320000, opened: -35, vrm: "hfmm-07", spo: "hfmm-06", pa: "10 Aug 2026" },
+  { n: "Andrei Umnov", b: "b-cbd", loan: 1260000, opened: -29, vrm: "hfmm-08", spo: "hfmm-05", note: "File to be submitted to CBD via Prypco — awaiting documents & e-signatures." },
+  { n: "Jumana Hytham Zin Aldin", b: "b-dib", st: "FOL", loan: 334920, opened: -22, vrm: "hfmm-07", spo: "hfmm-06", note: "Handover payment — valuation received by email; pre-approval in, FOL awaited." },
+  { n: "Sheree Anne", b: "b-dib", loan: 1560000, opened: -14, vrm: "hfmm-08", spo: "hfmm-06", rename: "Sheree Anne Serilla Sumpay (Al Reef 3 Bed)", note: "Al Reef 3-bed — file submitted 12-Aug; conditional approval needed." },
+  { n: "Saeed Shah", b: "b-adib", dl: "Al Reef", loan: 1200000, vrm: "hfmm-07", spo: "hfmm-03", pa: "16 Jul 2026", note: "Pre-approval received with conditions — valuation payment details shared; awaiting payment proof." },
+  { n: "Saeed Shah", b: "b-adib", dl: "Water Edge", loan: 1200000, vrm: "hfmm-07", spo: "hfmm-03", note: "Submission done via SPO — waiting for Unit Verification Certificate; reminder sent 15-Jul." },
+  { n: "Saeed Shah", b: "b-dib", loan: 2560000, vrm: "hfmm-07", spo: "hfmm-06", note: "Resale — file submitted on 19-Aug to bank." },
+  { n: "Ricardo Laborda", b: "b-adib", loan: 2080000, opened: -40, vrm: "hfmm-09", spo: "hfmm-03", note: "Buyout + Equity — VR received; send to FOL conversion with SPO (7-Aug)." },
+  { n: "Spencer Domingos", b: "b-dib", loan: 312000, opened: -42, vrm: "hfmm-08", spo: "hfmm-06", rename: "Spencer Domingos Guiao", pa: "9 Jul 2026" },
+  { n: "Sangeeth Chemboth", b: "b-adib", loan: 810000, opened: -50, vrm: "hfmm-07", spo: "hfmm-03", note: "Pure buyout — counter offer received from DIB; waiting for client response." },
+];
+
+for (const r of REG) {
+  const c = cases.find((cc) => {
+    const p = persons.find((x) => x.id === cc.personId);
+    if (!p || !p.name.toLowerCase().includes(r.n.toLowerCase())) return false;
+    if (cc.bankId !== r.b) return false;
+    if (r.st && cc.stage !== r.st) return false;
+    if (r.dl !== undefined && !(cc.deal ?? "").toLowerCase().includes(r.dl.toLowerCase())) return false;
+    return true;
+  });
+  if (!c) continue;
+  if (r.loan) { c.loanAmount = r.loan; c.propertyValue = Math.round(r.loan / 0.8 / 1000) * 1000; }
+  if (r.opened) c.createdAt = d(r.opened);
+  if (r.spo) c.ownerId = r.spo;
+  if (r.rename) { const p = persons.find((x) => x.id === c.personId); if (p) p.name = r.rename; }
+  if (r.note && !(c.tracker ?? []).some((e) => e.date === TD_LAST)) c.tracker = [...(c.tracker ?? []), { date: TD_LAST, note: r.note }];
+  if (r.pa) audit.push({ id: "ax" + ++ax, at: ts(-2), by: c.ownerId, module: "MILESTONE", action: "Pre-approval received", target: c.ref, detail: `${banks.find((b) => b.id === c.bankId)?.short} · ${r.pa}`, caseId: c.id });
+  if (r.vrm && !leads.some((l) => l.personId === c.personId && l.bankId === c.bankId))
+    leads.push({ id: "l" + (2000 + ++ln), ref: "L-" + (2000 + ln), personId: c.personId, source: "Existing Client", type: c.txType, status: "CONVERTED", owner: r.vrm, bankId: c.bankId, propertyValue: c.propertyValue || undefined, createdAt: c.createdAt, notes: `Converted to ${c.ref}` });
+  if (r.hold && !tasks.some((t) => t.caseId === c.id && t.title.startsWith("HOLD")))
+    tasks.push(task(c, "HOLD — await Sir Kiran's instruction before any follow-up", { due: d(5), priority: "LOW", waitingFor: "Sir Kiran", pendingReason: "On instruction — no follow-up" }));
+}
+
+/* ---- new people & files from the register ---- */
+let xn = 0;
+const NP = (name: string, o: Partial<Person> = {}): Person => {
+  const p: Person = { id: "xp" + ++xn, name, customerType: "EXPAT", nationality: "—", employment: "SALARIED", dob: "1985-06-15", mobile: "", email: "", employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1, cards: [], liabilities: [], kyc: { passport: false, eid: false, visa: false, address: false }, createdAt: d(-20), ...o };
+  persons.push(p); return p;
+};
+const getPerson = (name: string) => persons.find((x) => x.name.toLowerCase() === name.toLowerCase()) ?? persons.find((x) => x.name.toLowerCase().includes(name.toLowerCase())) ?? NP(name);
+
+const NC = (client: string, bank: string, stage: string, o: { deal?: string; loan?: number; opened?: number; vrm?: string; spo?: string; tx?: TxType; note?: string; hold?: boolean; wf?: string; pr?: string; na?: string; naDue?: number } = {}) => {
+  const p = getPerson(client);
+  cn += 1;
+  const loan = o.loan ?? 0;
+  const idx = stages.findIndex((s) => s.id === stage);
+  const c: Case = {
+    id: "c" + (3000 + cn), ref: "HF-" + (3000 + cn), personId: p.id, ownerId: o.spo ?? "hfmm-01",
+    bankId: bank, productId: products.find((pp) => pp.bankId === bank)!.id, txType: o.tx ?? "PURCHASE",
+    propertyValue: loan ? Math.round(loan / 0.8 / 1000) * 1000 : 0, loanAmount: loan, rate: 0, tenureMonths: 300,
+    stage, status: "OPEN", createdAt: d(o.opened ?? -7), expectedRevenue: 0,
+    stageHistory: [{ stageId: stage, at: ts(o.opened ?? -7), by: o.spo ?? "hfmm-01" }],
+    nextAction: o.na, nextActionDue: o.naDue !== undefined ? d(o.naDue) : undefined,
+    waitingFor: o.wf, pendingReason: o.pr, deal: o.deal,
+    docs: idx >= 3 ? mkDocs(idx) : [],
+    tracker: o.note ? [{ date: TD_LAST, note: o.note }] : [],
+  };
+  cases.push(c);
+  if (o.vrm) leads.push({ id: "l" + (2000 + ++ln), ref: "L-" + (2000 + ln), personId: p.id, source: "Existing Client", type: c.txType, status: "CONVERTED", owner: o.vrm, bankId: bank, propertyValue: c.propertyValue || undefined, createdAt: c.createdAt, notes: `Converted to ${c.ref}` });
+  if (o.hold) tasks.push(task(c, "HOLD — await Sir Kiran's instruction before any follow-up", { due: d(5), priority: "LOW", waitingFor: "Sir Kiran", pendingReason: "On instruction — no follow-up" }));
+  return c;
+};
+
+const NL = (client: string, o: { vrm?: string; opened?: number; note?: string; status?: LeadStatus; type?: TxType; pv?: number; na?: string; due?: number; src?: string } = {}) => {
+  const p = getPerson(client);
+  ln += 1;
+  leads.push({ id: "l" + (2000 + ln), ref: "L-" + (2000 + ln), personId: p.id, source: o.src ?? "Referral", type: o.type ?? "PURCHASE", status: o.status ?? "CONTACTED", owner: o.vrm ?? "hfmm-12", bankId: undefined, propertyValue: o.pv, createdAt: d(o.opened ?? -7), nextAction: o.na, due: o.due !== undefined ? d(o.due) : undefined, notes: o.note });
+};
+
+/* Ihab — additional off-plan handover files */
+NC("Ihab Abdulla Jawad", "b-enbd", "PREAPP", { deal: "Off-Plan Handover", loan: 4500000, opened: -14, vrm: "hfmm-09", spo: "hfmm-03", note: "Off-plan handover — query received, replied by Kiran Sir." });
+NC("Ihab Abdulla Jawad", "b-adib", "PREAPP", { deal: "Off-Plan Handover", loan: 4500000, opened: -14, vrm: "hfmm-09", spo: "hfmm-03", hold: true, note: "Off-plan handover — hold the case for 50% per Sir's instruction." });
+/* Avinash — DIB buyout + equity on hold */
+NC("Avinash Nagar", "b-dib", "PREAPP", { deal: "Buyout + Equity", loan: 2640000, opened: -57, tx: "BUYOUT_EQUITY", vrm: "hfmm-07", spo: "hfmm-06", hold: true, note: "On hold as per Kiran Sir." });
+/* Kashif Ghafoor — pure buyout at two banks; chase bank contact only */
+NC("Kashif Ghafoor", "b-dib", "SUBMIT", { loan: 1400000, opened: -50, tx: "BUYOUT", vrm: "hfmm-08", spo: "hfmm-06", na: "Chase Amit — no client follow-up per Sir Kiran", naDue: 1, wf: "Bank", note: "Pure buyout — chase Amit; per Kiran Sir, no follow-up with the client." });
+NC("Kashif Ghafoor", "b-adib", "SUBMIT", { loan: 1400000, opened: -50, tx: "BUYOUT", vrm: "hfmm-08", spo: "hfmm-03", na: "Chase Amit — no client follow-up per Sir Kiran", naDue: 1, wf: "Bank", note: "Pure buyout — chase Amit; per Kiran Sir, no follow-up with the client." });
+/* Kiran Patil — resale, MOU pending */
+NC("Kiran Patil", "b-adib", "VALUATION", { loan: 900200, opened: -50, vrm: "hfmm-09", spo: "hfmm-03", wf: "Client", pr: "Awaiting signatures", na: "Chase MOU signing — client still negotiating", naDue: 2, note: "Resale — waiting for MOU to be signed; client negotiating (31-Jul)." });
+/* Hesham 20MM — six-bank buyout + equity mandate */
+(["b-dib", "b-arab", "b-mashreq", "b-nbf", "b-cbd", "b-enbd"] as const).forEach((b) =>
+  NC("Hesham (20MM — Omar Sherif Ref)", b, b === "b-arab" ? "PREAPP" : "SUBMIT", {
+    deal: "20MM Buyout + Equity", loan: 12000000, opened: -43, tx: "BUYOUT_EQUITY", wf: "Client", pr: "Document missing",
+    na: b === "b-arab" ? "Track credit review — documents sent to bank" : "Collect client details & documents", naDue: 2,
+    note: b === "b-arab" ? "Buyout + Equity AED 12M — documents sent to the bank." : "Buyout + Equity AED 12M — waiting for client details & documents.",
+  }));
+/* Roshan Rohra — four banks, documents pending */
+(["b-fab", "b-enbd", "b-cbd", "b-adib"] as const).forEach((b, i) =>
+  NC("Roshan Rohra", b, "INTAKE", { opened: -16, vrm: "hfmm-09", spo: ["hfmm-01", "hfmm-02", "hfmm-03", "hfmm-04"][i], wf: "Client", pr: "Document missing", na: "Collect pending documents", naDue: 1, note: "Waiting for pending documents." }));
+/* Yashwardhan Ganediwal — 60% LTV, four banks */
+(["b-arab", "b-cbd", "b-rak", "b-adib"] as const).forEach((b, i) =>
+  NC("Yashwardhan Ganediwal", b, "INTAKE", { opened: -2, vrm: "hfmm-07", spo: ["hfmm-01", "hfmm-02", "hfmm-03", "hfmm-04"][i], wf: "Client", pr: "Document missing", na: "Collect documents — 60% LTV applies", naDue: 3, note: "At 60% loan-to-value — low-document profile." }));
+
+/* ---- early-stage pipeline → leads ---- */
+NL("Akram Chalich", { vrm: "hfmm-09", opened: -10, note: "Omar Sherif reference. No update from the client on documents.", na: "Chase client documents", due: 2 });
+NL("Dina Khalid", { vrm: "hfmm-11", opened: -10, status: "QUALIFIED", note: "Case study shared with Kiran Sir.", na: "Await Sir Kiran's review of case study", due: 3 });
+NL("Zeynap Erdogan", { vrm: "hfmm-08", opened: -10, note: "ON HOLD — handover of property is late.", na: "Review hold — developer handover delayed", due: 7 });
+NL("Shyam Veerabhadram", { vrm: "hfmm-09", opened: -57, status: "QUALIFIED", note: "Case study prepared & shared with Kiran Sir." });
+NL("Mohammed Jarrar", { vrm: "hfmm-07", opened: -51, note: "Documents pending from the client's end.", na: "Collect pending documents", due: 2 });
+NL("Deepika", { vrm: "hfmm-12", opened: -51, note: "Need to chase Kiran Sir for direction.", na: "Chase Sir Kiran for next steps", due: 1 });
+NL("Eun Kyong Lee", { opened: -49, note: "ON HOLD — property finalised; handover in Sep 2027." });
+NL("Aref Beyed", { src: "Existing Client", opened: -43, note: "No update from the client on documents.", na: "Follow up client for documents", due: 3 });
+NL("Clara", { opened: -28, status: "PROPOSAL", pv: 3960000, note: "Proposal shared with the client for review (3-Aug).", na: "Follow up on proposal review", due: 1 });
+NL("Jesus", { vrm: "hfmm-07", opened: -13, note: "Documents received on WhatsApp — waiting for working to be shared.", na: "Run affordability working & share", due: 1 });
+NL("Dr. Kamran Ahmed", { vrm: "hfmm-17", opened: -3, note: "Documents received on WhatsApp — waiting for working to be shared.", na: "Run affordability working & share", due: 1 });
+NL("Dr. Ali", { vrm: "hfmm-08", opened: -2, note: "New file — initial documents awaited.", na: "First contact & document list", due: 2 });
+NL("Saffa", { vrm: "hfmm-09", opened: -2, note: "New file — initial documents awaited.", na: "First contact & document list", due: 2 });
+NL("Ashish Mathur", { vrm: "hfmm-17", opened: -2, note: "Documents received on email — share the pending docs list.", na: "Share pending docs list", due: 1 });
+NL("Ismail Shaikh", { vrm: "hfmm-07", opened: 0, type: "BUYOUT_EQUITY", status: "QUALIFIED", note: "Buyout + Equity — structuring.", na: "Prepare buyout working", due: 3 });
+
+/* Sharafi (closed) — valuation refund instruction */
+audit.push({ id: "ax" + ++ax, at: ts(-1), by: "hfmm-06", module: "MILESTONE", action: "Valuation refund instructed", target: byRef("Mr Sharafi", "b-dib").ref, detail: "Refund valuation amount per Sir Kiran's email (4-Aug)", caseId: byRef("Mr Sharafi", "b-dib").id });
+
 export function buildSeed(): AppState {
   return {
     version: SEED_VERSION,
@@ -404,7 +546,7 @@ export function buildSeed(): AppState {
       { id: "hfmm-11", empId: "hfmm-11", name: "Sona", email: "sona@hfmc.ae", mobile: "+971 50 555 0011", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
       { id: "hfmm-13", empId: "hfmm-13", name: "Sneha", email: "sneha@hfmc.ae", mobile: "+971 50 555 0013", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
       { id: "hfmm-16", empId: "hfmm-16", name: "Binish", email: "binish@hfmc.ae", mobile: "+971 50 555 0016", role: "PA", team: "Management", leaderId: "hfmm-15", active: true, createdAt: d(-200), note: "PA to Sir Kiran" },
-      { id: "hfmm-17", empId: "hfmm-17", name: "Extra 1", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
+      { id: "hfmm-17", empId: "hfmm-17", name: "Omkar", email: "", mobile: "", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-30), note: "New joiner — designation to be confirmed" },
       { id: "hfmm-18", empId: "hfmm-18", name: "Extra 2", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
     ],
     persons, leads, banks, products, stages,

@@ -1,8 +1,9 @@
-export type RoleId = "ADMIN" | "HEAD" | "TL" | "SPO" | "VRM" | "PA";
+export type RoleId = "ADMIN" | "HEAD" | "TL" | "SPO" | "VRM" | "PA" | "TBD";
 
 export interface User {
   id: string; empId: string; name: string; email: string; mobile: string;
   role: RoleId; team: string; leaderId?: string; active: boolean; createdAt: string;
+  note?: string;
 }
 
 export type CustomerType = "NATIONAL" | "EXPAT" | "NON_RESIDENT";

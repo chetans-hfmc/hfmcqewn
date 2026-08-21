@@ -206,7 +206,7 @@ let dn = 0;
 const mkDocs = (stageIdx: number, o: { folReceived?: boolean; dda?: DocStatus } = {}): DocItem[] => {
   const out: DocItem[] = [];
   const push = (stageId: string, typeId: string, status: DocStatus) =>
-    out.push({ id: "sd" + ++dn, typeId, stageId, status, updatedAt: ts(-3), updatedBy: "u4" });
+    out.push({ id: "sd" + ++dn, typeId, stageId, status, updatedAt: ts(-3), updatedBy: "hfmm-01" });
   if (stageIdx >= 1) ["PASSPORT", "EID", "VISA"].forEach((t) => push("INTAKE", t, "VERIFIED"));
   if (stageIdx >= 3) push("SUBMIT", "APPFORM", "VERIFIED");
   if (stageIdx >= 6) push("VALUATION", "VALREP", stageIdx > 6 ? "VERIFIED" : "MISSING");
@@ -215,6 +215,9 @@ const mkDocs = (stageIdx: number, o: { folReceived?: boolean; dda?: DocStatus } 
   if (stageIdx >= 11) push("TRANSFER", "TITLE", stageIdx > 11 ? "VERIFIED" : "MISSING");
   return out;
 };
+
+const SPOS = ["hfmm-01", "hfmm-02", "hfmm-03", "hfmm-04", "hfmm-05", "hfmm-06"];
+const VRMS = ["hfmm-07", "hfmm-08", "hfmm-09", "hfmm-10", "hfmm-11", "hfmm-13"];
 
 let cn = 0;
 const cases: Case[] = ROWS.map((r, i) => {
@@ -244,7 +247,7 @@ const cases: Case[] = ROWS.map((r, i) => {
     lastNote ? { w: "Bank", p: "Awaiting bank response" } : undefined;
   const dueSeq = [2, -2, 4, 1, -1, 3, 0, 5][i % 8];
   const base: Case = {
-    id: "c" + (3000 + cn), ref: "HF-" + (3000 + cn), personId: pid(r.client), ownerId: i % 2 ? "u4" : "u5",
+    id: "c" + (3000 + cn), ref: "HF-" + (3000 + cn), personId: pid(r.client), ownerId: SPOS[i % 6],
     bankId: r.bank, productId: prod.id, txType: /buyout \+ equity/i.test(r.deal ?? "") ? "BUYOUT_EQUITY" : /buyout/i.test(r.deal ?? "") ? "BUYOUT" : "PURCHASE",
     deal: r.deal, bankRm: r.rm, channel: r.ch,
     propertyValue: r.client === "Karolina & Angie Abbas Issa" ? 1650000 : 0,
@@ -253,7 +256,7 @@ const cases: Case[] = ROWS.map((r, i) => {
     stage, status: closed ? "CLOSED" : "OPEN",
     outcome: r.st === "Won&closed" ? "WON" : r.st === "Closed" ? "LOST" : undefined,
     tracker,
-    stageHistory: [{ stageId: stage, at: ts(closed ? -30 : -(10 + (i % 12))), by: i % 2 ? "u4" : "u5" }],
+    stageHistory: [{ stageId: stage, at: ts(closed ? -30 : -(10 + (i % 12))), by: SPOS[i % 6] }],
     createdAt: d(closed ? -60 : -(12 + (i % 20))),
     expectedRevenue: 0,
     docs: mkDocs(stages.findIndex((s) => s.id === stage), {
@@ -318,14 +321,18 @@ const tasks: Task[] = [
 ];
 
 /* ---------- bank queries recorded in the tracker ---------- */
+const Q = (id: string, client: string, bank: string, deal: string | undefined, q: Omit<BankQuery, "id" | "caseId" | "ownerId" | "bankId">): BankQuery => {
+  const cz = byRef(client, bank, deal);
+  return { id, caseId: cz.id, ownerId: cz.ownerId, bankId: bank, ...q };
+};
 const queries: BankQuery[] = [
-  { id: "q101", caseId: byRef("Walid Elrasoul", "b-dib").id, ref: "BQ-101", bankId: "b-dib", requirement: "Query on file — response to be prepared by VRM", actionPoints: "Coordinate VRM response and revert to banker Nawzat", ownerId: "u5", receivedAt: ts(-5), due: d(-1), status: "OPEN" },
-  { id: "q102", caseId: byRef("Akram Shah", "b-adib").id, ref: "BQ-102", bankId: "b-adib", requirement: "Overdue facility flagged on customer profile", actionPoints: "Clarify overdue status with client; obtain clearance letter", ownerId: "u4", receivedAt: ts(-6), due: d(-2), status: "OPEN" },
-  { id: "q103", caseId: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").id, ref: "BQ-103", bankId: "b-arab", requirement: "HRA AED 150,000 — credit proof required in bank statement", actionPoints: "Collect statement evidence of HRA credit from client", ownerId: "u4", receivedAt: ts(-1), due: d(-1), status: "OPEN" },
-  { id: "q104", caseId: byRef("Ihab Abdulla Jawad", "b-enbd", "80% Resale").id, ref: "BQ-104", bankId: "b-enbd", requirement: "Credit query — escalated to Sir Kiran for assist", actionPoints: "Hold per Sir's confirmation; do not follow up", ownerId: "u5", receivedAt: ts(-4), due: d(3), status: "OPEN" },
-  { id: "q105", caseId: byRef("Ihab Abdulla Jawad", "b-fab", "80% Resale").id, ref: "BQ-105", bankId: "b-fab", requirement: "Query received from bank", actionPoints: "Do not follow up from 17-Aug per Sir's instruction", ownerId: "u5", receivedAt: ts(-3), due: d(4), status: "OPEN" },
-  { id: "q106", caseId: byRef("Sheree Anne Serilla Sumpay", "b-dib").id, ref: "BQ-106", bankId: "b-dib", requirement: "ID card from deployed company", actionPoints: "Collect from client and submit to banker Abdul", ownerId: "u4", receivedAt: ts(-5), due: d(-3), response: "ID card received from client and submitted to bank", evidence: "Submitted to banker Abdul", qc: "Verified by TL", status: "RESPONDED" },
-  { id: "q107", caseId: byRef("Yaghoub Hassan Pour", "b-adib").id, ref: "BQ-107", bankId: "b-adib", requirement: "Query on pre-approval file — Sir's reply pending", actionPoints: "Send Sir Kiran's reply to banker Ahmed", ownerId: "u4", receivedAt: ts(-6), due: d(-2), status: "OPEN" },
+  Q("q101", "Walid Elrasoul", "b-dib", undefined, { ref: "BQ-101", requirement: "Query on file — response to be prepared by VRM", actionPoints: "Coordinate VRM response and revert to banker Nawzat", receivedAt: ts(-5), due: d(-1), status: "OPEN" }),
+  Q("q102", "Akram Shah", "b-adib", undefined, { ref: "BQ-102", requirement: "Overdue facility flagged on customer profile", actionPoints: "Clarify overdue status with client; obtain clearance letter", receivedAt: ts(-6), due: d(-2), status: "OPEN" }),
+  Q("q103", "Zinah Alkatabi & Ihab Jawad", "b-arab", undefined, { ref: "BQ-103", requirement: "HRA AED 150,000 — credit proof required in bank statement", actionPoints: "Collect statement evidence of HRA credit from client", receivedAt: ts(-1), due: d(-1), status: "OPEN" }),
+  Q("q104", "Ihab Abdulla Jawad", "b-enbd", "80% Resale", { ref: "BQ-104", requirement: "Credit query — escalated to Sir Kiran for assist", actionPoints: "Hold per Sir's confirmation; do not follow up", receivedAt: ts(-4), due: d(3), status: "OPEN" }),
+  Q("q105", "Ihab Abdulla Jawad", "b-fab", "80% Resale", { ref: "BQ-105", requirement: "Query received from bank", actionPoints: "Do not follow up from 17-Aug per Sir's instruction", receivedAt: ts(-3), due: d(4), status: "OPEN" }),
+  Q("q106", "Sheree Anne Serilla Sumpay", "b-dib", undefined, { ref: "BQ-106", requirement: "ID card from deployed company", actionPoints: "Collect from client and submit to banker Abdul", receivedAt: ts(-5), due: d(-3), response: "ID card received from client and submitted to bank", evidence: "Submitted to banker Abdul", qc: "Verified by Vijya (SPO TL)", status: "RESPONDED" }),
+  Q("q107", "Yaghoub Hassan Pour", "b-adib", undefined, { ref: "BQ-107", requirement: "Query on pre-approval file — Sir's reply pending", actionPoints: "Send Sir Kiran's reply to banker Ahmed", receivedAt: ts(-6), due: d(-2), status: "OPEN" }),
 ];
 
 /* ---------- leads — files that converted during the tracker window ---------- */
@@ -333,7 +340,7 @@ let ln = 0;
 const conv = (client: string, bank: string, deal: string | undefined, off: number): Lead => {
   ln += 1;
   const caze = byRef(client, bank, deal);
-  return { id: "l" + (2000 + ln), ref: "L-" + (2000 + ln), personId: pid(client), source: deal ? "Existing Client" : "Bank Partner", type: caze.txType, status: "CONVERTED", owner: "u6", bankId: bank, createdAt: d(off), notes: `Converted to ${caze.ref}` };
+  return { id: "l" + (2000 + ln), ref: "L-" + (2000 + ln), personId: pid(client), source: deal ? "Existing Client" : "Bank Partner", type: caze.txType, status: "CONVERTED", owner: VRMS[ln % 6], bankId: bank, createdAt: d(off), notes: `Converted to ${caze.ref}` };
 };
 const leads: Lead[] = [
   conv("Andrei Umnov", "b-cbd", undefined, -6),
@@ -351,27 +358,28 @@ const eibor: AppState["eibor"] = Array.from({ length: 8 }, (_, i) => {
     date: d(i - 7),
     d1: +(4.15 + drift).toFixed(3), w1: +(4.28 + drift).toFixed(3), m1: +(4.37 + drift).toFixed(3),
     m3: +(4.46 + drift).toFixed(3), m6: +(4.53 + drift).toFixed(3), y1: +(4.59 + drift).toFixed(3),
-    source: "Central Bank UAE", updatedBy: "u2",
+    source: "Central Bank UAE", updatedBy: "hfmm-16",
   };
 });
 
 const calcs: AppState["calcs"] = [
-  { id: "calc1", type: "emi", label: "EMI preview · Yaghoub Hassan Pour · CBD", linkKind: "case", linkId: byRef("Yaghoub Hassan Pour", "b-cbd").id, linkRef: byRef("Yaghoub Hassan Pour", "b-cbd").ref, inputs: { loan: 1174000, rate: 4.15, tenure: 300 }, outputs: { emi: 6291, totalPayments: 1887300 }, rulesUsed: [{ code: "TENURE-MAX", version: 1 }], by: "u4", at: ts(-2) },
-  { id: "calc2", type: "buyout", label: "Buyout + Equity structure · Saeed Shah · Al Reef", linkKind: "case", linkId: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").id, linkRef: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").ref, inputs: { transaction: "Buyout + Equity", property: "Al Reef" }, outputs: { note: "Pre-approval received; valuation payment pending before structure finalised" }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: "u5", at: ts(-4) },
-  { id: "calc3", type: "ltv", label: "LTV check · Karolina & Angie Abbas Issa · DIB", linkKind: "case", linkId: byRef("Karolina & Angie Abbas Issa", "b-dib").id, linkRef: byRef("Karolina & Angie Abbas Issa", "b-dib").ref, inputs: { propertyValue: 1650000, customerType: "EXPAT", financeCount: 1 }, outputs: { ltv: "80%", maxFinance: 1320000 }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: "u5", at: ts(-6) },
+  { id: "calc1", type: "emi", label: "EMI preview · Yaghoub Hassan Pour · CBD", linkKind: "case", linkId: byRef("Yaghoub Hassan Pour", "b-cbd").id, linkRef: byRef("Yaghoub Hassan Pour", "b-cbd").ref, inputs: { loan: 1174000, rate: 4.15, tenure: 300 }, outputs: { emi: 6291, totalPayments: 1887300 }, rulesUsed: [{ code: "TENURE-MAX", version: 1 }], by: byRef("Yaghoub Hassan Pour", "b-cbd").ownerId, at: ts(-2) },
+  { id: "calc2", type: "buyout", label: "Buyout + Equity structure · Saeed Shah · Al Reef", linkKind: "case", linkId: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").id, linkRef: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").ref, inputs: { transaction: "Buyout + Equity", property: "Al Reef" }, outputs: { note: "Pre-approval received; valuation payment pending before structure finalised" }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").ownerId, at: ts(-4) },
+  { id: "calc3", type: "ltv", label: "LTV check · Karolina & Angie Abbas Issa · DIB", linkKind: "case", linkId: byRef("Karolina & Angie Abbas Issa", "b-dib").id, linkRef: byRef("Karolina & Angie Abbas Issa", "b-dib").ref, inputs: { propertyValue: 1650000, customerType: "EXPAT", financeCount: 1 }, outputs: { ltv: "80%", maxFinance: 1320000 }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: byRef("Karolina & Angie Abbas Issa", "b-dib").ownerId, at: ts(-6) },
 ];
 
 const audit: AppState["audit"] = [
-  { id: "a1", at: ts(-0.1), by: "u2", module: "IMPORT", action: "Tracker imported", target: `${cases.length} case files from daily tracker`, detail: "Working days 13–20 Aug 2026" },
-  { id: "a2", at: ts(-0.3), by: "u4", module: "CASE", action: "Tracker updated", target: byRef("Parvez Ahmed", "b-dib").ref, detail: "Settlement appointment booked 24-Aug, 10:03 AM", caseId: byRef("Parvez Ahmed", "b-dib").id },
-  { id: "a3", at: ts(-0.6), by: "u5", module: "DOC", action: "Document received", target: `${byRef("Karolina & Angie Abbas Issa", "b-dib").ref} · FOL`, detail: "FOL received 17-Aug — signing 31-Aug, 10:30 AM", caseId: byRef("Karolina & Angie Abbas Issa", "b-dib").id },
-  { id: "a4", at: ts(-1), by: "u4", module: "QUERY", action: "Query received", target: "BQ-103 · Zinah Alkatabi & Ihab Jawad", detail: "Arab Bank: HRA AED 150,000 credit proof", caseId: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").id },
-  { id: "a5", at: ts(-1.4), by: "u5", module: "CASE", action: "Settlement completed", target: byRef("Parvez Ahmed", "b-adib").ref, detail: "Settlement completed 17-Aug at DIB", caseId: byRef("Parvez Ahmed", "b-adib").id },
-  { id: "a6", at: ts(-2), by: "u4", module: "CASE", action: "Deal booked", target: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").ref, detail: "Manager's cheque handed to Aldar 18-Aug", caseId: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").id },
-  { id: "a7", at: ts(-3), by: "u2", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "DBR must stay strictly below 50%" },
-  { id: "a8", at: ts(-4), by: "u6", module: "LEAD", action: "Lead converted", target: `L-2006 → ${byRef("Ihab Abdulla Jawad", "b-nbf").ref}` },
-  { id: "a9", at: ts(-5), by: "u3", module: "CASE", action: "Case closed (won)", target: byRef("Silvia Torres", "b-enbd").ref, caseId: byRef("Silvia Torres", "b-enbd").id },
-  { id: "a10", at: ts(-6), by: "u2", module: "RULE", action: "Rule updated", target: "LTV-EXP-1 v1 → v2 (85% → 80%)", detail: "Expat 1st finance tightened" },
+  { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${cases.length} case files from daily tracker`, detail: "Working days 13–20 Aug 2026" },
+  { id: "a2", at: ts(-0.3), by: byRef("Parvez Ahmed", "b-dib").ownerId, module: "TRACKER", action: "Daily tracker updated", target: byRef("Parvez Ahmed", "b-dib").ref, detail: "Settlement appointment booked 24-Aug, 10:03 AM", caseId: byRef("Parvez Ahmed", "b-dib").id },
+  { id: "a3", at: ts(-0.6), by: byRef("Karolina & Angie Abbas Issa", "b-dib").ownerId, module: "DOC", action: "Document received", target: `${byRef("Karolina & Angie Abbas Issa", "b-dib").ref} · FOL`, detail: "FOL received 17-Aug — signing 31-Aug, 10:30 AM", caseId: byRef("Karolina & Angie Abbas Issa", "b-dib").id },
+  { id: "a4", at: ts(-1), by: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").ownerId, module: "QUERY", action: "Query received", target: "BQ-103 · Zinah Alkatabi & Ihab Jawad", detail: "Arab Bank: HRA AED 150,000 credit proof", caseId: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").id },
+  { id: "a5", at: ts(-1.4), by: byRef("Parvez Ahmed", "b-adib").ownerId, module: "CASE", action: "Settlement completed", target: byRef("Parvez Ahmed", "b-adib").ref, detail: "Settlement completed 17-Aug at DIB", caseId: byRef("Parvez Ahmed", "b-adib").id },
+  { id: "a6", at: ts(-2), by: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").ownerId, module: "CASE", action: "Deal booked", target: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").ref, detail: "Manager's cheque handed to Aldar 18-Aug", caseId: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").id },
+  { id: "a7", at: ts(-3), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "DBR must stay strictly below 50% — TO VERIFY" },
+  { id: "a8", at: ts(-4), by: "hfmm-11", module: "LEAD", action: "Lead converted", target: `L-2006 → ${byRef("Ihab Abdulla Jawad", "b-nbf").ref}` },
+  { id: "a9", at: ts(-5), by: "hfmm-14", module: "CASE", action: "Case closed (won)", target: byRef("Silvia Torres", "b-enbd").ref, caseId: byRef("Silvia Torres", "b-enbd").id },
+  { id: "a10", at: ts(-6), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "LTV-EXP-1 v1 → v2 (85% → 80%)", detail: "Expat 1st finance tightened" },
+  { id: "a11", at: ts(-7), by: "hfmm-16", module: "EIBOR", action: "EIBOR published", target: d(-1), detail: "3M fix updated from Central Bank UAE feed" },
 ];
 
 export function buildSeed(): AppState {
@@ -379,14 +387,25 @@ export function buildSeed(): AppState {
     version: SEED_VERSION,
     session: null,
     users: [
-      { id: "u1", empId: "HF-001", name: "Kiran Nair", email: "kiran@hfmc.ae", mobile: "+971 50 555 0001", role: "HEAD", team: "Management", active: true, createdAt: d(-400) },
-      { id: "u2", empId: "HF-002", name: "Amina Al Mansoori", email: "amina@hfmc.ae", mobile: "+971 50 555 0002", role: "ADMIN", team: "Admin", active: true, createdAt: d(-400) },
-      { id: "u3", empId: "HF-010", name: "Ravi Menon", email: "ravi@hfmc.ae", mobile: "+971 50 555 0010", role: "TL", team: "Ops Team A", leaderId: "u1", active: true, createdAt: d(-300) },
-      { id: "u4", empId: "HF-011", name: "Sarah Thomas", email: "sarah@hfmc.ae", mobile: "+971 50 555 0011", role: "SPO", team: "Ops Team A", leaderId: "u3", active: true, createdAt: d(-250) },
-      { id: "u5", empId: "HF-012", name: "Jose Philip", email: "jose@hfmc.ae", mobile: "+971 50 555 0012", role: "SPO", team: "Ops Team A", leaderId: "u3", active: true, createdAt: d(-250) },
-      { id: "u6", empId: "HF-021", name: "Priya Sharma", email: "priya@hfmc.ae", mobile: "+971 50 555 0021", role: "VRM", team: "Sales", leaderId: "u1", active: true, createdAt: d(-200) },
-      { id: "u7", empId: "HF-022", name: "Omar Farouk", email: "omar.f@hfmc.ae", mobile: "+971 50 555 0022", role: "VRM", team: "Sales", leaderId: "u1", active: true, createdAt: d(-180) },
-      { id: "u8", empId: "HF-030", name: "Lina Haddad", email: "lina@hfmc.ae", mobile: "+971 50 555 0030", role: "PA", team: "Admin", leaderId: "u1", active: true, createdAt: d(-160) },
+      { id: "hfmm-00", empId: "hfmm-00", name: "Super Admin", email: "admin@hfmc.ae", mobile: "", role: "ADMIN", team: "Management", active: true, createdAt: d(-400), note: "System slot — assigned by management / Sir Kiran" },
+      { id: "hfmm-15", empId: "hfmm-15", name: "Sir Kiran", email: "kiran@hfmc.ae", mobile: "+971 50 555 0015", role: "HEAD", team: "Management", active: true, createdAt: d(-400), note: "Head" },
+      { id: "hfmm-14", empId: "hfmm-14", name: "Swathi Naverkar", email: "swathi@hfmc.ae", mobile: "+971 50 555 0014", role: "TL", team: "Sales & Ops", leaderId: "hfmm-15", active: true, createdAt: d(-350), note: "VRM & SPO Head" },
+      { id: "hfmm-01", empId: "hfmm-01", name: "Vijya", email: "vijya@hfmc.ae", mobile: "+971 50 555 0001", role: "TL", team: "Ops Team (SPO)", leaderId: "hfmm-14", active: true, createdAt: d(-300), note: "SPO Team Leader" },
+      { id: "hfmm-12", empId: "hfmm-12", name: "Sameer", email: "sameer@hfmc.ae", mobile: "+971 50 555 0012", role: "TL", team: "Sales Team (VRM)", leaderId: "hfmm-14", active: true, createdAt: d(-300), note: "VRM Team Leader" },
+      { id: "hfmm-02", empId: "hfmm-02", name: "Vaibhavi", email: "vaibhavi@hfmc.ae", mobile: "+971 50 555 0002", role: "SPO", team: "Ops Team (SPO)", leaderId: "hfmm-01", active: true, createdAt: d(-260) },
+      { id: "hfmm-03", empId: "hfmm-03", name: "Vijay", email: "vijay@hfmc.ae", mobile: "+971 50 555 0003", role: "SPO", team: "Ops Team (SPO)", leaderId: "hfmm-01", active: true, createdAt: d(-260) },
+      { id: "hfmm-04", empId: "hfmm-04", name: "Chetan", email: "chetan@hfmc.ae", mobile: "+971 50 555 0004", role: "SPO", team: "Ops Team (SPO)", leaderId: "hfmm-01", active: true, createdAt: d(-260) },
+      { id: "hfmm-05", empId: "hfmm-05", name: "Rohan", email: "rohan@hfmc.ae", mobile: "+971 50 555 0005", role: "SPO", team: "Ops Team (SPO)", leaderId: "hfmm-01", active: true, createdAt: d(-260) },
+      { id: "hfmm-06", empId: "hfmm-06", name: "Mayur", email: "mayur@hfmc.ae", mobile: "+971 50 555 0006", role: "SPO", team: "Ops Team (SPO)", leaderId: "hfmm-01", active: true, createdAt: d(-260) },
+      { id: "hfmm-07", empId: "hfmm-07", name: "Gaurav", email: "gaurav@hfmc.ae", mobile: "+971 50 555 0007", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-08", empId: "hfmm-08", name: "Ani", email: "ani@hfmc.ae", mobile: "+971 50 555 0008", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-09", empId: "hfmm-09", name: "Edwin", email: "edwin@hfmc.ae", mobile: "+971 50 555 0009", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-10", empId: "hfmm-10", name: "Omprakash", email: "omprakash@hfmc.ae", mobile: "+971 50 555 0010", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-11", empId: "hfmm-11", name: "Sona", email: "sona@hfmc.ae", mobile: "+971 50 555 0011", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-13", empId: "hfmm-13", name: "Sneha", email: "sneha@hfmc.ae", mobile: "+971 50 555 0013", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-240) },
+      { id: "hfmm-16", empId: "hfmm-16", name: "Binish", email: "binish@hfmc.ae", mobile: "+971 50 555 0016", role: "PA", team: "Management", leaderId: "hfmm-15", active: true, createdAt: d(-200), note: "PA to Sir Kiran" },
+      { id: "hfmm-17", empId: "hfmm-17", name: "Extra 1", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
+      { id: "hfmm-18", empId: "hfmm-18", name: "Extra 2", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
     ],
     persons, leads, banks, products, stages,
     docTypes: [

@@ -11,11 +11,12 @@ export const ROLE_MODULES: Record<string, View[]> = {
   HEAD: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
   TL: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "audit"],
   SPO: ["dashboard", "tracker", "cases", "tasks", "documents", "queries", "calculators"],
-  VRM: ["dashboard", "tracker", "people", "leads", "calculators"],
-  PA: ["dashboard", "tracker", "people", "leads", "tasks", "documents"],
+  VRM: ["dashboard", "tracker", "people", "leads", "cases", "calculators"],
+  PA: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents"],
+  TBD: ["dashboard"],
 };
 export const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Super Admin", HEAD: "Head of Mortgage", TL: "Team Leader", SPO: "Sales Process Owner", VRM: "Virtual Relationship Mgr", PA: "Personal Assistant",
+  ADMIN: "Super Admin", HEAD: "Head of Mortgage", TL: "Team Leader", SPO: "Sales Process Owner", VRM: "Virtual Relationship Mgr", PA: "Personal Assistant", TBD: "Role TBD",
 };
 
 export type Action =

@@ -235,6 +235,30 @@ export function UsersView() {
     <div>
       <SectionHead title="Users & roles" sub="User → Role → Permission. The final permission matrix remains TO VERIFY with compliance."
         right={canEdit ? <Btn onClick={() => setAdd(true)}><Ic n="plus" size={14} /> New user</Btn> : <Pill tone="gr">view only</Pill>} />
+
+      {/* org snapshot */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {[
+          { team: "Management", icon: "shield", tone: "bg-ink text-paper" },
+          { team: "Sales & Ops", icon: "layers", tone: "bg-pine-700 text-paper" },
+          { team: "Ops Team (SPO)", icon: "clipboard", tone: "bg-steel-600 text-paper" },
+          { team: "Sales Team (VRM)", icon: "funnel", tone: "bg-amber-600 text-paper" },
+        ].map((t, i) => {
+          const members = state.users.filter((u) => u.team === t.team);
+          const leader = state.users.find((u) => u.team === t.team && members.some((m) => m.leaderId === u.id));
+          return (
+            <div key={t.team} className={cx("rounded-lg px-3.5 py-3 anim-up", t.tone)} style={{ animationDelay: `${i * 50}ms` }}>
+              <div className="flex items-center justify-between">
+                <p className="font-display font-bold text-[12.5px] tracking-tight">{t.team}</p>
+                <Ic n={t.icon} size={15} />
+              </div>
+              <p className="num text-[22px] font-semibold leading-tight mt-1">{members.filter((m) => m.active).length}<span className="text-[11px] opacity-70 font-body font-normal"> active · {members.length} total</span></p>
+              <p className="text-[10.5px] opacity-80 mt-0.5">{leader ? `Lead: ${leader.name}` : members.length ? members.map((m) => m.name.split(" ")[0]).slice(0, 3).join(", ") : "—"}</p>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="bg-card border border-mist rounded-lg overflow-x-auto anim-up">
         <table className="w-full text-[13px] min-w-[840px]">
           <thead><tr className="text-left text-[10.5px] uppercase tracking-[0.09em] font-display text-ink-soft border-b border-mist bg-paper/60">
@@ -243,8 +267,14 @@ export function UsersView() {
           <tbody>
             {state.users.map((u, i) => (
               <tr key={u.id} className={cx("border-b border-mist/60 last:border-0 anim-up", !u.active && "opacity-50")} style={{ animationDelay: `${i * 30}ms` }}>
-                <td className="px-4 py-2.5"><div className="flex items-center gap-2.5"><Avatar name={u.name} size={30} /><div><p className="font-semibold">{u.name}</p><p className="text-[11px] text-ink-soft num">{u.empId} · {u.email}</p></div></div></td>
-                <td className="px-3 py-2.5"><Pill tone={u.role === "ADMIN" ? "ink" : u.role === "HEAD" ? "pine" : u.role === "SPO" ? "steel" : u.role === "VRM" ? "amber" : "gr"}>{ROLE_LABEL[u.role]}</Pill></td>
+                <td className="px-4 py-2.5"><div className="flex items-center gap-2.5"><Avatar name={u.name} size={30} /><div>
+                  <p className="font-semibold flex items-center gap-1.5">{u.name}
+                    {state.users.some((x) => x.leaderId === u.id) && <span className="text-[9px] font-display font-bold uppercase tracking-wide bg-amber-100 text-amber-700 rounded px-1 py-[1px]">TL</span>}
+                  </p>
+                  <p className="text-[11px] text-ink-soft num">{u.empId}{u.email ? ` · ${u.email}` : ""}</p>
+                  {u.note && <p className="text-[10.5px] text-amber-700 font-medium">{u.note}</p>}
+                </div></div></td>
+                <td className="px-3 py-2.5"><Pill tone={u.role === "ADMIN" ? "ink" : u.role === "HEAD" ? "pine" : u.role === "TL" ? "pine" : u.role === "SPO" ? "steel" : u.role === "VRM" ? "amber" : "gr"}>{ROLE_LABEL[u.role]}</Pill></td>
                 <td className="px-3 py-2.5 text-ink-soft">{u.team}</td>
                 <td className="px-3 py-2.5 text-ink-soft">{u.leaderId ? state.users.find((x) => x.id === u.leaderId)?.name : "—"}</td>
                 <td className="px-3 py-2.5 num">{state.tasks.filter((t) => t.ownerId === u.id && t.status === "OPEN").length}</td>

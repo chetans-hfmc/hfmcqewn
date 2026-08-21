@@ -88,6 +88,7 @@ const P: Record<string, React.ReactNode> = {
   pen: <><path d="M14.5 5 19 9.5 8 20.5H3.5V16L14.5 5Z" /><path d="m12.5 7 4.5 4.5" /></>,
   check: <path d="m4.5 12.5 5 5 10-11" />,
   calendar: <><rect x="3.5" y="5" width="17" height="16" rx="1.6" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>,
+  download: <><path d="M12 3.5v10.5m0 0 4-4m-4 4-4-4" /><path d="M4.5 16.5V19a1.8 1.8 0 0 0 1.8 1.8h11.4A1.8 1.8 0 0 0 19.5 19v-2.5" /></>,
   flag: <path d="M6 21V4m0 0c4-2.4 8 2.4 12 0v9c-4 2.4-8-2.4-12 0" />,
   send: <path d="m4 11.5 16-7-4.5 16-3.5-6.5L4 11.5Zm8 2.5L20 4.5" />,
   eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>,

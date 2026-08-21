@@ -83,6 +83,26 @@ export default function TrackerView() {
           Open files only
         </button>
         <div className="ml-auto flex items-center gap-2">
+          <Btn variant="outline" onClick={() => {
+            const head = ["Ref", "Client", "Deal", "Stage", "Bank", "Bank RM", "Channel", "Owner", "Status", "Latest position", ...dates.map((dt) => fmtDate(dt))];
+            const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+            const lines = [head.map(esc).join(",")];
+            rows.forEach((c) => {
+              const person = state.persons.find((p) => p.id === c.personId);
+              const bankObj = state.banks.find((b) => b.id === c.bankId);
+              const stDef = state.stages.find((s) => s.id === c.stage);
+              const ownerObj = state.users.find((u) => u.id === c.ownerId);
+              lines.push([c.ref, person?.name ?? "", c.deal ?? "", stDef?.name ?? "", bankObj?.short ?? "", c.bankRm ?? "", c.channel ?? "", ownerObj?.name ?? "",
+                c.status === "CLOSED" ? (c.outcome === "WON" ? "Won & Closed" : "Closed") : "Open", latestNote(c), ...dates.map((dt) => cellOf(c, dt))].map(esc).join(","));
+            });
+            const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `HFMC-daily-tracker-${today}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+          }}>
+            <Ic n="download" size={13} /> Export CSV
+          </Btn>
           <Btn variant="outline" onClick={() => setConfirmDay(nextWorkingDay(dates[dates.length - 1]))}>
             <Ic n="plus" size={13} /> Add day
           </Btn>

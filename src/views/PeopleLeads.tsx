@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { CustomerType, Employment, Lead, LeadStatus, Person, Task, TxType } from "../types";
 import { useMe, useNav, useStore } from "../store";
 import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, SectionHead, Select, TextInput, addDays, cx, fmtAED, fmtDate, nowISO, todayISO, uid, ageYears } from "../ui";
+import { emi } from "../calc";
 
 const CT: { v: CustomerType; l: string }[] = [
   { v: "EXPAT", l: "Expat" }, { v: "NATIONAL", l: "UAE National" }, { v: "NON_RESIDENT", l: "Non-Resident" },
@@ -17,41 +18,121 @@ const statusTone: Record<LeadStatus, string> = {
   NEW: "steel", CONTACTED: "steel", APPOINTMENT: "amber", QUALIFIED: "pine", PROPOSAL: "gold", CONVERTED: "ink", LOST: "gr",
 };
 
+function PSec({ t, children }: { t: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h4 className="text-[11px] font-display font-bold uppercase tracking-[0.11em] text-pine-700 mb-1.5 pb-1 border-b border-pine-100">{t}</h4>
+      {children}
+    </div>
+  );
+}
+
+function FSec({ t, children }: { t: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <p className="font-display font-bold text-[11px] uppercase tracking-[0.13em] text-pine-700 mb-2.5 pb-1.5 border-b border-pine-100">{t}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">{children}</div>
+    </div>
+  );
+}
+
 function PersonForm({ onSave, onClose, existing }: { onSave: (p: Person) => void; onClose: () => void; existing?: Person }) {
+  const { state } = useStore();
   const [f, setF] = useState({
-    name: existing?.name ?? "", customerType: existing?.customerType ?? ("EXPAT" as CustomerType), nationality: existing?.nationality ?? "",
-    employment: existing?.employment ?? ("SALARIED" as Employment), dob: existing?.dob ?? "1992-01-01", mobile: existing?.mobile ?? "",
-    email: existing?.email ?? "", employer: existing?.employer ?? "", monthlySalary: existing?.monthlySalary ?? 0,
-    otherIncome: existing?.otherIncome ?? 0, financeCount: existing?.financeCount ?? (1 as 1 | 2),
+    name: existing?.name ?? "", preferredName: existing?.preferredName ?? "", customerType: existing?.customerType ?? ("EXPAT" as CustomerType),
+    nationality: existing?.nationality ?? "", countryOfBirth: existing?.countryOfBirth ?? "", gender: existing?.gender ?? "",
+    dob: existing?.dob ?? "", mobile: existing?.mobile ?? "", altMobile: existing?.altMobile ?? "", email: existing?.email ?? "",
+    whatsapp: existing?.whatsapp ?? "",
+    uaeResident: existing?.uaeResident ?? true, residencyStatus: existing?.residencyStatus ?? "", visaType: existing?.visaType ?? "",
+    visaExpiry: existing?.visaExpiry ?? "", eidNumber: existing?.eidNumber ?? "", eidExpiry: existing?.eidExpiry ?? "",
+    passportNo: existing?.passportNo ?? "", passportExpiry: existing?.passportExpiry ?? "", emirate: existing?.emirate ?? "",
+    currentAddress: existing?.currentAddress ?? "",
+    employment: existing?.employment ?? ("SALARIED" as Employment), employer: existing?.employer ?? "", jobTitle: existing?.jobTitle ?? "",
+    sector: existing?.sector ?? "", yearsEmployed: existing?.yearsEmployed ?? 0, workLocation: existing?.workLocation ?? "",
+    hrName: existing?.hrName ?? "", hrPhone: existing?.hrPhone ?? "",
+    monthlySalary: existing?.monthlySalary ?? 0, otherIncome: existing?.otherIncome ?? 0, financeCount: existing?.financeCount ?? (1 as 1 | 2),
+    creditScore: existing?.creditScore ?? "", dependants: existing?.dependants ?? 0, primaryAccountBank: existing?.primaryAccountBank ?? "",
+    assignedTeam: existing?.assignedTeam ?? "", assignedRm: existing?.assignedRm ?? "", dateRegistered: existing?.dateRegistered ?? todayISO(),
+    leadSource: existing?.leadSource ?? "",
   });
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
   const valid = f.name.trim().length > 1;
+  const total = f.monthlySalary + f.otherIncome;
   return (
-    <Modal open onClose={onClose} title={existing ? `Edit · ${existing.name}` : "New person"} width={620}
+    <Modal open onClose={onClose} title={existing ? `Client profile · ${existing.name}` : "New client profile"} width={720}
       footer={<>
+        <p className="mr-auto text-[11px] text-ink-soft num">Total income {fmtAED(total)}/mo</p>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
         <Btn disabled={!valid} onClick={() => onSave({
-          id: existing?.id ?? "p" + uid(), name: f.name.trim(), customerType: f.customerType, nationality: f.nationality || "—",
-          employment: f.employment, dob: f.dob, mobile: f.mobile, email: f.email, employer: f.employer,
+          id: existing?.id ?? "p" + uid(), name: f.name.trim(), preferredName: f.preferredName || undefined,
+          customerType: f.customerType, nationality: f.nationality || "—", countryOfBirth: f.countryOfBirth || undefined, gender: f.gender || undefined,
+          dob: f.dob, mobile: f.mobile, altMobile: f.altMobile || undefined, email: f.email, whatsapp: f.whatsapp || undefined,
+          uaeResident: f.uaeResident, residencyStatus: f.residencyStatus || undefined, visaType: f.visaType || undefined,
+          visaExpiry: f.visaExpiry || undefined, eidNumber: f.eidNumber || undefined, eidExpiry: f.eidExpiry || undefined,
+          passportNo: f.passportNo || undefined, passportExpiry: f.passportExpiry || undefined, emirate: f.emirate || undefined,
+          currentAddress: f.currentAddress || undefined,
+          employment: f.employment, employer: f.employer, jobTitle: f.jobTitle || undefined, sector: f.sector || undefined,
+          yearsEmployed: f.yearsEmployed || undefined, workLocation: f.workLocation || undefined,
+          hrName: f.hrName || undefined, hrPhone: f.hrPhone || undefined,
           monthlySalary: f.monthlySalary, otherIncome: f.otherIncome, financeCount: f.financeCount,
+          creditScore: f.creditScore || undefined, dependants: f.dependants || undefined, primaryAccountBank: f.primaryAccountBank || undefined,
+          assignedTeam: f.assignedTeam || undefined, assignedRm: f.assignedRm || undefined,
+          dateRegistered: f.dateRegistered || undefined, leadSource: f.leadSource || undefined,
           cards: existing?.cards ?? [], liabilities: existing?.liabilities ?? [],
           kyc: existing?.kyc ?? { passport: false, eid: false, visa: false, address: false },
           createdAt: existing?.createdAt ?? todayISO(),
-        })}>{existing ? "Save changes" : "Create person"}</Btn>
+        })}>{existing ? "Save profile" : "Create profile"}</Btn>
       </>}>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2"><Field label="Full name" req><TextInput value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Arjun Malhotra" /></Field></div>
-        <Field label="Customer type"><Select value={f.customerType} onChange={(v) => set("customerType", v)} options={CT.map((c) => ({ v: c.v, l: c.l }))} /></Field>
-        <Field label="Nationality"><TextInput value={f.nationality} onChange={(e) => set("nationality", e.target.value)} placeholder="e.g. India" /></Field>
-        <Field label="Employment"><Select value={f.employment} onChange={(v) => set("employment", v)} options={EMP.map((c) => ({ v: c.v, l: c.l }))} /></Field>
+      <FSec t="Personal information">
+        <Field label="Full name" req><TextInput value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Dina Khalid Saeed Alalami" /></Field>
+        <Field label="Preferred name"><TextInput value={f.preferredName} onChange={(e) => set("preferredName", e.target.value)} /></Field>
         <Field label="Date of birth"><DateInput value={f.dob} onChange={(e) => set("dob", e.target.value)} /></Field>
-        <Field label="Mobile"><TextInput value={f.mobile} onChange={(e) => set("mobile", e.target.value)} /></Field>
+        <Field label="Gender"><Select value={f.gender} onChange={(v) => set("gender", v)} options={[{ v: "", l: "—" }, { v: "Female", l: "Female" }, { v: "Male", l: "Male" }]} /></Field>
+        <Field label="Mobile"><TextInput value={f.mobile} onChange={(e) => set("mobile", e.target.value)} placeholder="+971 …" /></Field>
+        <Field label="Alt mobile"><TextInput value={f.altMobile} onChange={(e) => set("altMobile", e.target.value)} /></Field>
         <Field label="Email"><TextInput value={f.email} onChange={(e) => set("email", e.target.value)} /></Field>
-        <Field label="Employer"><TextInput value={f.employer} onChange={(e) => set("employer", e.target.value)} /></Field>
-        <Field label="Property finance count"><Select value={String(f.financeCount)} onChange={(v) => set("financeCount", Number(v) as 1 | 2)} options={[{ v: "1", l: "1st property finance" }, { v: "2", l: "2nd or more" }]} /></Field>
+        <Field label="WhatsApp"><TextInput value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></Field>
+        <Field label="Nationality"><TextInput value={f.nationality} onChange={(e) => set("nationality", e.target.value)} placeholder="e.g. UAE National" /></Field>
+        <Field label="Country of birth"><TextInput value={f.countryOfBirth} onChange={(e) => set("countryOfBirth", e.target.value)} /></Field>
+        <Field label="Customer type"><Select value={f.customerType} onChange={(v) => set("customerType", v)} options={CT.map((c) => ({ v: c.v, l: c.l }))} /></Field>
+      </FSec>
+      <FSec t="Residency & visa">
+        <Field label="UAE resident"><Select value={f.uaeResident ? "yes" : "no"} onChange={(v) => set("uaeResident", v === "yes")} options={[{ v: "yes", l: "Yes" }, { v: "no", l: "No" }]} /></Field>
+        <Field label="Residency status"><Select value={f.residencyStatus} onChange={(v) => set("residencyStatus", v)} options={[{ v: "", l: "—" }, { v: "Citizen", l: "Citizen" }, { v: "Resident", l: "Resident" }, { v: "Non-resident", l: "Non-resident" }]} /></Field>
+        <Field label="Visa type"><TextInput value={f.visaType} onChange={(e) => set("visaType", e.target.value)} placeholder="N/A for citizens" /></Field>
+        <Field label="Visa expiry"><DateInput value={f.visaExpiry} onChange={(e) => set("visaExpiry", e.target.value)} /></Field>
+        <Field label="Emirates ID no."><TextInput value={f.eidNumber} onChange={(e) => set("eidNumber", e.target.value)} placeholder="784-…" /></Field>
+        <Field label="EID expiry"><DateInput value={f.eidExpiry} onChange={(e) => set("eidExpiry", e.target.value)} /></Field>
+        <Field label="Passport no."><TextInput value={f.passportNo} onChange={(e) => set("passportNo", e.target.value)} /></Field>
+        <Field label="Passport expiry"><DateInput value={f.passportExpiry} onChange={(e) => set("passportExpiry", e.target.value)} /></Field>
+        <Field label="Emirate"><Select value={f.emirate} onChange={(v) => set("emirate", v)} options={[{ v: "", l: "—" }, ...["Abu Dhabi", "Dubai", "Sharjah", "Ajman", "RAK", "Fujairah", "UAQ"].map((x) => ({ v: x, l: x }))]} /></Field>
+        <Field label="Current address"><TextInput value={f.currentAddress} onChange={(e) => set("currentAddress", e.target.value)} /></Field>
+      </FSec>
+      <FSec t="Employment details">
+        <Field label="Employment type"><Select value={f.employment} onChange={(v) => set("employment", v)} options={EMP.map((c) => ({ v: c.v, l: c.l }))} /></Field>
+        <Field label="Employer name"><TextInput value={f.employer} onChange={(e) => set("employer", e.target.value)} /></Field>
+        <Field label="Job title"><TextInput value={f.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} /></Field>
+        <Field label="Sector"><Select value={f.sector} onChange={(v) => set("sector", v)} options={[{ v: "", l: "—" }, ...["Government", "Semi-Government", "Private", "Banking", "Oil & Gas", "Healthcare", "Education", "Other"].map((x) => ({ v: x, l: x }))]} /></Field>
+        <Field label="Years employed"><NumInput value={f.yearsEmployed} onChange={(n) => set("yearsEmployed", n)} suffix="yrs" /></Field>
+        <Field label="Work location"><TextInput value={f.workLocation} onChange={(e) => set("workLocation", e.target.value)} /></Field>
+        <Field label="HR contact name"><TextInput value={f.hrName} onChange={(e) => set("hrName", e.target.value)} /></Field>
+        <Field label="HR contact phone"><TextInput value={f.hrPhone} onChange={(e) => set("hrPhone", e.target.value)} /></Field>
+      </FSec>
+      <FSec t="Financial profile">
         <Field label="Monthly salary"><NumInput value={f.monthlySalary} onChange={(n) => set("monthlySalary", n)} suffix="AED" /></Field>
-        <Field label="Other monthly income"><NumInput value={f.otherIncome} onChange={(n) => set("otherIncome", n)} suffix="AED" /></Field>
-      </div>
+        <Field label="Other income"><NumInput value={f.otherIncome} onChange={(n) => set("otherIncome", n)} suffix="AED" /></Field>
+        <Field label="Credit score"><Select value={f.creditScore} onChange={(v) => set("creditScore", v)} options={[{ v: "", l: "—" }, ...["Excellent", "Good", "Fair", "Poor"].map((x) => ({ v: x, l: x }))]} /></Field>
+        <Field label="No. of dependants"><NumInput value={f.dependants} onChange={(n) => set("dependants", n)} /></Field>
+        <Field label="Primary account bank"><TextInput value={f.primaryAccountBank} onChange={(e) => set("primaryAccountBank", e.target.value)} /></Field>
+        <Field label="Property finance count"><Select value={String(f.financeCount)} onChange={(v) => set("financeCount", Number(v) as 1 | 2)} options={[{ v: "1", l: "1st property finance" }, { v: "2", l: "2nd or more" }]} /></Field>
+      </FSec>
+      <FSec t="Assignment & registration">
+        <Field label="Assigned team"><Select value={f.assignedTeam} onChange={(v) => set("assignedTeam", v)} options={[{ v: "", l: "—" }, { v: "VRM1", l: "VRM1" }, { v: "VRM2", l: "VRM2" }, ...Array.from(new Set(state.users.filter((u) => u.active && u.role === "VRM").map((u) => u.name))).map((n) => ({ v: n, l: n }))]
+          .filter((o, i, a) => a.findIndex((x) => x.v === o.v) === i)} /></Field>
+        <Field label="Assigned RM"><Select value={f.assignedRm} onChange={(v) => set("assignedRm", v)} options={[{ v: "", l: "—" }, ...state.users.filter((u) => u.active && (u.role === "VRM" || u.role === "SPO")).map((u) => ({ v: u.name, l: u.name }))]} /></Field>
+        <Field label="Date registered"><DateInput value={f.dateRegistered} onChange={(e) => set("dateRegistered", e.target.value)} /></Field>
+        <Field label="Lead source"><Select value={f.leadSource} onChange={(v) => set("leadSource", v)} options={[{ v: "", l: "—" }, ...state.leadSources.map((s) => ({ v: s, l: s }))]} /></Field>
+      </FSec>
     </Modal>
   );
 }
@@ -61,7 +142,7 @@ export function PeopleView() {
   const nav = useNav();
   const [q, setQ] = useState("");
   const [form, setForm] = useState<null | { existing?: Person }>(null);
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>((nav.params.personId as string) ?? null);
 
   const list = state.persons.filter((p) => (p.name + p.nationality + p.email).toLowerCase().includes(q.toLowerCase()));
   const person = state.persons.find((p) => p.id === sel);
@@ -127,16 +208,89 @@ export function PeopleView() {
               <Pill tone="gr">Age {ageYears(person.dob)}</Pill>
               <Pill tone="gr">{person.financeCount === 1 ? "1st finance" : "2nd+ finance"}</Pill>
             </div>
-            <div>
-              <h4 className="text-[11px] font-display font-semibold uppercase tracking-[0.09em] text-ink-soft mb-1.5">Profile</h4>
-              <KV k="Nationality" v={person.nationality} mono={false} />
-              <KV k="DOB" v={fmtDate(person.dob)} mono={false} />
+            <PSec t="Personal information">
+              <KV k="Full name" v={person.name} mono={false} />
+              <KV k="Preferred name" v={person.preferredName || "—"} mono={false} />
+              <KV k="Date of birth" v={person.dob ? fmtDate(person.dob) : "—"} mono={false} />
+              <KV k="Gender" v={person.gender || "—"} mono={false} />
               <KV k="Mobile" v={person.mobile || "—"} mono={false} />
+              <KV k="Alt mobile" v={person.altMobile || "—"} mono={false} />
               <KV k="Email" v={person.email || "—"} mono={false} />
-              <KV k="Employer" v={person.employer || "—"} mono={false} />
+              <KV k="WhatsApp" v={person.whatsapp || "—"} mono={false} />
+              <KV k="Nationality" v={person.nationality} mono={false} />
+              <KV k="Country of birth" v={person.countryOfBirth || "—"} mono={false} />
+            </PSec>
+            <PSec t="Residency & visa">
+              <KV k="UAE resident" v={person.uaeResident === undefined ? "—" : person.uaeResident ? "Yes" : "No"} mono={false} />
+              <KV k="Residency status" v={person.residencyStatus || "—"} mono={false} />
+              <KV k="Visa type" v={person.visaType || "—"} mono={false} />
+              <KV k="Visa expiry" v={person.visaExpiry ? fmtDate(person.visaExpiry) : "—"} mono={false} />
+              <KV k="Emirates ID no." v={person.eidNumber || "—"} />
+              <KV k="EID expiry" v={person.eidExpiry ? fmtDate(person.eidExpiry) : "—"} mono={false} />
+              <KV k="Passport no." v={person.passportNo || "—"} />
+              <KV k="Passport expiry" v={person.passportExpiry ? fmtDate(person.passportExpiry) : "—"} mono={false} />
+              <KV k="Emirate" v={person.emirate || "—"} mono={false} />
+              <KV k="Current address" v={person.currentAddress || "—"} mono={false} />
+            </PSec>
+            <PSec t="Employment details">
+              <KV k="Employment type" v={EMP.find((c) => c.v === person.employment)?.l ?? "—"} mono={false} />
+              <KV k="Employer name" v={person.employer || "—"} mono={false} />
+              <KV k="Job title" v={person.jobTitle || "—"} mono={false} />
+              <KV k="Sector" v={person.sector || "—"} mono={false} />
+              <KV k="Years employed" v={person.yearsEmployed ? `${person.yearsEmployed}` : "—"} />
+              <KV k="Work location" v={person.workLocation || "—"} mono={false} />
+              <KV k="HR contact name" v={person.hrName || "—"} mono={false} />
+              <KV k="HR contact phone" v={person.hrPhone || "—"} mono={false} />
+            </PSec>
+            <PSec t="Financial profile">
               <KV k="Monthly salary" v={person.monthlySalary ? fmtAED(person.monthlySalary) : "—"} />
-              <KV k="Other income" v={fmtAED(person.otherIncome)} />
-            </div>
+              <KV k="Other income" v={person.otherIncome ? fmtAED(person.otherIncome) : "—"} />
+              <KV k="Total income (auto)" v={person.monthlySalary + person.otherIncome ? fmtAED(person.monthlySalary + person.otherIncome) : "—"} />
+              <KV k="Existing liabilities" v={person.liabilities.length ? `${fmtAED(person.liabilities.reduce((s, l) => s + l.monthly, 0))}/mo` : "—"} />
+              <KV k="DBR % (auto)" v={(() => {
+                const inc = person.monthlySalary + person.otherIncome;
+                if (!inc) return "—";
+                const dbr = (person.liabilities.reduce((s, l) => s + l.monthly, 0) / inc) * 100;
+                return `${dbr.toFixed(1)}%${dbr >= 50 ? " · above 50% ceiling" : ""}`;
+              })()} />
+              <KV k="Credit score" v={person.creditScore || "—"} mono={false} />
+              <KV k="No. of dependants" v={person.dependants !== undefined && person.dependants !== null ? `${person.dependants}` : "—"} />
+              <KV k="Primary account bank" v={person.primaryAccountBank || "—"} mono={false} />
+              <KV k="Property finance count" v={person.financeCount === 1 ? "1st property finance" : "2nd or more"} mono={false} />
+            </PSec>
+            <PSec t="Transaction details (from linked cases)">
+              {(() => {
+                const cs = state.cases.filter((c) => c.personId === person.id && c.status === "OPEN");
+                if (!cs.length) return <p className="text-[12px] text-ink-soft italic px-1">No open transaction — details appear when a case is created.</p>;
+                return cs.map((cz) => {
+                  const bank = state.banks.find((b) => b.id === cz.bankId);
+                  const ltv = cz.propertyValue ? (cz.loanAmount / cz.propertyValue) * 100 : 0;
+                  const emiV = emi(cz.loanAmount, cz.rate, cz.tenureMonths);
+                  return (
+                    <button key={cz.id} onClick={() => nav.go("cases", { caseId: cz.id })} className="w-full text-left border border-mist rounded-md px-3 py-2.5 mb-2 hover:border-pine-400 hover:shadow-sm transition-all focusable">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="num text-[11px] font-bold text-pine-700">{cz.ref} · {bank?.short}{cz.deal ? ` · ${cz.deal}` : ""}</span>
+                        <span className="text-[10px] font-display font-bold uppercase tracking-wide bg-pine-100 text-pine-800 rounded px-1.5 py-0.5">{state.stages.find((s) => s.id === cz.stage)?.short}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 text-[11.5px]">
+                        <KV k="Transaction type" v={TX.find((t) => t.v === cz.txType)?.l ?? "—"} mono={false} />
+                        <KV k="Property value" v={cz.propertyValue ? fmtAED(cz.propertyValue) : "—"} />
+                        <KV k="Finance amount" v={cz.loanAmount ? fmtAED(cz.loanAmount) : "—"} />
+                        <KV k="LTV % (auto)" v={ltv ? `${ltv.toFixed(0)}%` : "—"} />
+                        <KV k="Tenor" v={`${Math.round(cz.tenureMonths / 12)} yrs (${cz.tenureMonths} mo)`} />
+                        <KV k="Interest rate" v={`${cz.rate}%`} />
+                        <KV k="Monthly EMI (auto)" v={cz.loanAmount ? fmtAED(emiV) : "—"} />
+                        <KV k="Bank status" v={cz.bankApp?.status || state.stages.find((s) => s.id === cz.stage)?.name || "—"} mono={false} />
+                      </div>
+                    </button>
+                  );
+                });
+              })()}
+              <KV k="Assigned team" v={person.assignedTeam || "—"} mono={false} />
+              <KV k="Assigned RM" v={person.assignedRm || "—"} mono={false} />
+              <KV k="Date registered" v={person.dateRegistered ? fmtDate(person.dateRegistered) : fmtDate(person.createdAt)} mono={false} />
+              <KV k="Lead source" v={person.leadSource || "—"} mono={false} />
+            </PSec>
             <div>
               <h4 className="text-[11px] font-display font-semibold uppercase tracking-[0.09em] text-ink-soft mb-1.5">KYC checklist</h4>
               <div className="grid grid-cols-2 gap-2">

@@ -17,7 +17,18 @@ export interface Person {
   cards: { bank: string; limit: number }[];
   liabilities: { type: string; monthly: number }[];
   kyc: { passport: boolean; eid: boolean; visa: boolean; address: boolean };
-  profile?: Record<string, string | number>;
+  /* personal information */
+  preferredName?: string; gender?: string; altMobile?: string; whatsapp?: string; countryOfBirth?: string;
+  /* residency & visa */
+  uaeResident?: boolean; residencyStatus?: string; visaType?: string; visaExpiry?: string;
+  eidNumber?: string; eidExpiry?: string; passportNo?: string; passportExpiry?: string;
+  emirate?: string; currentAddress?: string;
+  /* employment details */
+  jobTitle?: string; sector?: string; yearsEmployed?: number; workLocation?: string; hrName?: string; hrPhone?: string;
+  /* financial profile */
+  creditScore?: string; dependants?: number; primaryAccountBank?: string;
+  /* assignment */
+  assignedTeam?: string; assignedRm?: string; dateRegistered?: string; leadSource?: string;
   createdAt: string;
 }
 

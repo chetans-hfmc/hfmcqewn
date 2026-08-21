@@ -7,12 +7,12 @@ const KEY = "hfmc-mos-state";
 
 /* ---------- role → module access (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
-  ADMIN: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
-  HEAD: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
-  TL: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "audit"],
-  SPO: ["dashboard", "tracker", "cases", "tasks", "documents", "queries", "calculators"],
-  VRM: ["dashboard", "tracker", "people", "leads", "cases", "calculators"],
-  PA: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents"],
+  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "guide", "audit"],
+  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "guide", "audit"],
+  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "guide", "audit"],
+  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "calculators", "guide"],
+  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "calculators", "guide"],
+  PA: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "guide"],
   TBD: ["dashboard"],
 };
 export const ROLE_LABEL: Record<string, string> = {

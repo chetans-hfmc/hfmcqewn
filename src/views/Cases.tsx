@@ -506,6 +506,7 @@ function AddQuery({ caze, onClose }: { caze: Case; onClose: () => void }) {
 
 function TatTab({ c, person }: { c: Case; person: Person }) {
   const { state, dispatch } = useStore();
+  const nav = useNav();
   const me = useMe();
   const [note, setNote] = useState("");
   const [copied, setCopied] = useState(false);
@@ -617,7 +618,7 @@ function TatTab({ c, person }: { c: Case; person: Person }) {
       )}
 
       {/* bank application + client profile */}
-      {(c.bankApp || person.profile) && (
+      {(c.bankApp || true) && (
         <div className="grid lg:grid-cols-2 gap-3">
           {c.bankApp && (
             <div className="border border-mist bg-card rounded-lg p-4 anim-up">
@@ -637,21 +638,26 @@ function TatTab({ c, person }: { c: Case; person: Person }) {
               </div>
             </div>
           )}
-          {person.profile && (
-            <div className="border border-mist bg-card rounded-lg p-4 anim-up">
-              <p className="font-display font-bold text-[13px] tracking-tight mb-2.5">Client information — {person.name}</p>
-              <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[12px]">
-                {Object.entries(person.profile).map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-3 border-b border-mist/50 py-1">
-                    <span className="text-ink-soft">{k}</span><span className="num font-semibold text-right">{String(v)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Monthly salary</span><span className="num font-semibold">{fmtAED(person.monthlySalary)}</span></div>
-                <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Existing liabilities</span><span className="num font-semibold">{fmtAED(person.liabilities.reduce((s, l) => s + l.monthly, 0))}/m</span></div>
-                <div className="flex justify-between gap-3 py-1"><span className="text-ink-soft">DBR (auto)</span><span className={cx("num font-bold", person.monthlySalary ? (person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100 >= 50 ? "text-rust-600" : "text-pine-700" : "")}>{person.monthlySalary ? `${((person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100).toFixed(1)}%` : "—"}</span></div>
-              </div>
+          <div className="border border-mist bg-card rounded-lg p-4 anim-up">
+            <p className="font-display font-bold text-[13px] tracking-tight mb-2.5">Client information — {person.name}</p>
+            <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[12px]">
+              {[
+                ["Mobile", person.mobile], ["WhatsApp", person.whatsapp], ["Email", person.email],
+                ["Nationality", person.nationality], ["Emirate", person.emirate],
+                ["Employment", person.employment === "SALARIED" ? "Salaried" : "Self-employed"],
+                ["Employer", person.employer], ["Sector", person.sector], ["Years employed", person.yearsEmployed ? String(person.yearsEmployed) : undefined],
+                ["Credit score", person.creditScore], ["Assigned team", person.assignedTeam], ["Assigned RM", person.assignedRm],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k as string} className="flex justify-between gap-3 border-b border-mist/50 py-1">
+                  <span className="text-ink-soft">{k}</span><span className="num font-semibold text-right">{String(v)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Monthly salary</span><span className="num font-semibold">{person.monthlySalary ? fmtAED(person.monthlySalary) : "—"}</span></div>
+              <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Existing liabilities</span><span className="num font-semibold">{fmtAED(person.liabilities.reduce((s, l) => s + l.monthly, 0))}/m</span></div>
+              <div className="flex justify-between gap-3 py-1"><span className="text-ink-soft">DBR (auto)</span><span className={cx("num font-bold", person.monthlySalary ? (person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100 >= 50 ? "text-rust-600" : "text-pine-700" : "")}>{person.monthlySalary ? `${((person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100).toFixed(1)}%` : "—"}</span></div>
             </div>
-          )}
+            <button onClick={() => nav.go("people", { params: { personId: person.id } })} className="focusable mt-3 text-[11.5px] font-display font-bold text-pine-700 hover:underline flex items-center gap-1"><Ic n="user" size={13} /> Open full client profile</button>
+          </div>
         </div>
       )}
 

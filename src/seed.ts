@@ -1,7 +1,7 @@
 import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 7;
+export const SEED_VERSION = 8;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
@@ -531,18 +531,18 @@ audit.push({ id: "ax" + ++ax, at: ts(-1), by: "hfmm-06", module: "MILESTONE", ac
    ================================================================ */
 const dina = persons.find((p) => p.name.startsWith("Dina Khalid"))!;
 Object.assign(dina, {
-  dob: "1973-08-22", nationality: "UAE", customerType: "NATIONAL", employment: "SALARIED",
+  dob: "1973-08-22", nationality: "UAE National", customerType: "NATIONAL", employment: "SALARIED",
   mobile: "+971 52 696 9845", email: "dina.alalami@gmail.com", employer: "Abu Dhabi School of Government",
   monthlySalary: 60679, otherIncome: 0, financeCount: 1,
   liabilities: [{ type: "Existing financing", monthly: 30842 }],
   kyc: { passport: true, eid: true, visa: true, address: true },
-  profile: {
-    "Preferred name": "Dina", Gender: "Female", WhatsApp: "+971 52 696 9845", "Country of birth": "UAE",
-    Residency: "Citizen", Emirate: "Abu Dhabi", "Emirates ID": "784-1973-0613762-7", Passport: "AA0076779",
-    "Job sector": "Government", "Years employed": 7, "Credit score": "Good", "Assigned team": "VRM2",
-    "Assigned RM": "Adnan Mahmood", "Lead source": "Referral",
-  },
-});
+  preferredName: "Dina", gender: "Female", whatsapp: "+971 52 696 9845", countryOfBirth: "UAE",
+  uaeResident: true, residencyStatus: "Citizen", visaType: "N/A",
+  eidNumber: "784-1973-0613762-7", passportNo: "AA0076779", emirate: "Abu Dhabi",
+  sector: "Government", yearsEmployed: 7, workLocation: "Abu Dhabi",
+  creditScore: "Good", assignedTeam: "VRM2", assignedRm: "Adnan Mahmood",
+  dateRegistered: d(-11), leadSource: "Referral",
+} as Partial<Person>);
 {
   const dibProd = products.find((p) => p.bankId === "b-dib")!;
   const stg = (id: string, at: number) => ({ stageId: id, at: ts(at), by: "hfmm-06" });
@@ -551,9 +551,9 @@ Object.assign(dina, {
     bankId: "b-dib", productId: dibProd.id, txType: "BUYOUT", propertyValue: 0, loanAmount: 0,
     rate: 3.99, tenureMonths: 300, stage: "FOL", status: "OPEN",
     stageHistory: [stg("INTAKE", -11), stg("FILEQC", -10), stg("SUBMIT", -9), stg("PREAPP", -7), stg("VALUATION", -4), stg("FOL", -1)],
-    triggerDates: { INTAKE: d(-11), FILEQC: d(-10), SUBMIT: d(-9), PREAPP: d(-7), VALUATION: d(-4), FOL: d(-1) },
+    triggerDates: { INTAKE: d(0), FILEQC: d(-10), SUBMIT: d(-9), PREAPP: d(-7), VALUATION: d(-4), FOL: d(-1) },
     conditionsDone: {
-      "INTAKE:0": true, "INTAKE:1": true, "INTAKE:2": true, "INTAKE:3": true,
+      "INTAKE:0": true, "INTAKE:1": true,
       "FILEQC:0": true, "FILEQC:1": true, "FILEQC:2": true,
       "SUBMIT:0": true, "SUBMIT:1": true, "SUBMIT:2": true, "SUBMIT:3": true, "SUBMIT:4": true,
       "PREAPP:0": true, "PREAPP:1": true, "PREAPP:2": true, "PREAPP:4": true, "PREAPP:5": true,
@@ -561,7 +561,7 @@ Object.assign(dina, {
       "FOL:0": true, "FOL:1": true,
     },
     nextAction: "FOL received — share with client for signing", nextActionDue: d(1), waitingFor: "Client",
-    expectedCompletion: d(20), expectedRevenue: 0, createdAt: d(-11),
+    expectedCompletion: d(45), expectedRevenue: 0, createdAt: d(-11),
     bankApp: {
       officer: "Mr. Babar", officerEmail: "babar@dib.ae", appRef: "DIB-2026-00123", status: "Pre-Approval",
       statusDate: "2026-04-20", rate: 3.99, ltv: 75, valuationFee: 2500, offerExpiry: "2026-04-30", insuranceProvider: "DIB Takaful",
@@ -573,11 +573,12 @@ Object.assign(dina, {
     docs: [],
   };
   const DD = (typeId: string, status: DocStatus): DocItem => ({ id: "dd" + ++dn, typeId, stageId: "INTAKE", status, updatedAt: ts(-2), updatedBy: "hfmm-11" });
+  /* workbook status: 11 of 16 received (69%) — R=received P=pending NA */
   dinaCase.docs = [
     DD("EID", "VERIFIED"), DD("PASSPORT", "VERIFIED"), DD("VISA", "VERIFIED"), DD("PHOTO", "RECEIVED"),
-    DD("SALCERT", "MISSING"), DD("PAYSLIPS", "VERIFIED"), DD("BANKSTMT", "VERIFIED"), DD("LIABILITY", "RECEIVED"),
-    DD("EMPCONTRACT", "VERIFIED"), DD("SPA", "VERIFIED"), DD("FORMF", "RECEIVED"), DD("NOCDEV", "MISSING"),
-    DD("FLOORPLAN", "RECEIVED"), DD("TRADELIC", "NA"), DD("AUDITREP", "NA"), DD("LOANSTMT", "VERIFIED"), DD("POA", "NA"),
+    DD("SALCERT", "MISSING"), DD("PAYSLIPS", "RECEIVED"), DD("BANKSTMT", "RECEIVED"), DD("LIABILITY", "MISSING"),
+    DD("EMPCONTRACT", "RECEIVED"), DD("SPA", "RECEIVED"), DD("FORMF", "RECEIVED"), DD("NOCDEV", "MISSING"),
+    DD("FLOORPLAN", "RECEIVED"), DD("TRADELIC", "NA"), DD("AUDITREP", "NA"), DD("LOANSTMT", "RECEIVED"), DD("POA", "NA"),
     { id: "dd" + ++dn, typeId: "FOL", stageId: "FOL", status: "RECEIVED", updatedAt: ts(-1), updatedBy: "hfmm-06" },
   ];
   cases.push(dinaCase);

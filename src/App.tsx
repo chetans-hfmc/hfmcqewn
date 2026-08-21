@@ -8,6 +8,8 @@ import { Case360, CasesView } from "./views/Cases";
 import { DocumentsView, QueriesView, TasksView } from "./views/Ops";
 import CalculatorsView from "./views/Calculators";
 import TrackerView from "./views/Tracker";
+import TatView from "./views/Tat";
+import GuideView from "./views/Guide";
 import { AuditView, RuleCentre, UsersView } from "./views/Admin";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
@@ -17,6 +19,7 @@ const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
     { v: "leads", l: "Leads", icon: "funnel" },
     { v: "cases", l: "Cases", icon: "briefcase" },
     { v: "tracker", l: "Daily Tracker", icon: "calendar" },
+    { v: "tat", l: "TAT & Escalation", icon: "timer" },
   ]},
   { g: "Execute", items: [
     { v: "tasks", l: "Tasks", icon: "clipboard" },
@@ -27,6 +30,7 @@ const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
   { g: "Govern", items: [
     { v: "rules", l: "Rule Centre", icon: "sliders" },
     { v: "users", l: "Users & Roles", icon: "shield" },
+    { v: "guide", l: "Ops Guide Book", icon: "book" },
     { v: "audit", l: "Audit Trail", icon: "clock" },
   ]},
 ];
@@ -121,9 +125,9 @@ function Shell() {
   const openQueries = state.queries.filter((q) => q.status === "OPEN").length;
 
   const titles: Record<View, string> = {
-    dashboard: "Control Tower", tracker: "Daily Tracker", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
+    dashboard: "Control Tower", tracker: "Daily Tracker", tat: "TAT & Escalation", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
     tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries", calculators: "Calculator Centre",
-    rules: "Rule Centre", users: "Users & Roles", audit: "Audit Trail",
+    rules: "Rule Centre", users: "Users & Roles", guide: "Operations Guide Book", audit: "Audit Trail",
   };
 
   return (
@@ -214,12 +218,14 @@ function Shell() {
             {view === "leads" && <LeadsView />}
             {view === "cases" && (nav.caseId ? <Case360 id={nav.caseId} /> : <CasesView />)}
             {view === "tracker" && <TrackerView />}
+            {view === "tat" && <TatView />}
             {view === "tasks" && <TasksView />}
             {view === "documents" && <DocumentsView />}
             {view === "queries" && <QueriesView />}
             {view === "calculators" && <CalculatorsView />}
             {view === "rules" && <RuleCentre />}
             {view === "users" && <UsersView />}
+            {view === "guide" && <GuideView />}
             {view === "audit" && <AuditView />}
           </div>
         </main>

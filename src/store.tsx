@@ -182,7 +182,14 @@ function init(): AppState {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppState;
-      if (parsed.version === SEED_VERSION) return parsed;
+      // Version must match AND the data must fingerprint as the current dataset
+      // (guards against stale caches written under a colliding version number).
+      const fresh =
+        parsed.version === SEED_VERSION &&
+        Array.isArray(parsed.trackerDates) &&
+        Array.isArray(parsed.users) &&
+        parsed.users.some((u) => u.empId === "hfmm-15");
+      if (fresh) return parsed;
     }
   } catch { /* fall through */ }
   return buildSeed();

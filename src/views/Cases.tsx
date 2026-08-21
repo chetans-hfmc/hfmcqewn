@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Case, DocStatus, Task } from "../types";
 import { useMe, useNav, useStore } from "../store";
 import { emi, stageGates } from "../calc";
-import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextArea, TextInput, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtPct, fmtTime, nowISO, todayISO, uid, ageYears } from "../ui";
+import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextArea, TextInput, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtPct, fmtTime, nowISO, todayISO, uid } from "../ui";
 
 const DOC_STATUSES: { v: DocStatus; l: string; cls: string; on: string }[] = [
   { v: "MISSING", l: "Missing", cls: "text-ink-soft", on: "bg-gr-700 text-paper border-gr-700" },
@@ -62,9 +62,11 @@ export function CasesView() {
                 <tr key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
                   className="border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${i * 25}ms` }}>
                   <td className="px-4 py-3"><p className="num font-semibold text-pine-700">{c.ref}</p><p className="text-[10.5px] text-ink-soft">opened {fmtDate(c.createdAt)}</p></td>
-                  <td className="px-3 py-3"><div className="flex items-center gap-2"><Avatar name={personName(c.personId)} size={26} /><span className="font-semibold">{personName(c.personId)}</span></div></td>
-                  <td className="px-3 py-3"><p className="font-medium">{state.banks.find((b) => b.id === c.bankId)?.short}</p><p className="text-[10.5px] text-ink-soft max-w-[160px] truncate">{state.products.find((p) => p.id === c.productId)?.name}</p></td>
-                  <td className="px-3 py-3"><p className="num font-semibold">{fmtAED(c.loanAmount)}</p><p className="text-[10.5px] text-ink-soft">of {fmtAED(c.propertyValue)}</p></td>
+                  <td className="px-3 py-3"><div className="flex items-center gap-2"><Avatar name={personName(c.personId)} size={26} /><div><p className="font-semibold leading-tight">{personName(c.personId)}</p>{c.deal && <p className="text-[10.5px] text-amber-700 font-medium">{c.deal}</p>}</div></div></td>
+                  <td className="px-3 py-3"><p className="font-medium">{state.banks.find((b) => b.id === c.bankId)?.short} <span className="text-[10px] text-ink-soft font-normal">· {c.channel}</span></p><p className="text-[10.5px] text-ink-soft max-w-[170px] truncate">RM {c.bankRm ?? "—"}</p></td>
+                  <td className="px-3 py-3">{c.loanAmount || c.propertyValue
+                    ? <><p className="num font-semibold">{c.loanAmount ? fmtAED(c.loanAmount) : "—"}</p><p className="text-[10.5px] text-ink-soft">of {c.propertyValue ? fmtAED(c.propertyValue) : "—"}</p></>
+                    : <span className="text-[11px] text-ink-soft/60 italic">not on tracker</span>}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <Pill tone={c.status === "CLOSED" ? "gr" : idx >= 10 ? "pine" : idx >= 5 ? "steel" : "amber"}>{st?.name}</Pill>
@@ -143,8 +145,13 @@ export function Case360({ id }: { id: string }) {
               <Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill>
               <Pill tone="ink">{c.txType.replace("_", " + ")}</Pill>
             </div>
-            <p className="text-[13px] text-ink-soft mt-1 flex items-center gap-2">
-              <Avatar name={person.name} size={20} /> <span className="font-semibold text-ink">{person.name}</span> · {person.customerType.replace("_", "-")} · age {ageYears(person.dob)} · {state.banks.find((b) => b.id === c.bankId)?.name} · {state.products.find((p) => p.id === c.productId)?.name}
+            <p className="text-[13px] text-ink-soft mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Avatar name={person.name} size={20} /> <span className="font-semibold text-ink">{person.name}</span>
+              {c.deal && <Pill tone="amber">{c.deal}</Pill>}
+              <span>· {state.banks.find((b) => b.id === c.bankId)?.name}</span>
+              <span>· Bank RM: <strong className="text-ink">{c.bankRm ?? "—"}</strong></span>
+              {c.channel && <span>· {c.channel}</span>}
+              {c.outcome && <Pill tone={c.outcome === "WON" ? "green" : "gray"}>{c.outcome === "WON" ? "Won" : "Closed / lost"}</Pill>}
             </p>
           </div>
           <div className="flex gap-2">
@@ -161,12 +168,12 @@ export function Case360({ id }: { id: string }) {
       {/* finance strip */}
       <div className="anim-up grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 bg-ink text-paper rounded-lg overflow-hidden" style={{ animationDelay: "60ms" }}>
         {[
-          { k: "Property value", v: fmtAED(c.propertyValue) },
-          { k: "Loan amount", v: fmtAED(c.loanAmount) },
-          { k: "Applied LTV", v: fmtPct(ltv, 1) },
+          { k: "Property value", v: c.propertyValue ? fmtAED(c.propertyValue) : "—" },
+          { k: "Loan amount", v: c.loanAmount ? fmtAED(c.loanAmount) : "—" },
+          { k: "Applied LTV", v: c.loanAmount && c.propertyValue ? fmtPct(ltv, 1) : "—" },
           { k: "Rate", v: `${fmtN(c.rate, 2)}%` },
           { k: "Tenure", v: `${c.tenureMonths} mo` },
-          { k: "Monthly EMI", v: fmtAED(monthly) },
+          { k: "Monthly EMI", v: c.loanAmount ? fmtAED(monthly) : "—" },
         ].map((x, i) => (
           <div key={x.k} className={cx("px-4 py-3", i > 0 && "border-l border-paper/10")}>
             <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-paper/60">{x.k}</p>
@@ -218,6 +225,7 @@ export function Case360({ id }: { id: string }) {
               { id: "docs", l: "Documents & QC", count: c.docs.length },
               { id: "tasks", l: "Tasks", count: tasks.filter((t) => t.status === "OPEN").length },
               { id: "queries", l: "Bank queries", count: queries.filter((qq) => qq.status === "OPEN").length },
+              { id: "log", l: "Daily log", count: c.tracker?.length ?? 0 },
               { id: "calcs", l: "Calculations", count: calcs.length },
               { id: "activity", l: "Activity", count: activity.length },
             ].map((t) => (
@@ -344,6 +352,8 @@ export function Case360({ id }: { id: string }) {
               <div className="flex justify-end"><Btn size="sm" variant="outline" onClick={() => nav.go("calculators", { params: { calc: "affordability", personId: c.personId, propertyValue: c.propertyValue, caseId: c.id } })}><Ic n="calc" size={13} /> Run calculator for this case</Btn></div>
             </div>
           )}
+
+          {tab === "log" && <DailyLogTab caze={c} />}
 
           {tab === "activity" && (
             <div className="space-y-3">
@@ -477,5 +487,57 @@ function AddQuery({ caze, onClose }: { caze: Case; onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+function DailyLogTab({ caze }: { caze: Case }) {
+  const { state, dispatch } = useStore();
+  const me = useMe();
+  const [note, setNote] = useState("");
+  const today = todayISO();
+  const entries = [...(caze.tracker ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+  const todays = caze.tracker?.find((e) => e.date === today)?.note ?? "";
+  const dates = state.trackerDates.includes(today) ? state.trackerDates : [...state.trackerDates, today].sort();
+  return (
+    <div className="space-y-4">
+      <div className="border border-pine-200 bg-pine-50/60 rounded-md p-3.5">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="font-display font-bold text-[13px] tracking-tight">Log today's position · <span className="num">{fmtDate(today)}</span></p>
+          {todays && <Pill tone="green">logged</Pill>}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && note.trim()) { dispatch({ t: "SET_TRACKER", caseId: caze.id, date: today, note }); setNote(""); } }}
+            placeholder={todays ? "Update today's note…" : "e.g. Pre-approval received — waiting for client confirmation…"}
+            className="focusable flex-1 h-[34px] rounded-md border border-mist bg-card px-3 text-[12.5px]"
+          />
+          <Btn size="sm" disabled={!note.trim()} onClick={() => { dispatch({ t: "SET_TRACKER", caseId: caze.id, date: today, note }); setNote(""); }}>
+            <Ic n="check" size={13} /> Save
+          </Btn>
+        </div>
+        {todays && <p className="text-[11.5px] text-ink-soft mt-2">Current: <span className="text-ink font-medium">{todays}</span></p>}
+      </div>
+
+      <div>
+        <p className="text-[10.5px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mb-2">Daily log — {entries.length} entries</p>
+        <div className="space-y-2.5">
+          {entries.map((e) => (
+            <div key={e.date} className="flex gap-3 anim-tick">
+              <div className="flex flex-col items-center">
+                <span className={cx("mt-0.5 w-2.5 h-2.5 rounded-full shrink-0", e.date === dates[dates.length - 1] ? "bg-pine-600" : "bg-pine-300")} />
+                <span className="w-px flex-1 bg-mist" />
+              </div>
+              <div className="pb-1 min-w-0">
+                <p className="num text-[11px] font-bold text-pine-700">{fmtDate(e.date)}{e.date === today && <span className="ml-2 text-[9.5px] uppercase tracking-wide bg-pine-600 text-paper rounded px-1.5 py-[1px]">today</span>}</p>
+                <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-line">{e.note}</p>
+              </div>
+            </div>
+          ))}
+          {entries.length === 0 && <EmptyState icon="calendar" title="No daily log yet" sub="Log today's position above, or open the Daily Tracker board." />}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -37,7 +37,6 @@ export default function Dashboard() {
   }, [state, open]);
 
   const pipeline = open.reduce((s, c) => s + c.loanAmount, 0);
-  const revenue = open.reduce((s, c) => s + c.expectedRevenue, 0);
   const openTasks = state.tasks.filter((t) => t.status === "OPEN");
   const attention = bucketed.overdue.length + bucketed.risk.length + bucketed.noaction.length;
   const eibor = state.eibor[state.eibor.length - 1];
@@ -74,8 +73,9 @@ export default function Dashboard() {
       {/* stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Stat label="Open cases" value={open.length} format={(n) => fmtN(n)} sub={`${stageCounts.length} active stages`} delay={0} />
-        <Stat label="Pipeline finance" value={pipeline} format={(n) => fmtAED(n)} sub="Sum of open loan amounts" delay={60} />
-        <Stat label="Expected revenue" value={revenue} format={(n) => fmtAED(n)} sub="Fees on open files" delay={120} tone="text-pine-700" />
+        <Stat label="Pipeline finance" value={pipeline} format={(n) => (n ? fmtAED(n) : "—")} sub="Tracked loan amounts" delay={60} />
+        <Stat label="Tracker coverage" value={open.filter((c) => c.tracker?.some((e) => e.date === state.trackerDates[state.trackerDates.length - 1])).length}
+          format={(n) => fmtN(n)} sub={`files logged · ${fmtDate(state.trackerDates[state.trackerDates.length - 1] ?? todayISO())}`} delay={120} tone="text-pine-700" />
         <Stat label="Open tasks" value={openTasks.length} format={(n) => fmtN(n)} sub={`${openTasks.filter((t) => (daysUntil(t.due) ?? 1) < 0).length} overdue`} delay={180} />
         <Stat label="Open bank queries" value={state.queries.filter((q) => q.status === "OPEN").length} format={(n) => fmtN(n)} sub="Awaiting response" delay={240} tone="text-steel-700" />
       </div>

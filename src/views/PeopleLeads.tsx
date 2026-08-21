@@ -91,8 +91,8 @@ export function PeopleView() {
                 <tr key={p.id} className="border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${i * 30}ms` }} onClick={() => setSel(p.id)}>
                   <td className="px-4 py-2.5"><div className="flex items-center gap-2.5"><Avatar name={p.name} size={30} /><div><p className="font-semibold">{p.name}</p><p className="text-[11px] text-ink-soft">{p.nationality} · {p.employment === "SALARIED" ? "Salaried" : "Self-employed"}</p></div></div></td>
                   <td className="px-3 py-2.5"><Pill tone={p.customerType === "NATIONAL" ? "pine" : p.customerType === "EXPAT" ? "steel" : "amber"}>{CT.find((c) => c.v === p.customerType)?.l}</Pill></td>
-                  <td className="px-3 py-2.5 num">{ageYears(p.dob)}</td>
-                  <td className="px-3 py-2.5 num">{fmtAED(p.monthlySalary + p.otherIncome)}</td>
+                  <td className="px-3 py-2.5 num">{p.dob ? ageYears(p.dob) : "—"}</td>
+                  <td className="px-3 py-2.5 num">{p.monthlySalary + p.otherIncome ? fmtAED(p.monthlySalary + p.otherIncome) : <span className="text-ink-soft/60 not-italic text-[11px]">to profile</span>}</td>
                   <td className="px-3 py-2.5 num text-ink-soft">{p.cards.length} cards · {fmtAED(p.liabilities.reduce((s, l) => s + l.monthly, 0))}/m</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5">
@@ -134,7 +134,7 @@ export function PeopleView() {
               <KV k="Mobile" v={person.mobile || "—"} mono={false} />
               <KV k="Email" v={person.email || "—"} mono={false} />
               <KV k="Employer" v={person.employer || "—"} mono={false} />
-              <KV k="Monthly salary" v={fmtAED(person.monthlySalary)} />
+              <KV k="Monthly salary" v={person.monthlySalary ? fmtAED(person.monthlySalary) : "—"} />
               <KV k="Other income" v={fmtAED(person.otherIncome)} />
             </div>
             <div>

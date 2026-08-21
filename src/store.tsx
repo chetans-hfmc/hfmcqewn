@@ -7,12 +7,12 @@ const KEY = "hfmc-mos-state";
 
 /* ---------- role → module access (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
-  ADMIN: ["dashboard", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
-  HEAD: ["dashboard", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
-  TL: ["dashboard", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "audit"],
-  SPO: ["dashboard", "cases", "tasks", "documents", "queries", "calculators"],
-  VRM: ["dashboard", "people", "leads", "calculators"],
-  PA: ["dashboard", "people", "leads", "tasks", "documents"],
+  ADMIN: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
+  HEAD: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "audit"],
+  TL: ["dashboard", "tracker", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "audit"],
+  SPO: ["dashboard", "tracker", "cases", "tasks", "documents", "queries", "calculators"],
+  VRM: ["dashboard", "tracker", "people", "leads", "calculators"],
+  PA: ["dashboard", "tracker", "people", "leads", "tasks", "documents"],
 };
 export const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Super Admin", HEAD: "Head of Mortgage", TL: "Team Leader", SPO: "Sales Process Owner", VRM: "Virtual Relationship Mgr", PA: "Personal Assistant",
@@ -32,6 +32,8 @@ export type Action =
   | { t: "SET_DOC"; caseId: string; docId: string; status: DocStatus; note?: string; expiry?: string }
   | { t: "ADD_QUERY"; q: BankQuery } | { t: "UPDATE_QUERY"; id: string; patch: Partial<BankQuery> }
   | { t: "SAVE_CALC"; calc: CalcRecord }
+  | { t: "SET_TRACKER"; caseId: string; date: string; note: string }
+  | { t: "ADD_TRACKER_DAY"; date: string }
   | { t: "UPSERT_RULE"; rule: Rule; isNew?: boolean }
   | { t: "ADD_EIBOR"; row: AppState["eibor"][number] }
   | { t: "ADD_USER"; user: User } | { t: "UPDATE_USER"; id: string; patch: Partial<User> };
@@ -139,6 +141,19 @@ function reducer(state: AppState, a: Action): AppState {
       return s;
     }
     case "SAVE_CALC": return log({ ...state, calcs: [a.calc, ...state.calcs] }, { module: "CALC", action: "Calculation saved", target: a.calc.label, caseId: a.calc.linkKind === "case" ? a.calc.linkId : undefined });
+    case "SET_TRACKER": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze) return state;
+      const tracker = (caze.tracker ?? []).filter((e) => e.date !== a.date);
+      if (a.note.trim()) tracker.push({ date: a.date, note: a.note.trim() });
+      tracker.sort((x, y) => x.date.localeCompare(y.date));
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, tracker } : c)) };
+      return log(s, { module: "TRACKER", action: "Daily tracker updated", target: caze.ref, detail: `${a.date} — ${a.note.trim().slice(0, 90)}${a.note.trim().length > 90 ? "…" : ""}`, caseId: a.caseId });
+    }
+    case "ADD_TRACKER_DAY": {
+      if (state.trackerDates.includes(a.date)) return state;
+      return log({ ...state, trackerDates: [...state.trackerDates, a.date].sort() }, { module: "TRACKER", action: "Tracker day added", target: a.date });
+    }
     case "UPSERT_RULE": {
       if (a.isNew) return log({ ...state, rules: [...state.rules, a.rule] }, { module: "RULE", action: "Rule created", target: `${a.rule.code} = ${a.rule.value}` });
       const before = state.rules.find((r) => r.id === a.rule.id);

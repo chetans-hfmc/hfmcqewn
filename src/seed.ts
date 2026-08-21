@@ -1,10 +1,19 @@
-import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, Person, Rule, Task } from "./types";
+import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, Person, Rule, Task, TrackerEntry } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
+
+/* =====================================================================
+   Operational dataset — imported from the HFMC daily case tracker
+   (working days 13, 14, 17, 18, 19, 20 Aug 2026). Financial figures are
+   only recorded where the tracker states them; everything else is left
+   blank rather than invented.
+   ===================================================================== */
+
+export const TRACKER_DATES = ["2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20"];
 
 const stages: AppState["stages"] = [
   { id: "HANDOVER", name: "Handover", short: "HO", sla: 2, docs: [], tasks: ["Sales→Ops handover briefing", "Validate lead file & calculator snapshot"] },
@@ -58,204 +67,282 @@ const rules: Rule[] = [
   R({ id: "r-q1", code: "STRESS-QUAL", module: "STRESS", name: "Qualifying rate stress", kind: "pct", value: 2, scope: {}, version: 1, effectiveFrom: "2026-01-01" }),
 ];
 
-const P = (p: Omit<Person, "createdAt"> & { createdAt?: string }): Person => ({ createdAt: d(-60), ...p });
-const persons: Person[] = [
-  P({ id: "p1", name: "Arjun Malhotra", customerType: "EXPAT", nationality: "India", employment: "SALARIED", dob: "1992-04-12", mobile: "+971 50 221 4471", email: "arjun.m@gmail.com", employer: "Gulf Logistics FZE", monthlySalary: 38000, otherIncome: 0, financeCount: 1, cards: [{ bank: "ENBD", limit: 25000 }, { bank: "ADCB", limit: 15000 }], liabilities: [{ type: "Car loan", monthly: 1850 }], kyc: { passport: true, eid: true, visa: true, address: true } }),
-  P({ id: "p2", name: "Fatima Al Suwaidi", customerType: "NATIONAL", nationality: "UAE", employment: "SALARIED", dob: "1990-09-23", mobile: "+971 55 887 2034", email: "fatima.suwaidi@outlook.com", employer: "Abu Dhabi Municipality", monthlySalary: 45000, otherIncome: 0, financeCount: 1, cards: [{ bank: "ADCB", limit: 40000 }], liabilities: [], kyc: { passport: true, eid: true, visa: true, address: true } }),
-  P({ id: "p3", name: "James Rodriguez", customerType: "NON_RESIDENT", nationality: "Spain", employment: "SELF_EMPLOYED", dob: "1978-01-30", mobile: "+34 612 44 8890", email: "j.rodriguez@rodriguezholdings.es", employer: "Rodriguez Holdings SL", monthlySalary: 60000, otherIncome: 15000, financeCount: 2, cards: [{ bank: "HSBC", limit: 60000 }], liabilities: [], kyc: { passport: true, eid: false, visa: false, address: false } }),
-  P({ id: "p4", name: "Deepa Krishnan", customerType: "EXPAT", nationality: "India", employment: "SALARIED", dob: "1996-11-05", mobile: "+971 52 660 1187", email: "deepa.krishnan@yahoo.com", employer: "Mediclinic Middle East", monthlySalary: 22000, otherIncome: 0, financeCount: 1, cards: [{ bank: "Mashreq", limit: 10000 }], liabilities: [{ type: "Personal loan", monthly: 950 }], kyc: { passport: true, eid: true, visa: true, address: true } }),
-  P({ id: "p5", name: "Omar Bakri", customerType: "EXPAT", nationality: "Lebanon", employment: "SELF_EMPLOYED", dob: "1985-06-17", mobile: "+971 50 903 5512", email: "omar@bakritrading.com", employer: "Bakri Trading LLC", monthlySalary: 52000, otherIncome: 0, financeCount: 1, cards: [{ bank: "ENBD", limit: 35000 }], liabilities: [], kyc: { passport: true, eid: true, visa: true, address: true } }),
-  P({ id: "p6", name: "Elena Petrova", customerType: "NON_RESIDENT", nationality: "Russia", employment: "SALARIED", dob: "1988-03-08", mobile: "+7 916 220 4567", email: "elena.petrova@moscowmail.ru", employer: "Severstal International", monthlySalary: 30000, otherIncome: 0, financeCount: 1, cards: [], liabilities: [], kyc: { passport: true, eid: false, visa: false, address: false } }),
-  P({ id: "p7", name: "Saeed Al Mansoori", customerType: "NATIONAL", nationality: "UAE", employment: "SELF_EMPLOYED", dob: "1980-12-02", mobile: "+971 56 445 7789", email: "saeed.mansoori@emaratco.ae", employer: "Al Mansoori Contracting", monthlySalary: 75000, otherIncome: 12000, financeCount: 2, cards: [{ bank: "DIB", limit: 50000 }], liabilities: [{ type: "Car loan", monthly: 3200 }], kyc: { passport: true, eid: true, visa: true, address: true } }),
-  P({ id: "p8", name: "Nisha Verma", customerType: "EXPAT", nationality: "India", employment: "SALARIED", dob: "1994-07-19", mobile: "+971 54 310 9923", email: "nisha.verma@gmail.com", employer: "Talabat", monthlySalary: 18500, otherIncome: 0, financeCount: 1, cards: [{ bank: "ADCB", limit: 8000 }], liabilities: [], kyc: { passport: true, eid: false, visa: true, address: true } }),
-  P({ id: "p9", name: "Hassan Yousef", customerType: "EXPAT", nationality: "Egypt", employment: "SALARIED", dob: "1991-02-14", mobile: "+971 50 118 6642", email: "h.yousef@gmail.com", employer: "Emirates Airlines", monthlySalary: 27000, otherIncome: 0, financeCount: 1, cards: [{ bank: "ENBD", limit: 12000 }], liabilities: [{ type: "Car loan", monthly: 1200 }], kyc: { passport: true, eid: true, visa: true, address: true } }),
-];
-
 const banks: AppState["banks"] = [
-  { id: "b-enbd", name: "Emirates NBD", short: "ENBD" },
-  { id: "b-adcb", name: "Abu Dhabi Commercial Bank", short: "ADCB" },
+  { id: "b-adib", name: "Abu Dhabi Islamic Bank", short: "ADIB" },
   { id: "b-dib", name: "Dubai Islamic Bank", short: "DIB" },
+  { id: "b-enbd", name: "Emirates NBD", short: "ENBD" },
   { id: "b-hsbc", name: "HSBC Middle East", short: "HSBC" },
-  { id: "b-mashreq", name: "Mashreq Bank", short: "MSHQ" },
+  { id: "b-mashreq", name: "Mashreq Bank", short: "Mashreq" },
+  { id: "b-cbd", name: "Commercial Bank of Dubai", short: "CBD" },
+  { id: "b-fab", name: "First Abu Dhabi Bank", short: "FAB" },
+  { id: "b-rak", name: "RAKBANK", short: "RAK" },
+  { id: "b-scb", name: "Standard Chartered UAE", short: "SCB" },
+  { id: "b-arab", name: "Arab Bank UAE", short: "ARAB" },
+  { id: "b-nbf", name: "National Bank of Fujairah", short: "NBF" },
+  { id: "b-bob", name: "Bank of Baroda UAE", short: "BOB" },
+  { id: "b-adcb", name: "Abu Dhabi Commercial Bank", short: "ADCB" },
 ];
 const products: AppState["products"] = [
-  { id: "pr-enbd-sal", bankId: "b-enbd", name: "ENBD Salaried Fixed 3Y", rateType: "FIXED", rate: 3.99, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
-  { id: "pr-enbd-var", bankId: "b-enbd", name: "ENBD EIBOR Linked", rateType: "VARIABLE", rate: 4.65, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
-  { id: "pr-adcb-sal", bankId: "b-adcb", name: "ADCB Salaried Fixed", rateType: "FIXED", rate: 3.89, maxTenureMonths: 300, maxLoan: 4000000, ccRate: 5 },
-  { id: "pr-adcb-self", bankId: "b-adcb", name: "ADCB Business Banking", rateType: "FIXED", rate: 4.49, maxTenureMonths: 240, maxLoan: 3000000, ccRate: 5 },
+  { id: "pr-adib-sal", bankId: "b-adib", name: "ADIB Salaried Fixed", rateType: "ISLAMIC", rate: 3.99, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
   { id: "pr-dib-ijara", bankId: "b-dib", name: "DIB Ijarah", rateType: "ISLAMIC", rate: 3.75, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5, note: "Expat salaried retirement exception: 65" },
-  { id: "pr-dib-sal", bankId: "b-dib", name: "DIB Salaried Fixed", rateType: "ISLAMIC", rate: 4.1, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
+  { id: "pr-enbd-sal", bankId: "b-enbd", name: "ENBD Salaried Fixed 3Y", rateType: "FIXED", rate: 3.99, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
   { id: "pr-hsbc-prem", bankId: "b-hsbc", name: "HSBC Premier Mortgage", rateType: "FIXED", rate: 3.69, maxTenureMonths: 300, maxLoan: 7500000, ccRate: 5 },
   { id: "pr-mash-sal", bankId: "b-mashreq", name: "Mashreq Salaried", rateType: "FIXED", rate: 4.25, maxTenureMonths: 300, maxLoan: 4000000, ccRate: 5 },
+  { id: "pr-cbd-sal", bankId: "b-cbd", name: "CBD Home Finance", rateType: "FIXED", rate: 4.15, maxTenureMonths: 300, maxLoan: 4000000, ccRate: 5 },
+  { id: "pr-fab-sal", bankId: "b-fab", name: "FAB Salaried Fixed", rateType: "FIXED", rate: 3.89, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
+  { id: "pr-rak-sal", bankId: "b-rak", name: "RAKBANK Salaried", rateType: "FIXED", rate: 4.35, maxTenureMonths: 300, maxLoan: 3500000, ccRate: 5 },
+  { id: "pr-scb-sal", bankId: "b-scb", name: "SCB Mortgage Saver", rateType: "VARIABLE", rate: 4.45, maxTenureMonths: 300, maxLoan: 5000000, ccRate: 5 },
+  { id: "pr-arab-sal", bankId: "b-arab", name: "Arab Bank Housing Loan", rateType: "FIXED", rate: 4.29, maxTenureMonths: 300, maxLoan: 3000000, ccRate: 5, note: "Credit cards at 5% of limits" },
+  { id: "pr-nbf-sal", bankId: "b-nbf", name: "NBF Salaried Mortgage", rateType: "FIXED", rate: 4.4, maxTenureMonths: 300, maxLoan: 3000000, ccRate: 5 },
+  { id: "pr-bob-sal", bankId: "b-bob", name: "BOB Home Loan", rateType: "FIXED", rate: 4.5, maxTenureMonths: 240, maxLoan: 2500000, ccRate: 5 },
+  { id: "pr-adcb-sal", bankId: "b-adcb", name: "ADCB Salaried Fixed", rateType: "FIXED", rate: 3.89, maxTenureMonths: 300, maxLoan: 4000000, ccRate: 5 },
 ];
 
-/* ----- doc / task builders ----- */
-let dn = 0;
-const doc = (stageId: string, typeId: string, status: DocStatus, off = -3, by = "u4"): DocItem =>
-  ({ id: "sd" + ++dn, typeId, stageId, status, updatedAt: ts(off), updatedBy: by });
-let tn = 0;
-const task = (caseId: string, stageId: string, type: string, title: string, ownerId: string, createdOff: number,
-  o: Partial<Task> = {}): Task => ({
-  id: "st" + ++tn, caseId, stageId, type, title, ownerId, priority: "MEDIUM", status: "OPEN",
-  createdAt: ts(createdOff), ...o,
-});
+/* ---------- persons (deduplicated clients from the tracker) ---------- */
+const CLIENTS = [
+  "Faizul Hussain", "Reneez Ahmed Kabeer", "Ante Svagusa", "Yasir Mohhumad", "Jumana Hytham Zin Aldin",
+  "Marc Robert Spitzer", "Stephen Geoff Fensham", "Jignesh Kumar Patel", "Walid Elrasoul", "Stanislav Boykov",
+  "Gonzalo Tatay Diaz & Carla Viti Munoz", "Bhavesh & Prerna Magnani", "Sona Rawal & Bhavesh Rawal",
+  "Ediz Karahasanoglu", "Yaghoub Hassan Pour", "Silvia Torres", "Dharpan Randhawa", "Qingie Yang",
+  "Dr Rahat Ghazanfar", "Saurabh Jain", "Sumantra", "Chandan Marianathan Rajah", "Anna Larina",
+  "Parvez Ahmed", "Yash Pandya", "Mr Sharafi", "Avinash Nagar", "Rona Nadeem",
+  "Mohamed Hengazy I. Aboukhalil", "Spencer Domingos", "Ihab Abdulla Jawad", "Saeed Shah", "Ricardo Laborda",
+  "Sangeeth Chemboth", "Karolina & Angie Abbas Issa", "Akram Shah", "Sheree Anne Serilla Sumpay",
+  "Andrei Umnov", "Zinah Alkatabi & Ihab Jawad", "Hesham",
+];
+const persons: Person[] = CLIENTS.map((name, i) => ({
+  id: "p" + (i + 1), name, customerType: "EXPAT", nationality: "", employment: "SALARIED",
+  dob: "", mobile: "", email: "", employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1,
+  cards: [], liabilities: [], kyc: { passport: false, eid: false, visa: false, address: false }, createdAt: d(-30),
+}));
+const pid = (name: string) => persons.find((p) => p.name === name)!.id;
 
-const verifiedBlock = (caseId: string, stageId: string, docsList: string[], off: number): { docs: DocItem[]; tasks: Task[] } => {
-  const def = stages.find((s) => s.id === stageId)!;
-  return {
-    docs: docsList.map((t) => doc(stageId, t, "VERIFIED", off)),
-    tasks: def.tasks.map((t) => task(caseId, stageId, t.split(" ").slice(0, 3).join(" "), t, "u4", off, { status: "DONE", completedAt: ts(off), due: d(off + 2) })),
-  };
+/* ---------- daily tracker rows (as received from operations) ---------- */
+const rep = (n: string): (string | null)[] => [n, n, n, n, n, n];
+const N6: (string | null)[] = [null, null, null, null, null, null];
+
+type Row = { st: string; client: string; bank: string; rm: string; ch: string; deal?: string; notes: (string | null)[] };
+
+const ROWS: Row[] = [
+  { st: "Valuation", client: "Faizul Hussain", bank: "b-adib", rm: "Zaffar", ch: "Direct", notes: rep("Waiting for the property to finalize.") },
+  { st: "Pre-Approval", client: "Reneez Ahmed Kabeer", bank: "b-hsbc", rm: "Samiksha / Dinesh C", ch: "Huspy", notes: rep("Sir Kiran is following up Dinesh.") },
+  { st: "Pre-Approval", client: "Reneez Ahmed Kabeer", bank: "b-hsbc", rm: "Samiksha / Dinesh", ch: "Huspy", notes: ["Sir is directly coordinating with Dinesh — waiting for approval.", "Sir is directly coordinating with Dinesh — waiting for approval.", "Sir is directly coordinating with Dinesh — waiting for approval.", "Sir Kiran is following up Dinesh.", "Sir Kiran is following up Dinesh.", "Sir Kiran is following up Dinesh."] },
+  { st: "Valuation", client: "Reneez Ahmed Kabeer", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Waiting for the property to finalize.") },
+  { st: "Pre-Approval", client: "Reneez Ahmed Kabeer", bank: "b-mashreq", rm: "Samiksha / Praveen", ch: "Direct", notes: rep("As per bank revert, bonuses cannot be considered for a family business — income not eligible per Mashreq policy. Waiting for Sir's response.") },
+  { st: "Pre-Approval", client: "Reneez Ahmed Kabeer", bank: "b-adib", rm: "Zaffar", ch: "Direct", deal: "Land plot", notes: rep("Nothing to do now — no submission, instructed by Sir Kiran.") },
+  { st: "Pre-Approval", client: "Ante Svagusa", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Pre-approval received but finance value is less. RCD didn't change the amount — will request amendment after valuation. Share valuation doc.") },
+  { st: "Valuation", client: "Ante Svagusa", bank: "b-adib", rm: "Zaffar", ch: "Direct", notes: rep("Waiting for the property to finalize.") },
+  { st: "Pre-Approval", client: "Yasir Mohhumad", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Pre-approval received 19-Jan-2026 for less amount and less tenure. Per Sir, submit fresh case with new working.") },
+  { st: "Closed", client: "Jumana Hytham Zin Aldin", bank: "b-adib", rm: "Zaffar", ch: "Direct", notes: N6 },
+  { st: "Closed", client: "Jumana Hytham Zin Aldin", bank: "b-dib", rm: "Babar", ch: "Direct", notes: N6 },
+  { st: "Valuation", client: "Marc Robert Spitzer", bank: "b-cbd", rm: "Samiksha / Praveen", ch: "Huspy", notes: rep("Waiting for the property to finalize.") },
+  { st: "Pre-Approval", client: "Marc Robert Spitzer", bank: "b-mashreq", rm: "Samiksha / Praveen", ch: "Huspy", notes: rep("Case on hold due to pre-approval fees — client doesn't want to pay.") },
+  { st: "Valuation", client: "Stephen Geoff Fensham", bank: "b-hsbc", rm: "Samiksha", ch: "Huspy", notes: rep("Case is on hold.") },
+  { st: "Valuation", client: "Stephen Geoff Fensham", bank: "b-scb", rm: "Samiksha", ch: "Huspy", notes: rep("Case is on hold.") },
+  { st: "Valuation", client: "Stephen Geoff Fensham", bank: "b-enbd", rm: "Samiksha", ch: "Huspy", notes: rep("Case is on hold.") },
+  { st: "Valuation", client: "Stephen Geoff Fensham", bank: "b-rak", rm: "Farukh", ch: "Prypco", notes: rep("Case is on hold.") },
+  { st: "Valuation", client: "Jignesh Kumar Patel", bank: "b-mashreq", rm: "Samiksha / Praveen", ch: "Huspy", notes: rep("ENBD valuation completed; case now in FOL — waiting for client confirmation on the Mashreq transaction.") },
+  { st: "Pre-Approval", client: "Walid Elrasoul", bank: "b-dib", rm: "Nawzat", ch: "Direct", notes: rep("Bank query received — waiting for VRM response.") },
+  { st: "Valuation", client: "Stanislav Boykov", bank: "b-rak", rm: "Farukh", ch: "Prypco", notes: rep("Sir Kiran coordinating with client — property not yet finalized.") },
+  { st: "Won&closed", client: "Gonzalo Tatay Diaz & Carla Viti Munoz", bank: "b-adib", rm: "Zaffar", ch: "Direct", notes: N6 },
+  { st: "Valuation", client: "Bhavesh & Prerna Magnani", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Property not finalized — as per Sir, do not follow up.") },
+  { st: "Valuation", client: "Sona Rawal & Bhavesh Rawal", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Client wants to hold for now; introduced to our internal real-estate team for assistance.") },
+  { st: "Valuation", client: "Ediz Karahasanoglu", bank: "b-hsbc", rm: "Samiksha", ch: "Huspy", notes: rep("Sir Kiran is handling the case.") },
+  { st: "Pre-Approval", client: "Yaghoub Hassan Pour", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: rep("Waiting for Sir's reply to the query.") },
+  { st: "Pre-Approval", client: "Yaghoub Hassan Pour", bank: "b-cbd", rm: "Burhan", ch: "Direct", notes: rep("Pre-approval received 11-Jun-2026 with conditions — less FAV AED 1,174,000.") },
+  { st: "Won&closed", client: "Silvia Torres", bank: "b-enbd", rm: "Tuba", ch: "Huspy", notes: N6 },
+  { st: "Final Transfer", client: "Dharpan Randhawa", bank: "b-adib", rm: "Eranga", ch: "Direct", notes: rep("Waiting for TD.") },
+  { st: "Won&closed", client: "Qingie Yang", bank: "b-dib", rm: "Babar", ch: "Direct", notes: N6 },
+  { st: "Won&closed", client: "Dr Rahat Ghazanfar", bank: "b-dib", rm: "Raouf", ch: "Direct", notes: N6 },
+  { st: "Won&closed", client: "Dr Rahat Ghazanfar", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: N6 },
+  { st: "Pre-Approval", client: "Yaghoub Hassan Pour", bank: "b-cbd", rm: "Burhan", ch: "Direct", deal: "Second file", notes: rep("Pre-approval received 11-Jun-2026 with conditions — less FAV AED 1,174,000.") },
+  { st: "Valuation", client: "Saurabh Jain", bank: "b-bob", rm: "Vikas", ch: "Direct", notes: rep("Waiting for BCC (Building Completion Certificate) report to do property evaluation.") },
+  { st: "Won&closed", client: "Sumantra", bank: "b-enbd", rm: "Buddha", ch: "Huspy", notes: N6 },
+  { st: "Pre-Approval", client: "Chandan Marianathan Rajah", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Pre-approval received 24-Jun-2026; property not finalized — VRM checking with client. Case on hold.") },
+  { st: "Final Transfer", client: "Anna Larina", bank: "b-rak", rm: "Shiji", ch: "Prypco", notes: ["Blocking process done — blocking certificate shared by client. Settlement cheque deposited with HSBC on 13-Aug-2026.", "Blocking process done — blocking certificate shared by client. Settlement cheque deposited with HSBC on 13-Aug-2026.", "Waiting for update on mortgage release letter from HSBC.", "Waiting for update on mortgage release letter from HSBC.", "Waiting for update on mortgage release letter from HSBC.", "Waiting for update on mortgage release letter from HSBC."] },
+  { st: "Loan Booking", client: "Parvez Ahmed", bank: "b-dib", rm: "Babar", ch: "Direct", notes: ["Liability letter expected by Friday — follow up to confirm receipt and next steps. Salary certificate shared with banker Babar.", "Liability letter takes 5 days to issue. Seller advised to drop original liability letter at Mr. Babar Zaheer's office (10th Floor, Business Avenue Tower, Salam Street, AD) if issued today; confirm designated FAB branch for settlement cheque.", "Liability letter takes 5 days to issue. Seller advised to drop original liability letter at Mr. Babar Zaheer's office (10th Floor, Business Avenue Tower, Salam Street, AD) if issued today; confirm designated FAB branch for settlement cheque.", "Liability letter received — Sir Kiran sent same to bank. NOC received on WhatsApp and saved in G-drive folder.", "Liability letter received — Sir Kiran sent same to bank. NOC received on WhatsApp and saved in G-drive folder.", "Settlement appointment booked for 24-Aug-2026, 10:03 AM. Bank asked us to confirm branch with seller. Per proposal sheet, cheque to be deposited at FAB Khalifa Street or FAB Khalifa Park branch — verification needed. Email sent to VRM, awaiting confirmation."] },
+  { st: "Pre-Approval", client: "Yash Pandya", bank: "b-dib", rm: "Babar", ch: "Direct", notes: rep("Pre-approval received; refund of valuation fees credited to client's account. Case on hold.") },
+  { st: "Closed", client: "Mr Sharafi", bank: "b-dib", rm: "Abdul", ch: "Direct", notes: N6 },
+  { st: "Loan Booking", client: "Avinash Nagar", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: ["Settlement successfully completed today. Next step: wait for Mortgage Release Letter (approx. 7–10 working days after settlement).", "Settlement successfully completed today. Next step: wait for Mortgage Release Letter (approx. 7–10 working days after settlement).", "Settlement successfully completed on 13-Aug-2026. Waiting for Mortgage Release Letter (approx. 7–10 working days).", "Settlement successfully completed on 13-Aug-2026. Waiting for Mortgage Release Letter (approx. 7–10 working days).", "24th–28th Aug 2026: mortgage release and mortgage registration should be completed.", "24th–28th Aug 2026: mortgage release and registration expected. As per Kiran Sir — nothing to be done for now."] },
+  { st: "Valuation", client: "Avinash Nagar", bank: "b-adib", rm: "Ahmed", ch: "Direct", deal: "Second property", notes: ["Valuation initiated — waiting for schedule from realtor. On hold (waiting for handover notification; till 17-Aug no follow-up).", "Valuation initiated — waiting for schedule from realtor. On hold (waiting for handover notification; till 17-Aug no follow-up).", "Valuation initiated — waiting for schedule from realtor. On hold (waiting for handover notification; till 17-Aug no follow-up).", "Valuation initiated — waiting for schedule from realtor. On hold (waiting for handover notification; till 17-Aug no follow-up).", "Wait till Thursday (20-Aug-2026) to put a message — see the response from the realtor today. Based on the realtor's decision, take the valuation ahead.", "Wait till Thursday (20-Aug-2026) to put a message — see the response from the realtor today. Based on the realtor's decision, take the valuation ahead."] },
+  { st: "FOL", client: "Rona Nadeem", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: ["FOL on hold for seller title deed copy. Once received, push transaction ahead — wait till Friday for seller update.", "FOL on hold for seller title deed copy. Once received, push transaction ahead — wait till Friday for seller update.", "FOL on hold for seller title deed copy. Once received, push transaction ahead — wait till Friday for seller update.", "FOL on hold for seller title deed copy. Once received, push transaction ahead — wait till Friday for seller update.", "FOL on hold for seller title deed copy. Once received, push transaction ahead — wait till Friday for seller update.", "Waiting for seller's title deed. Per realtor: Aldar RM can't do anything as it's already under municipality. News expected next week Mon/Tue."] },
+  { st: "Loan Booking", client: "Mohamed Hengazy I. Aboukhalil", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: ["Per Kiran Sir: take Hegazy to Aldar customer service, show FOL, inform loan booking / drawdown / manager's cheque under preparation — need confirmation from Khalil.", "Per Kiran Sir: take Hegazy to Aldar customer service, show FOL — as per Khalil, handover cheques to Ahmed (ADIB).", "As per bank revert: deal is booked.", "Developer cheque handed over to Aldar 18-Aug-2026.", "Manager's cheque handed over to Aldar on 18-Aug-2026.", "Client to visit Aldar at least once in 2 days for title deed of the apartment — manager's cheque handed over on 18-Aug-2026."] },
+  { st: "Loan Booking", client: "Spencer Domingos", bank: "b-dib", rm: "Abdul", ch: "Direct", notes: ["As per bank update: case under process — FOL to be shared soon.", "Case under process; follow-up email sent requesting FOL update.", "FOL received — rechecking done and shared with VRM.", "FOL signing done 18-Aug-2026. Case moves to Loan Booking.", "Loan booking is in process.", "Per banker, transfer of ownership scheduled for 24-Aug-2026; client to confirm convenient date/time on Monday — banker informed by email."] },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-mashreq", rm: "Praveen", ch: "Huspy", deal: "80%", notes: rep("Query received — per Sir's instruction, do not follow up with the bank from 10-Aug-2026.") },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-cbd", rm: "Shiji", ch: "Prypco", deal: "80% Resale", notes: rep("Per Sir's instruction, do not follow up with the bank from 10-Aug-2026.") },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-cbd", rm: "Shiji", ch: "Prypco", deal: "Unit 420 — Commercial 60%", notes: rep("Pre-approval received — waiting for client confirmation to move to next stage.") },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-cbd", rm: "Shiji", ch: "Prypco", deal: "Unit 419 — Commercial 60%", notes: ["Pre-approval received — waiting for client confirmation to move to next stage.", "Pre-approval received — waiting for client confirmation to move to next stage.", "Pre-approval received — waiting for client confirmation to move to next stage.", "Pre-approval received — waiting for client confirmation to move to next stage.", "Per Sir's instruction, do not follow up with the bank from 10-Aug-2026.", "Pre-approval received — waiting for client confirmation to move to next stage."] },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-enbd", rm: "Samiksha", ch: "Huspy", deal: "50%", notes: rep("Case is on hold.") },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-enbd", rm: "Samiksha", ch: "Huspy", deal: "80% Resale", notes: ["As per bank update: case is with credit — decision expected today or by tomorrow.", "Query received from bank — same query sent to Kiran Sir for assist.", "As per Sir's confirmation — don't follow.", "As per Sir's confirmation — don't follow.", "As per Sir's confirmation — don't follow.", "As per Sir's confirmation — don't follow."] },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: rep("Pre-approval received for 65% — waiting for other banks' pre-approval updates. Bank query received.") },
+  { st: "Loan Booking", client: "Parvez Ahmed", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: ["DDA activated by client. Loan-booking email shared; settlement requested for 17-Aug-2026. ADIB confirmed deal booked — settlement appointment once PO received.", "DDA activated by client. Loan-booking email shared; settlement requested for 17-Aug-2026. ADIB confirmed deal booked — settlement appointment once PO received.", "Settlement completed today 17-Aug at DIB.", "Settlement completed 17-Aug at DIB — waiting for mortgage release letter.", "Settlement completed 17-Aug at DIB — awaiting mortgage release letter.", "Mortgage Release Letter expected around 26th–31st Aug 2026."] },
+  { st: "Valuation", client: "Saeed Shah", bank: "b-adib", rm: "Ahmed", ch: "Direct", deal: "Al Reef — Buyout + Equity", notes: rep("Pre-approval received — valuation payment pending from client's side.") },
+  { st: "Valuation", client: "Saeed Shah", bank: "b-adib", rm: "Ahmed", ch: "Direct", deal: "Water Edge — Buyout + Equity", notes: rep("Pre-approval received — valuation payment pending from client's side.") },
+  { st: "FOL", client: "Ricardo Laborda", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: rep("Valuation report received but market value came in lower. Waiting for FOL conversion from VRM — Sir Kiran showing more properties to client.") },
+  { st: "Valuation", client: "Sangeeth Chemboth", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: rep("Waiting for valuation payment proof.") },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-fab", rm: "Shiji", ch: "Prypco", deal: "80% Resale", notes: ["Case is in credit as per the banker.", "Query received from the bank yesterday.", "Query received — per Sir's instruction, do not follow up with the bank from 17-Aug-2026.", "Query received — per Sir's instruction, do not follow up with the bank from 17-Aug-2026.", "Query received — per Sir's instruction, do not follow up with the bank from 17-Aug-2026.", "Query received — per Sir's instruction, do not follow up with the bank from 17-Aug-2026."] },
+  { st: "Closed", client: "Ihab Abdulla Jawad", bank: "b-fab", rm: "Shiji", ch: "Prypco", deal: "Unit 420 — Commercial 70%", notes: N6 },
+  { st: "Closed", client: "Ihab Abdulla Jawad", bank: "b-fab", rm: "Shiji", ch: "Prypco", deal: "Unit 419 — Commercial 70%", notes: N6 },
+  { st: "FOL", client: "Karolina & Angie Abbas Issa", bank: "b-dib", rm: "Babar", ch: "Direct", notes: ["Valuation amount received AED 1,650,000. Case moved to FOL.", "FOL conversion details shared with bank — awaiting FOL update.", "Per banker Abdul: verification certificate received and FOL processed. Follow-up email sent asking expected FOL timeline.", "FOL received 17-Aug-2026. Signing on 31-Aug-2026, 10:30 AM — Madam Karolina out of UAE till 30-Aug.", "FOL signing on 31-Aug-2026, 10:30 AM — Madam Karolina out of UAE till 30-Aug-2026.", "FOL signing on 31-Aug-2026, 10:30 AM — Madam Karolina out of UAE till 30-Aug-2026."] },
+  { st: "Pre-Approval", client: "Akram Shah", bank: "b-adib", rm: "Ahmed", ch: "Direct", notes: rep("Bank query received — there is an overdue.") },
+  { st: "Pre-Approval", client: "Akram Shah", bank: "b-cbd", rm: "Siji", ch: "Huspy", notes: rep("Case on hold as per Sir's instruction 30-Jul-2026.") },
+  { st: "FOL", client: "Jumana Hytham Zin Aldin", bank: "b-dib", rm: "Raouf", ch: "Direct", notes: ["Follow-up email sent to bank for pre-approval status.", "Follow-up email sent requesting pre-approval status; FOL conversion details shared in advance.", "Per Abdul: case at Level-4 approval with credit for pre-approval. FOL conversion + documents shared in advance on 14-Aug so FOL can process immediately on approval.", "Per Alaa: POL today and conversion to be submitted today.", "Pre-approval received — waiting for FOL.", "Pre-approval received yesterday; follow-up email sent to bank for FOL letter."] },
+  { st: "Pre-Approval", client: "Sheree Anne Serilla Sumpay", bank: "b-dib", rm: "Raouf", ch: "Direct", notes: ["Follow-up with banker Abdul — file received and in credit review. Query raised for deployed-company ID card; requested from client.", "File under process. Bank query: ID card from deployed company — requested from client; will share and follow up on pre-approval.", "File under process. Bank query: ID card from deployed company — requested from client; will share and follow up on pre-approval.", "ID card received from client and submitted to bank. Follow-up email sent to Abdul for pre-approval status.", "Follow-up email sent to banker for pre-approval status.", "Follow-up email sent to banker for pre-approval status."] },
+  { st: "Pre-Approval", client: "Andrei Umnov", bank: "b-cbd", rm: "Santanu", ch: "Prypco", notes: [null, null, "File submitted to the bank.", "Case was logged yesterday — per Santanu Sir, no update yet.", "Santanu Sir following up with bank — awaiting LMF number.", "Santanu Sir following up with bank — awaiting LMF number."] },
+  { st: "Pre-Approval", client: "Saeed Shah", bank: "b-dib", rm: "Raouf", ch: "Direct", deal: "Al Reef — Resale", notes: [null, null, null, null, "File submitted to the bank.", "Swathi shared the documents with Abdul — file in process with bank."] },
+  { st: "Pre-Approval", client: "Zinah Alkatabi & Ihab Jawad", bank: "b-arab", rm: "Pradipta", ch: "Direct", notes: [null, null, null, null, "File submitted to the bank.", "Query raised by bank for HRA AED 150,000 — credit proof in statement."] },
+  { st: "Pre-Approval", client: "Zinah Alkatabi & Ihab Jawad", bank: "b-cbd", rm: "Santanu", ch: "Prypco", notes: [null, null, null, null, null, "File submitted to the bank."] },
+  { st: "Pre-Approval", client: "Hesham", bank: "b-arab", rm: "Pradipta", ch: "Direct", notes: [null, null, null, null, null, "Few documents have been shared."] },
+  { st: "Pre-Approval", client: "Ihab Abdulla Jawad", bank: "b-nbf", rm: "Rajeew", ch: "Direct", notes: [null, null, null, null, "Documents submitted to the bank.", "Follow-up mail sent to bank — waiting for response."] },
+];
+
+const STAGE_OF: Record<string, string> = {
+  "Pre-Approval": "PREAPP", Valuation: "VALUATION", FOL: "FOL", "Loan Booking": "BOOKING", "Final Transfer": "TRANSFER",
+  Closed: "CLOSURE", "Won&closed": "CLOSURE",
 };
 
-const mkHist = (steps: [string, number][], by = "u4") => steps.map(([s, off]) => ({ stageId: s, at: ts(off), by }));
+/* stage indices: HANDOVER 0 · INTAKE 1 · FILEQC 2 · SUBMIT 3 · PREAPP 4 · QUERY 5 · VALUATION 6 · FOL 7 · DDA 8 · BOOKING 9 · RELEASE 10 · TRANSFER 11 · TITLEQC 12 · CLOSURE 13 */
+let dn = 0;
+const mkDocs = (stageIdx: number, o: { folReceived?: boolean; dda?: DocStatus } = {}): DocItem[] => {
+  const out: DocItem[] = [];
+  const push = (stageId: string, typeId: string, status: DocStatus) =>
+    out.push({ id: "sd" + ++dn, typeId, stageId, status, updatedAt: ts(-3), updatedBy: "u4" });
+  if (stageIdx >= 1) ["PASSPORT", "EID", "VISA"].forEach((t) => push("INTAKE", t, "VERIFIED"));
+  if (stageIdx >= 3) push("SUBMIT", "APPFORM", "VERIFIED");
+  if (stageIdx >= 6) push("VALUATION", "VALREP", stageIdx > 6 ? "VERIFIED" : "MISSING");
+  if (stageIdx >= 7) push("FOL", "FOL", stageIdx > 7 ? "VERIFIED" : o.folReceived ? "RECEIVED" : "MISSING");
+  if (stageIdx >= 8) push("DDA", "DDA", stageIdx > 8 ? "VERIFIED" : o.dda ?? "MISSING");
+  if (stageIdx >= 11) push("TRANSFER", "TITLE", stageIdx > 11 ? "VERIFIED" : "MISSING");
+  return out;
+};
 
-const C = (c: Omit<Case, "status" | "createdAt" | "expectedRevenue" | "stageHistory"> & { createdAt?: string; expectedRevenue?: number; status?: Case["status"]; stageHistory?: Case["stageHistory"] }): Case =>
-  ({ status: "OPEN", createdAt: d(-20), expectedRevenue: 20000, stageHistory: mkHist([[c.stage, -10]]), ...c });
+let cn = 0;
+const cases: Case[] = ROWS.map((r, i) => {
+  cn += 1;
+  const closed = r.st === "Closed" || r.st === "Won&closed";
+  const stage = STAGE_OF[r.st];
+  const prod = products.find((p) => p.bankId === r.bank)!;
+  const tracker: TrackerEntry[] = r.notes
+    .map((n, k) => ({ date: TRACKER_DATES[k], note: n }))
+    .filter((e): e is TrackerEntry => !!e.note)
+    .map((e) => ({ ...e, note: e.note as string }));
+  const lastNote = tracker.length ? tracker[tracker.length - 1].note : undefined;
+  const holdish = /on hold|don'?t follow|nothing to do|do not follow/i.test(lastNote ?? "");
+  const waiting =
+    /property.*(finalize|finalized)|not yet finalized/i.test(lastNote ?? "") ? { w: "Client", p: "Property not finalized" } :
+    /pre-approval fees/i.test(lastNote ?? "") ? { w: "Client", p: "Pre-approval fee objection" } :
+    /valuation payment/i.test(lastNote ?? "") ? { w: "Client", p: "Valuation payment pending" } :
+    /mortgage release/i.test(lastNote ?? "") ? { w: "Bank", p: "Awaiting mortgage release letter" } :
+    /waiting for (sir|kiran)/i.test(lastNote ?? "") || /sir'?s (reply|response)/i.test(lastNote ?? "") ? { w: "Sir Kiran", p: "Awaiting management reply" } :
+    /vrms? response/i.test(lastNote ?? "") ? { w: "VRM", p: "Awaiting VRM response" } :
+    /query/i.test(lastNote ?? "") ? { w: "Bank", p: "Bank query in progress" } :
+    /client confirmation|client'?s confirmation/i.test(lastNote ?? "") ? { w: "Client", p: "Awaiting client confirmation" } :
+    /waiting for (td|title deed|seller)/i.test(lastNote ?? "") ? { w: "Seller", p: "Awaiting seller documents" } :
+    /bcc/i.test(lastNote ?? "") ? { w: "Developer", p: "Awaiting BCC report" } :
+    /realtor/i.test(lastNote ?? "") ? { w: "Realtor", p: "Awaiting realtor update" } :
+    holdish ? { w: "Sir Kiran", p: "On instruction — no follow-up" } :
+    lastNote ? { w: "Bank", p: "Awaiting bank response" } : undefined;
+  const dueSeq = [2, -2, 4, 1, -1, 3, 0, 5][i % 8];
+  const base: Case = {
+    id: "c" + (3000 + cn), ref: "HF-" + (3000 + cn), personId: pid(r.client), ownerId: i % 2 ? "u4" : "u5",
+    bankId: r.bank, productId: prod.id, txType: /buyout \+ equity/i.test(r.deal ?? "") ? "BUYOUT_EQUITY" : /buyout/i.test(r.deal ?? "") ? "BUYOUT" : "PURCHASE",
+    deal: r.deal, bankRm: r.rm, channel: r.ch,
+    propertyValue: r.client === "Karolina & Angie Abbas Issa" ? 1650000 : 0,
+    loanAmount: r.client === "Yaghoub Hassan Pour" && r.deal !== "Second file" ? 1174000 : 0,
+    rate: prod.rate, tenureMonths: 300,
+    stage, status: closed ? "CLOSED" : "OPEN",
+    outcome: r.st === "Won&closed" ? "WON" : r.st === "Closed" ? "LOST" : undefined,
+    tracker,
+    stageHistory: [{ stageId: stage, at: ts(closed ? -30 : -(10 + (i % 12))), by: i % 2 ? "u4" : "u5" }],
+    createdAt: d(closed ? -60 : -(12 + (i % 20))),
+    expectedRevenue: 0,
+    docs: mkDocs(stages.findIndex((s) => s.id === stage), {
+      folReceived: r.client === "Karolina & Angie Abbas Issa",
+      dda: (r.client === "Parvez Ahmed" && r.bank === "b-adib") || r.client === "Mohamed Hengazy I. Aboukhalil" ? "VERIFIED" : undefined,
+    }),
+    ...(closed
+      ? { closedAt: d(-1) }
+      : {
+          nextAction: lastNote ? (holdish ? "Await instruction — no follow-up" : "Update daily tracker & follow up") : "Profile client file",
+          nextActionDue: lastNote ? d(dueSeq) : d(1),
+          waitingFor: waiting?.w, pendingReason: waiting?.p,
+          blocker: /don'?t follow|do not follow|nothing to do/i.test(lastNote ?? "") ? "Instruction from Sir Kiran — do not follow up" : undefined,
+        }),
+  };
+  return base;
+});
 
-const cases: Case[] = [
-  // NO NEXT ACTION — fresh handover
-  C({
-    id: "c44", ref: "HF-2044", personId: "p1", leadId: "l1004", ownerId: "u4", bankId: "b-enbd", productId: "pr-enbd-sal",
-    txType: "PURCHASE", propertyValue: 1600000, loanAmount: 1280000, rate: 3.99, tenureMonths: 300,
-    stage: "HANDOVER", createdAt: d(-1), expectedRevenue: 24500, stageHistory: mkHist([["HANDOVER", -1]]),
-    docs: [],
-  }),
-  // READY FOR NEXT STAGE — FILE QC gates all green
-  C({
-    id: "c29", ref: "HF-2029", personId: "p9", leadId: "l1007", ownerId: "u4", bankId: "b-dib", productId: "pr-dib-sal",
-    txType: "PURCHASE", propertyValue: 1100000, loanAmount: 880000, rate: 4.1, tenureMonths: 300,
-    stage: "FILEQC", createdAt: d(-12), expectedRevenue: 18500,
-    stageHistory: mkHist([["HANDOVER", -12], ["INTAKE", -10], ["FILEQC", -6]]),
-    docs: [
-      ...verifiedBlock("c29", "INTAKE", ["PASSPORT", "EID", "VISA"], -10).docs,
-      ...verifiedBlock("c29", "FILEQC", ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], -6).docs,
-    ],
-    nextAction: "Submit file to DIB", nextActionDue: d(2),
-  }),
-  // OVERDUE — valuation report chasing
-  C({
-    id: "c41", ref: "HF-2041", personId: "p4", leadId: "l1001", ownerId: "u5", bankId: "b-mashreq", productId: "pr-mash-sal",
-    txType: "PURCHASE", propertyValue: 950000, loanAmount: 760000, rate: 4.25, tenureMonths: 300,
-    stage: "VALUATION", createdAt: d(-25), expectedRevenue: 16800,
-    stageHistory: mkHist([["HANDOVER", -25], ["INTAKE", -23], ["FILEQC", -19], ["SUBMIT", -16], ["PREAPP", -13], ["VALUATION", -8]]),
-    docs: [
-      ...verifiedBlock("c41", "INTAKE", ["PASSPORT", "EID", "VISA"], -23).docs,
-      ...verifiedBlock("c41", "FILEQC", ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], -19).docs,
-      doc("SUBMIT", "APPFORM", "VERIFIED", -16),
-      doc("VALUATION", "VALREP", "MISSING", -2, "u5"),
-    ],
-    nextAction: "Chase valuation report from valuer", nextActionDue: d(-2), waitingFor: "Valuer", pendingReason: "Valuation delayed",
-  }),
-  // AT RISK — pre-approval follow-up due tomorrow
-  C({
-    id: "c36", ref: "HF-2036", personId: "p8", leadId: "l1002", ownerId: "u4", bankId: "b-adcb", productId: "pr-adcb-sal",
-    txType: "PURCHASE", propertyValue: 800000, loanAmount: 640000, rate: 3.89, tenureMonths: 300,
-    stage: "PREAPP", createdAt: d(-18), expectedRevenue: 14200,
-    stageHistory: mkHist([["HANDOVER", -18], ["INTAKE", -16], ["FILEQC", -12], ["SUBMIT", -9], ["PREAPP", -6]]),
-    docs: [
-      ...verifiedBlock("c36", "INTAKE", ["PASSPORT", "EID", "VISA"], -16).docs,
-      doc("FILEQC", "SALCERT", "VERIFIED", -12), doc("FILEQC", "BANKSTMT", "VERIFIED", -12),
-      doc("FILEQC", "LIABILITY", "NA", -12), doc("FILEQC", "CARDSTMT", "VERIFIED", -12),
-      doc("SUBMIT", "APPFORM", "VERIFIED", -9),
-    ],
-    nextAction: "Follow up ADCB pre-approval", nextActionDue: d(1), waitingFor: "Bank",
-  }),
-  // BANK QUERY — open query on file
-  C({
-    id: "c38", ref: "HF-2038", personId: "p5", ownerId: "u5", bankId: "b-dib", productId: "pr-dib-ijara",
-    txType: "BUYOUT", propertyValue: 2400000, loanAmount: 1800000, rate: 3.75, tenureMonths: 300,
-    stage: "QUERY", createdAt: d(-22), expectedRevenue: 29000,
-    stageHistory: mkHist([["HANDOVER", -22], ["INTAKE", -20], ["FILEQC", -16], ["SUBMIT", -12], ["PREAPP", -9], ["QUERY", -4]]),
-    docs: [
-      ...verifiedBlock("c38", "INTAKE", ["PASSPORT", "EID", "VISA"], -20).docs,
-      ...verifiedBlock("c38", "FILEQC", ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], -16).docs,
-      doc("SUBMIT", "APPFORM", "VERIFIED", -12),
-    ],
-    nextAction: "Send audited financials to DIB", nextActionDue: d(1), waitingFor: "Client", pendingReason: "Document missing",
-  }),
-  // WAITING — FOL with client
-  C({
-    id: "c19", ref: "HF-2019", personId: "p2", leadId: "l1008", ownerId: "u4", bankId: "b-adcb", productId: "pr-adcb-sal",
-    txType: "PURCHASE", propertyValue: 2100000, loanAmount: 1680000, rate: 3.89, tenureMonths: 300,
-    stage: "FOL", createdAt: d(-40), expectedRevenue: 32500,
-    stageHistory: mkHist([["HANDOVER", -40], ["INTAKE", -38], ["FILEQC", -34], ["SUBMIT", -30], ["PREAPP", -26], ["VALUATION", -18], ["FOL", -9]]),
-    docs: [
-      ...verifiedBlock("c19", "INTAKE", ["PASSPORT", "EID", "VISA"], -38).docs,
-      ...verifiedBlock("c19", "FILEQC", ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], -34).docs,
-      doc("SUBMIT", "APPFORM", "VERIFIED", -30),
-      doc("VALUATION", "VALREP", "VERIFIED", -18),
-      doc("FOL", "FOL", "RECEIVED", -2, "u4"),
-    ],
-    nextAction: "Client signing appointment for FOL", nextActionDue: d(6), waitingFor: "Client",
-  }),
-  // RELEASE stage — buyout + equity for a national
-  C({
-    id: "c47", ref: "HF-2047", personId: "p7", ownerId: "u5", bankId: "b-dib", productId: "pr-dib-ijara",
-    txType: "BUYOUT_EQUITY", propertyValue: 3000000, loanAmount: 2100000, rate: 3.75, tenureMonths: 300,
-    stage: "RELEASE", createdAt: d(-55), expectedRevenue: 41000,
-    stageHistory: mkHist([["HANDOVER", -55], ["INTAKE", -53], ["FILEQC", -49], ["SUBMIT", -45], ["PREAPP", -41], ["VALUATION", -33], ["FOL", -26], ["DDA", -19], ["BOOKING", -14], ["RELEASE", -8]]),
-    docs: [
-      ...verifiedBlock("c47", "INTAKE", ["PASSPORT", "EID", "VISA"], -53).docs,
-      ...verifiedBlock("c47", "FILEQC", ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], -49).docs,
-      doc("SUBMIT", "APPFORM", "VERIFIED", -45),
-      doc("VALUATION", "VALREP", "VERIFIED", -33),
-      doc("FOL", "FOL", "VERIFIED", -26),
-      doc("DDA", "DDA", "VERIFIED", -19),
-      doc("RELEASE", "NOC", "MISSING", -1, "u5"),
-    ],
-    nextAction: "Obtain mortgage release NOC", nextActionDue: d(4), waitingFor: "Bank", pendingReason: "Awaiting bank response",
-  }),
-  // CLOSED
-  C({
-    id: "c12", ref: "HF-2012", personId: "p5", ownerId: "u4", bankId: "b-dib", productId: "pr-dib-ijara",
-    txType: "BUYOUT", propertyValue: 2000000, loanAmount: 1500000, rate: 3.99, tenureMonths: 300,
-    stage: "CLOSURE", createdAt: d(-90), closedAt: d(-6), expectedRevenue: 27500, status: "CLOSED",
-    stageHistory: mkHist([["HANDOVER", -90], ["INTAKE", -88], ["FILEQC", -84], ["SUBMIT", -80], ["PREAPP", -76], ["VALUATION", -66], ["FOL", -58], ["DDA", -50], ["BOOKING", -44], ["RELEASE", -36], ["TRANSFER", -24], ["TITLEQC", -14], ["CLOSURE", -6]]),
-    docs: [
-      ...verifiedBlock("c12", "INTAKE", ["PASSPORT", "EID", "VISA"], -88).docs,
-      doc("SUBMIT", "APPFORM", "VERIFIED", -80), doc("VALUATION", "VALREP", "VERIFIED", -66),
-      doc("FOL", "FOL", "VERIFIED", -58), doc("DDA", "DDA", "VERIFIED", -50), doc("RELEASE", "NOC", "VERIFIED", -36),
-      doc("TRANSFER", "TITLE", "VERIFIED", -24), doc("TITLEQC", "NEWTITLE", "VERIFIED", -14),
-    ],
-  }),
-];
+const byRef = (client: string, bank: string, deal?: string) =>
+  cases.find((c) => c.personId === pid(client) && c.bankId === bank && (c.deal ?? undefined) === deal)!;
 
+/* ---------- tasks derived from the tracker's action points ---------- */
+let tn = 0;
+const task = (c: Case, title: string, o: Partial<Task> = {}): Task => ({
+  id: "st" + ++tn, caseId: c.id, stageId: c.stage, type: "Follow up with bank", title,
+  ownerId: c.ownerId, priority: "MEDIUM", status: "OPEN", createdAt: ts(-3), ...o,
+});
 const tasks: Task[] = [
-  ...verifiedBlock("c29", "HANDOVER", [], -12).tasks,
-  ...verifiedBlock("c29", "INTAKE", [], -10).tasks,
-  ...verifiedBlock("c29", "FILEQC", [], -6).tasks,
-  task("c44", "HANDOVER", "Sales→Ops handover briefing", "Sales→Ops handover briefing", "u4", -1, { due: d(1), priority: "HIGH" }),
-  task("c44", "HANDOVER", "Validate lead file & calculator snapshot", "Validate lead file & calculator snapshot", "u4", -1, { due: d(1) }),
-  task("c41", "VALUATION", "Order property valuation", "Order property valuation", "u5", -8, { status: "DONE", completedAt: ts(-7), due: d(-7) }),
-  task("c41", "VALUATION", "Review valuation report", "Review valuation report", "u5", -7, { due: d(-2), priority: "HIGH", waitingFor: "Valuer", pendingReason: "Valuation delayed" }),
-  task("c36", "PREAPP", "Follow up with bank", "Follow up ADCB pre-approval", "u4", -6, { due: d(1), waitingFor: "Bank" }),
-  task("c36", "PREAPP", "Capture pre-approval terms", "Capture pre-approval terms", "u4", -6, { due: d(3) }),
-  task("c38", "QUERY", "Respond to bank query", "Send audited financials to DIB", "u5", -4, { due: d(1), priority: "HIGH", waitingFor: "Client", pendingReason: "Document missing" }),
-  task("c19", "FOL", "Review Final Offer Letter", "Review Final Offer Letter", "u4", -9, { status: "DONE", completedAt: ts(-8), due: d(-8) }),
-  task("c19", "FOL", "Clarify FOL conditions", "Clarify FOL conditions with ADCB", "u4", -9, { status: "DONE", completedAt: ts(-7), due: d(-7) }),
-  task("c19", "DDA", "Sign DDA with client", "Sign DDA with Fatima Al Suwaidi", "u4", -2, { due: d(6), waitingFor: "Client" }),
-  task("c47", "RELEASE", "Settle existing liability", "Settle existing liability", "u5", -8, { status: "DONE", completedAt: ts(-5), due: d(-5) }),
-  task("c47", "RELEASE", "Obtain mortgage release NOC", "Obtain mortgage release NOC", "u5", -8, { due: d(4), waitingFor: "Bank", pendingReason: "Awaiting bank response", priority: "HIGH" }),
-  task("c41", "TRANSFER", "Update client on progress", "Update Deepa on valuation status", "u5", -2, { due: d(0) }),
+  task(byRef("Parvez Ahmed", "b-dib"), "Confirm FAB settlement branch with seller — appointment 24-Aug, 10:03 AM", { due: d(-1), priority: "HIGH", waitingFor: "VRM" }),
+  task(byRef("Avinash Nagar", "b-adib"), "Follow up Mortgage Release Letter (expected 24–28 Aug)", { due: d(2), waitingFor: "Bank" }),
+  task(byRef("Avinash Nagar", "b-adib", "Second property"), "Message realtor — decision on valuation schedule", { due: d(-2), priority: "HIGH", waitingFor: "Realtor" }),
+  task(byRef("Rona Nadeem", "b-adib"), "Chase seller title deed — Aldar/municipality update Mon–Tue", { due: d(-2), waitingFor: "Seller" }),
+  task(byRef("Mohamed Hengazy I. Aboukhalil", "b-adib"), "Client visit to Aldar for apartment title deed", { due: d(1), waitingFor: "Client" }),
+  task(byRef("Spencer Domingos", "b-dib"), "Confirm ownership-transfer date with client (bank proposed 24-Aug)", { due: d(0), waitingFor: "Client" }),
+  task(byRef("Karolina & Angie Abbas Issa", "b-dib"), "FOL signing 31-Aug, 10:30 AM — reminder before client returns 30-Aug", { due: d(6), waitingFor: "Client" }),
+  task(byRef("Jumana Hytham Zin Aldin", "b-dib"), "Follow up bank for FOL letter (pre-approval in)", { due: d(1), priority: "HIGH", waitingFor: "Bank" }),
+  task(byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity"), "Collect valuation payment from client", { due: d(-3), priority: "HIGH", waitingFor: "Client", pendingReason: "Valuation payment pending" }),
+  task(byRef("Saeed Shah", "b-adib", "Water Edge — Buyout + Equity"), "Collect valuation payment from client", { due: d(-3), priority: "HIGH", waitingFor: "Client", pendingReason: "Valuation payment pending" }),
+  task(byRef("Sangeeth Chemboth", "b-adib"), "Collect valuation payment proof", { due: d(-1), waitingFor: "Client" }),
+  task(byRef("Anna Larina", "b-rak"), "Chase HSBC mortgage release letter (cheque deposited 13-Aug)", { due: d(0), priority: "HIGH", waitingFor: "Bank" }),
+  task(byRef("Dharpan Randhawa", "b-adib"), "Obtain title deed for final transfer", { due: d(2), waitingFor: "Developer" }),
+  task(byRef("Ricardo Laborda", "b-adib"), "FOL conversion — VRM to shortlist alternate properties with Sir Kiran", { due: d(3), waitingFor: "Client" }),
+  task(byRef("Yasir Mohhumad", "b-dib"), "Resubmit fresh case with new working (less amount & tenure)", { due: d(-4), priority: "HIGH", waitingFor: "Sir Kiran" }),
+  task(byRef("Ante Svagusa", "b-dib"), "Request FAV amendment after valuation; share valuation doc", { due: d(2), waitingFor: "Bank" }),
+  task(byRef("Reneez Ahmed Kabeer", "b-mashreq"), "Bonus-income eligibility — await Sir's response to bank revert", { due: d(-1), waitingFor: "Sir Kiran", pendingReason: "Income not eligible per Mashreq policy" }),
+  task(byRef("Jignesh Kumar Patel", "b-mashreq"), "Client confirmation on Mashreq transaction (ENBD FOL running)", { due: d(1), waitingFor: "Client" }),
+  task(byRef("Walid Elrasoul", "b-dib"), "Answer bank query — coordinate VRM response", { due: d(-1), priority: "HIGH", waitingFor: "VRM" }),
+  task(byRef("Sheree Anne Serilla Sumpay", "b-dib"), "Follow up pre-approval after ID card submission", { due: d(1), waitingFor: "Bank" }),
+  task(byRef("Ihab Abdulla Jawad", "b-nbf"), "Chase bank response to submitted documents", { due: d(2), waitingFor: "Bank" }),
+  task(byRef("Andrei Umnov", "b-cbd"), "Obtain LMF number — Santanu Sir following up", { due: d(0), waitingFor: "Bank" }),
+  task(byRef("Zinah Alkatabi & Ihab Jawad", "b-arab"), "Provide HRA AED 150,000 credit proof in statement", { due: d(-1), priority: "HIGH", waitingFor: "Client" }),
+  // files under explicit hold instruction — keep out of the "ready" bucket
+  ...[
+    byRef("Reneez Ahmed Kabeer", "b-adib", "Land plot"),
+    byRef("Bhavesh & Prerna Magnani", "b-dib"),
+    byRef("Ihab Abdulla Jawad", "b-mashreq", "80%"),
+    byRef("Ihab Abdulla Jawad", "b-cbd", "80% Resale"),
+    byRef("Ihab Abdulla Jawad", "b-enbd", "80% Resale"),
+    byRef("Ihab Abdulla Jawad", "b-fab", "80% Resale"),
+    byRef("Akram Shah", "b-cbd"),
+  ].map((hz) => task(hz, "HOLD — await Sir Kiran's instruction before any bank follow-up", { due: d(5), priority: "LOW", waitingFor: "Sir Kiran", pendingReason: "On instruction — no follow-up", remarks: "Do not contact the bank until the hold is lifted." })),
 ];
 
+/* ---------- bank queries recorded in the tracker ---------- */
 const queries: BankQuery[] = [
-  { id: "q31", caseId: "c38", ref: "BQ-031", bankId: "b-dib", requirement: "Clarify trade license vintage and provide 2 years audited financials", actionPoints: "1. Request audit reports from client\n2. Confirm license issue date\n3. Prepare cover note for credit", ownerId: "u5", receivedAt: ts(-4), due: d(1), status: "OPEN" },
-  { id: "q28", caseId: "c19", ref: "BQ-028", bankId: "b-adcb", requirement: "Provide updated salary certificate with allowance breakup", actionPoints: "Collect from employer HR portal", ownerId: "u4", receivedAt: ts(-26), due: d(-22), response: "Certificate uploaded to bank portal, ref ADCB-88412", evidence: "Email confirmation from RM", qc: "Verified by TL", status: "CLOSED" },
-  { id: "q22", caseId: "c12", ref: "BQ-022", bankId: "b-dib", requirement: "Source of funds declaration for settlement", actionPoints: "Client signed declaration", ownerId: "u4", receivedAt: ts(-70), due: d(-66), response: "Declaration submitted", evidence: "Signed PDF on file", qc: "Verified by TL", status: "CLOSED" },
+  { id: "q101", caseId: byRef("Walid Elrasoul", "b-dib").id, ref: "BQ-101", bankId: "b-dib", requirement: "Query on file — response to be prepared by VRM", actionPoints: "Coordinate VRM response and revert to banker Nawzat", ownerId: "u5", receivedAt: ts(-5), due: d(-1), status: "OPEN" },
+  { id: "q102", caseId: byRef("Akram Shah", "b-adib").id, ref: "BQ-102", bankId: "b-adib", requirement: "Overdue facility flagged on customer profile", actionPoints: "Clarify overdue status with client; obtain clearance letter", ownerId: "u4", receivedAt: ts(-6), due: d(-2), status: "OPEN" },
+  { id: "q103", caseId: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").id, ref: "BQ-103", bankId: "b-arab", requirement: "HRA AED 150,000 — credit proof required in bank statement", actionPoints: "Collect statement evidence of HRA credit from client", ownerId: "u4", receivedAt: ts(-1), due: d(-1), status: "OPEN" },
+  { id: "q104", caseId: byRef("Ihab Abdulla Jawad", "b-enbd", "80% Resale").id, ref: "BQ-104", bankId: "b-enbd", requirement: "Credit query — escalated to Sir Kiran for assist", actionPoints: "Hold per Sir's confirmation; do not follow up", ownerId: "u5", receivedAt: ts(-4), due: d(3), status: "OPEN" },
+  { id: "q105", caseId: byRef("Ihab Abdulla Jawad", "b-fab", "80% Resale").id, ref: "BQ-105", bankId: "b-fab", requirement: "Query received from bank", actionPoints: "Do not follow up from 17-Aug per Sir's instruction", ownerId: "u5", receivedAt: ts(-3), due: d(4), status: "OPEN" },
+  { id: "q106", caseId: byRef("Sheree Anne Serilla Sumpay", "b-dib").id, ref: "BQ-106", bankId: "b-dib", requirement: "ID card from deployed company", actionPoints: "Collect from client and submit to banker Abdul", ownerId: "u4", receivedAt: ts(-5), due: d(-3), response: "ID card received from client and submitted to bank", evidence: "Submitted to banker Abdul", qc: "Verified by TL", status: "RESPONDED" },
+  { id: "q107", caseId: byRef("Yaghoub Hassan Pour", "b-adib").id, ref: "BQ-107", bankId: "b-adib", requirement: "Query on pre-approval file — Sir's reply pending", actionPoints: "Send Sir Kiran's reply to banker Ahmed", ownerId: "u4", receivedAt: ts(-6), due: d(-2), status: "OPEN" },
 ];
 
-const L = (l: Omit<Lead, "createdAt"> & { createdAt?: string }): Lead => ({ createdAt: d(-8), ...l });
+/* ---------- leads — files that converted during the tracker window ---------- */
+let ln = 0;
+const conv = (client: string, bank: string, deal: string | undefined, off: number): Lead => {
+  ln += 1;
+  const caze = byRef(client, bank, deal);
+  return { id: "l" + (2000 + ln), ref: "L-" + (2000 + ln), personId: pid(client), source: deal ? "Existing Client" : "Bank Partner", type: caze.txType, status: "CONVERTED", owner: "u6", bankId: bank, createdAt: d(off), notes: `Converted to ${caze.ref}` };
+};
 const leads: Lead[] = [
-  L({ id: "l1001", ref: "L-1001", personId: "p4", source: "Property Portal", type: "PURCHASE", status: "QUALIFIED", owner: "u6", bankId: "b-mashreq", propertyValue: 950000, nextAction: "Present product shortlist", due: d(-1), createdAt: d(-14) }),
-  L({ id: "l1002", ref: "L-1002", personId: "p8", source: "Walk-in", type: "PURCHASE", status: "CONTACTED", owner: "u6", propertyValue: 800000, nextAction: "Collect salary documents", due: d(1), createdAt: d(-10) }),
-  L({ id: "l1003", ref: "L-1003", personId: "p3", source: "Referral", type: "BUYOUT_EQUITY", status: "APPOINTMENT", owner: "u7", bankId: "b-hsbc", propertyValue: 3200000, nextAction: "Video KYC appointment", due: d(3), createdAt: d(-6) }),
-  L({ id: "l1004", ref: "L-1004", personId: "p1", source: "Property Portal", type: "PURCHASE", status: "CONVERTED", owner: "u6", bankId: "b-enbd", propertyValue: 1600000, createdAt: d(-21), notes: "Converted to HF-2044" }),
-  L({ id: "l1005", ref: "L-1005", personId: "p5", source: "Referral", type: "BUYOUT", status: "PROPOSAL", owner: "u7", bankId: "b-dib", propertyValue: 2400000, nextAction: "Proposal review call", due: d(0), createdAt: d(-24) }),
-  L({ id: "l1006", ref: "L-1006", personId: "p6", source: "Bank Partner", type: "PURCHASE", status: "NEW", owner: "u7", bankId: "b-hsbc", propertyValue: 1400000, nextAction: "First contact call", due: d(2), createdAt: d(-1) }),
-  L({ id: "l1007", ref: "L-1007", personId: "p9", source: "Existing Client", type: "PURCHASE", status: "CONVERTED", owner: "u6", bankId: "b-dib", propertyValue: 1100000, createdAt: d(-30), notes: "Converted to HF-2029" }),
-  L({ id: "l1008", ref: "L-1008", personId: "p2", source: "Developer", type: "PURCHASE", status: "CONVERTED", owner: "u6", bankId: "b-adcb", propertyValue: 2100000, createdAt: d(-48), notes: "Converted to HF-2019" }),
+  conv("Andrei Umnov", "b-cbd", undefined, -6),
+  conv("Saeed Shah", "b-dib", "Al Reef — Resale", -5),
+  conv("Zinah Alkatabi & Ihab Jawad", "b-arab", undefined, -5),
+  conv("Zinah Alkatabi & Ihab Jawad", "b-cbd", undefined, -4),
+  conv("Hesham", "b-arab", undefined, -4),
+  conv("Ihab Abdulla Jawad", "b-nbf", undefined, -5),
+  conv("Karolina & Angie Abbas Issa", "b-dib", undefined, -20),
 ];
 
 const eibor: AppState["eibor"] = Array.from({ length: 8 }, (_, i) => {
@@ -269,26 +356,22 @@ const eibor: AppState["eibor"] = Array.from({ length: 8 }, (_, i) => {
 });
 
 const calcs: AppState["calcs"] = [
-  { id: "calc1", type: "affordability", label: "Affordability · Hassan Yousef · DIB", linkKind: "case", linkId: "c29", linkRef: "HF-2029", inputs: { salary: 27000, propertyValue: 1100000, rate: 4.1 }, outputs: { maxLoan: 880000, emi: 4266, dbr: "22.6%", status: "ELIGIBLE" }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }, { code: "DBR-MAX", version: 2 }, { code: "TENURE-MAX", version: 1 }], by: "u6", at: ts(-12) },
-  { id: "calc2", type: "affordability", label: "Affordability · Arjun Malhotra · ENBD", linkKind: "lead", linkId: "l1004", linkRef: "L-1004", inputs: { salary: 38000, propertyValue: 1600000, rate: 3.99 }, outputs: { maxLoan: 1280000, emi: 6087, dbr: "21.4%", status: "ELIGIBLE" }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }, { code: "DBR-MAX", version: 2 }], by: "u6", at: ts(-20) },
-  { id: "calc3", type: "buyout", label: "Buyout structure · Omar Bakri", linkKind: "case", linkId: "c38", linkRef: "HF-2038", inputs: { outstanding: 1410000, propertyValue: 2400000 }, outputs: { newLoan: 1800000, settlement: 10000, equity: 82000 }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }, { code: "SETTLE-1", version: 1 }], by: "u5", at: ts(-15) },
-  { id: "calc4", type: "dbr", label: "DBR check · Saeed Al Mansoori", linkKind: "case", linkId: "c47", linkRef: "HF-2047", inputs: { income: 87000, obligations: 5750 }, outputs: { dbr: "41.2%", cap: "50%", status: "PASS" }, rulesUsed: [{ code: "DBR-MAX", version: 2 }], by: "u5", at: ts(-30) },
-  { id: "calc5", type: "emi", label: "EMI preview · Fatima Al Suwaidi", linkKind: "case", linkId: "c19", linkRef: "HF-2019", inputs: { loan: 1680000, rate: 3.89, tenure: 300 }, outputs: { emi: 8793 }, rulesUsed: [], by: "u4", at: ts(-9) },
+  { id: "calc1", type: "emi", label: "EMI preview · Yaghoub Hassan Pour · CBD", linkKind: "case", linkId: byRef("Yaghoub Hassan Pour", "b-cbd").id, linkRef: byRef("Yaghoub Hassan Pour", "b-cbd").ref, inputs: { loan: 1174000, rate: 4.15, tenure: 300 }, outputs: { emi: 6291, totalPayments: 1887300 }, rulesUsed: [{ code: "TENURE-MAX", version: 1 }], by: "u4", at: ts(-2) },
+  { id: "calc2", type: "buyout", label: "Buyout + Equity structure · Saeed Shah · Al Reef", linkKind: "case", linkId: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").id, linkRef: byRef("Saeed Shah", "b-adib", "Al Reef — Buyout + Equity").ref, inputs: { transaction: "Buyout + Equity", property: "Al Reef" }, outputs: { note: "Pre-approval received; valuation payment pending before structure finalised" }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: "u5", at: ts(-4) },
+  { id: "calc3", type: "ltv", label: "LTV check · Karolina & Angie Abbas Issa · DIB", linkKind: "case", linkId: byRef("Karolina & Angie Abbas Issa", "b-dib").id, linkRef: byRef("Karolina & Angie Abbas Issa", "b-dib").ref, inputs: { propertyValue: 1650000, customerType: "EXPAT", financeCount: 1 }, outputs: { ltv: "80%", maxFinance: 1320000 }, rulesUsed: [{ code: "LTV-EXP-1", version: 2 }], by: "u5", at: ts(-6) },
 ];
 
 const audit: AppState["audit"] = [
-  { id: "a1", at: ts(-0.2), by: "u2", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "DBR must stay strictly below 50%" },
-  { id: "a2", at: ts(-0.4), by: "u4", module: "DOC", action: "Document received", target: "HF-2019 · FOL", detail: "FOL RECEIVED, verification pending", caseId: "c19" },
-  { id: "a3", at: ts(-0.9), by: "u5", module: "QUERY", action: "Query received", target: "BQ-031 · HF-2038", detail: "DIB: audited financials required", caseId: "c38" },
-  { id: "a4", at: ts(-1), by: "u3", module: "CASE", action: "Owner assigned", target: "HF-2044", detail: "Assigned to Sarah Thomas", caseId: "c44" },
-  { id: "a5", at: ts(-1.1), by: "u6", module: "LEAD", action: "Lead converted", target: "L-1004 → HF-2044", detail: "Handover to Ops complete", caseId: "c44" },
-  { id: "a6", at: ts(-2), by: "u5", module: "DOC", action: "Document verified", target: "HF-2047 · Liability NOC pending", detail: "NOC still MISSING", caseId: "c47" },
-  { id: "a7", at: ts(-4), by: "u4", module: "STAGE", action: "Stage advanced", target: "HF-2038 · Pre-Approval → Bank Query", caseId: "c38" },
-  { id: "a8", at: ts(-6), by: "u4", module: "CASE", action: "Case closed", target: "HF-2012", detail: "Golden record archived", caseId: "c12" },
-  { id: "a9", at: ts(-6), by: "u4", module: "STAGE", action: "Stage advanced", target: "HF-2029 · Intake → File QC", caseId: "c29" },
-  { id: "a10", at: ts(-8), by: "u2", module: "RULE", action: "Rule updated", target: "LTV-EXP-1 v1 → v2 (85% → 80%)", detail: "Expat 1st finance tightened" },
-  { id: "a11", at: ts(-9), by: "u4", module: "CALC", action: "Calculation saved", target: "EMI preview · HF-2019", caseId: "c19" },
-  { id: "a12", at: ts(-12), by: "u6", module: "CALC", action: "Calculation saved", target: "Affordability · HF-2029", detail: "Rule set v2026-08", caseId: "c29" },
+  { id: "a1", at: ts(-0.1), by: "u2", module: "IMPORT", action: "Tracker imported", target: `${cases.length} case files from daily tracker`, detail: "Working days 13–20 Aug 2026" },
+  { id: "a2", at: ts(-0.3), by: "u4", module: "CASE", action: "Tracker updated", target: byRef("Parvez Ahmed", "b-dib").ref, detail: "Settlement appointment booked 24-Aug, 10:03 AM", caseId: byRef("Parvez Ahmed", "b-dib").id },
+  { id: "a3", at: ts(-0.6), by: "u5", module: "DOC", action: "Document received", target: `${byRef("Karolina & Angie Abbas Issa", "b-dib").ref} · FOL`, detail: "FOL received 17-Aug — signing 31-Aug, 10:30 AM", caseId: byRef("Karolina & Angie Abbas Issa", "b-dib").id },
+  { id: "a4", at: ts(-1), by: "u4", module: "QUERY", action: "Query received", target: "BQ-103 · Zinah Alkatabi & Ihab Jawad", detail: "Arab Bank: HRA AED 150,000 credit proof", caseId: byRef("Zinah Alkatabi & Ihab Jawad", "b-arab").id },
+  { id: "a5", at: ts(-1.4), by: "u5", module: "CASE", action: "Settlement completed", target: byRef("Parvez Ahmed", "b-adib").ref, detail: "Settlement completed 17-Aug at DIB", caseId: byRef("Parvez Ahmed", "b-adib").id },
+  { id: "a6", at: ts(-2), by: "u4", module: "CASE", action: "Deal booked", target: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").ref, detail: "Manager's cheque handed to Aldar 18-Aug", caseId: byRef("Mohamed Hengazy I. Aboukhalil", "b-adib").id },
+  { id: "a7", at: ts(-3), by: "u2", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "DBR must stay strictly below 50%" },
+  { id: "a8", at: ts(-4), by: "u6", module: "LEAD", action: "Lead converted", target: `L-2006 → ${byRef("Ihab Abdulla Jawad", "b-nbf").ref}` },
+  { id: "a9", at: ts(-5), by: "u3", module: "CASE", action: "Case closed (won)", target: byRef("Silvia Torres", "b-enbd").ref, caseId: byRef("Silvia Torres", "b-enbd").id },
+  { id: "a10", at: ts(-6), by: "u2", module: "RULE", action: "Rule updated", target: "LTV-EXP-1 v1 → v2 (85% → 80%)", detail: "Expat 1st finance tightened" },
 ];
 
 export function buildSeed(): AppState {
@@ -316,9 +399,10 @@ export function buildSeed(): AppState {
       { id: "NEWTITLE", name: "New Title Deed" },
     ],
     taskTypes: ["Follow up with bank", "Collect documents from client", "Respond to bank query", "Schedule appointment", "Verify original documents", "Update client"],
-    waitingTypes: ["Bank", "Client", "Valuer", "Employer", "Developer", "Trustee Office", "Insurance", "Team Leader"],
-    pendingReasons: ["Document missing", "Awaiting bank response", "Client not reachable", "Valuation delayed", "Employer verification pending", "Terms under negotiation", "Awaiting signatures", "Fee approval pending"],
+    waitingTypes: ["Bank", "Client", "Sir Kiran", "VRM", "Seller", "Realtor", "Valuer", "Employer", "Developer", "Trustee Office", "Insurance", "Team Leader"],
+    pendingReasons: ["Document missing", "Awaiting bank response", "Client not reachable", "Property not finalized", "Valuation payment pending", "Awaiting mortgage release letter", "On instruction — no follow-up", "Pre-approval fee objection", "Awaiting seller documents", "Employer verification pending", "Terms under negotiation", "Awaiting signatures"],
     leadSources: ["Referral", "Property Portal", "Walk-in", "Bank Partner", "Developer", "Social Media", "Existing Client"],
     cases, tasks, queries, rules, eibor, calcs, audit,
+    trackerDates: TRACKER_DATES,
   };
 }

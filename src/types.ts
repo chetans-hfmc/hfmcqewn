@@ -48,9 +48,13 @@ export interface DocItem {
   note?: string; expiry?: string; updatedAt: string; updatedBy: string;
 }
 
+export interface TrackerEntry { date: string; note: string; }
+
 export interface Case {
   id: string; ref: string; personId: string; leadId?: string; ownerId: string;
   bankId: string; productId: string; txType: TxType;
+  deal?: string; bankRm?: string; channel?: string; outcome?: "WON" | "LOST";
+  tracker?: TrackerEntry[];
   propertyValue: number; loanAmount: number; rate: number; tenureMonths: number;
   stage: string; status: "OPEN" | "CLOSED";
   stageHistory: { stageId: string; at: string; by: string; note?: string }[];
@@ -109,10 +113,11 @@ export interface AppState {
   taskTypes: string[]; waitingTypes: string[]; pendingReasons: string[]; leadSources: string[];
   cases: Case[]; tasks: Task[]; queries: BankQuery[];
   rules: Rule[]; eibor: EiborRow[]; calcs: CalcRecord[]; audit: AuditEntry[];
+  trackerDates: string[];
 }
 
 export type View =
-  | "dashboard" | "people" | "leads" | "cases" | "tasks" | "documents"
+  | "dashboard" | "tracker" | "people" | "leads" | "cases" | "tasks" | "documents"
   | "queries" | "calculators" | "rules" | "users" | "audit";
 
 export interface NavState {

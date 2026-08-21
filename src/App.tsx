@@ -7,6 +7,7 @@ import { LeadsView, PeopleView } from "./views/PeopleLeads";
 import { Case360, CasesView } from "./views/Cases";
 import { DocumentsView, QueriesView, TasksView } from "./views/Ops";
 import CalculatorsView from "./views/Calculators";
+import TrackerView from "./views/Tracker";
 import { AuditView, RuleCentre, UsersView } from "./views/Admin";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
@@ -15,6 +16,7 @@ const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
     { v: "people", l: "People", icon: "users" },
     { v: "leads", l: "Leads", icon: "funnel" },
     { v: "cases", l: "Cases", icon: "briefcase" },
+    { v: "tracker", l: "Daily Tracker", icon: "calendar" },
   ]},
   { g: "Execute", items: [
     { v: "tasks", l: "Tasks", icon: "clipboard" },
@@ -119,7 +121,7 @@ function Shell() {
   const openQueries = state.queries.filter((q) => q.status === "OPEN").length;
 
   const titles: Record<View, string> = {
-    dashboard: "Control Tower", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
+    dashboard: "Control Tower", tracker: "Daily Tracker", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
     tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries", calculators: "Calculator Centre",
     rules: "Rule Centre", users: "Users & Roles", audit: "Audit Trail",
   };
@@ -211,6 +213,7 @@ function Shell() {
             {view === "people" && <PeopleView />}
             {view === "leads" && <LeadsView />}
             {view === "cases" && (nav.caseId ? <Case360 id={nav.caseId} /> : <CasesView />)}
+            {view === "tracker" && <TrackerView />}
             {view === "tasks" && <TasksView />}
             {view === "documents" && <DocumentsView />}
             {view === "queries" && <QueriesView />}

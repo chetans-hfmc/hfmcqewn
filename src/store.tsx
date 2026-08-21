@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import type { AppState, AuditEntry, BankQuery, CalcRecord, Case, DocItem, DocStatus, Lead, Person, Rule, Task, User, View } from "./types";
-import { buildSeed, SEED_VERSION } from "./seed";
+import { buildSeed, SEED_VERSION, SUPER_ADMIN } from "./seed";
 import { nowISO, todayISO, uid, addDays } from "./ui";
 
 const KEY = "hfmc-mos-state";
@@ -218,7 +218,13 @@ function init(): AppState {
         Array.isArray(parsed.trackerDates) &&
         Array.isArray(parsed.users) &&
         parsed.users.some((u) => u.empId === "hfmm-15");
-      if (fresh) return parsed;
+      if (fresh) {
+        // Self-heal: the management-assigned Super Admin slot must always exist.
+        if (!parsed.users.some((u) => u.empId === "hfmm-00" || u.id === "hfmm-00")) {
+          parsed.users = [{ ...SUPER_ADMIN }, ...parsed.users];
+        }
+        return parsed;
+      }
     }
   } catch { /* fall through */ }
   return buildSeed();

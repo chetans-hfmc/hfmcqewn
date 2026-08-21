@@ -90,7 +90,22 @@ function Login() {
         <h2 className="font-display font-bold text-[26px] tracking-tight mt-2 anim-up" style={{ animationDelay: "60ms" }}>Select your identity</h2>
         <p className="text-[13px] text-ink-soft mt-1 mb-6 anim-up" style={{ animationDelay: "100ms" }}>Navigation and permissions follow the role — User → Role → Permission.</p>
         <div className="space-y-5 max-w-lg">
-          {Object.entries(groups).map(([role, users], gi) => (
+          {/* pinned Super Admin identity */}
+          {groups["ADMIN"]?.map((u) => (
+            <button key={u.id} onClick={() => dispatch({ t: "LOGIN", userId: u.id })}
+              className="anim-up w-full flex items-center gap-3.5 bg-ink text-paper border border-ink rounded-lg px-4 py-3.5 text-left hover:bg-pine-950 hover:shadow-lg hover:-translate-y-px transition-all duration-150 focusable group">
+              <span className="w-10 h-10 rounded-md bg-pine-600 flex items-center justify-center shrink-0 group-hover:bg-pine-500 transition-colors"><Ic n="shield" size={19} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="block font-display font-bold text-[14.5px] tracking-tight">{u.name}</span>
+                  <span className="text-[8.5px] font-display font-bold uppercase tracking-[0.12em] bg-pine-600 text-paper rounded px-1.5 py-[2px]">Admin</span>
+                </span>
+                <span className="block text-[11px] text-paper/60 truncate">Full platform control · {u.empId} · assigned by management</span>
+              </span>
+              <Ic n="arrowR" size={16} className="text-pine-400 shrink-0" />
+            </button>
+          ))}
+          {Object.entries(groups).filter(([role]) => role !== "ADMIN").map(([role, users], gi) => (
             <div key={role} className="anim-up" style={{ animationDelay: `${140 + gi * 60}ms` }}>
               <p className="text-[10px] font-display font-semibold uppercase tracking-[0.14em] text-ink-soft mb-2">{ROLE_LABEL[role]}</p>
               <div className="grid sm:grid-cols-2 gap-2">

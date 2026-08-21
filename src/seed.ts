@@ -1,10 +1,17 @@
 import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 8;
+export const SEED_VERSION = 9;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
+
+/* Management-assigned Super Admin slot — must always exist; init() self-heals saved states missing it. */
+export const SUPER_ADMIN = {
+  id: "hfmm-00", empId: "hfmm-00", name: "Super Admin", email: "admin@hfmc.ae", mobile: "",
+  role: "ADMIN" as const, team: "Management", active: true, createdAt: d(-400),
+  note: "System slot — assigned by management / Sir Kiran",
+};
 
 /* =====================================================================
    Operational dataset — imported from the HFMC daily case tracker
@@ -607,7 +614,7 @@ export function buildSeed(): AppState {
     version: SEED_VERSION,
     session: null,
     users: [
-      { id: "hfmm-00", empId: "hfmm-00", name: "Super Admin", email: "admin@hfmc.ae", mobile: "", role: "ADMIN", team: "Management", active: true, createdAt: d(-400), note: "System slot — assigned by management / Sir Kiran" },
+      { ...SUPER_ADMIN },
       { id: "hfmm-15", empId: "hfmm-15", name: "Sir Kiran", email: "kiran@hfmc.ae", mobile: "+971 50 555 0015", role: "HEAD", team: "Management", active: true, createdAt: d(-400), note: "Head" },
       { id: "hfmm-14", empId: "hfmm-14", name: "Swathi Naverkar", email: "swathi@hfmc.ae", mobile: "+971 50 555 0014", role: "TL", team: "Sales & Ops", leaderId: "hfmm-15", active: true, createdAt: d(-350), note: "VRM & SPO Head" },
       { id: "hfmm-01", empId: "hfmm-01", name: "Vijya", email: "vijya@hfmc.ae", mobile: "+971 50 555 0001", role: "TL", team: "Ops Team (SPO)", leaderId: "hfmm-14", active: true, createdAt: d(-300), note: "SPO Team Leader" },

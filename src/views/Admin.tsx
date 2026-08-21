@@ -313,20 +313,50 @@ export function UsersView() {
   );
 }
 
+const TEAMS = ["Management", "Sales & Ops", "Ops Team (SPO)", "Sales Team (VRM)"];
+
 function AddUser({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useStore();
-  const [f, setF] = useState({ name: "", email: "", role: "SPO" as User["role"], team: "Ops Team A", leaderId: state.users.find((u) => u.role === "TL")?.id ?? "" });
+  const nextId = (() => {
+    const nums = state.users.map((u) => parseInt((u.empId.match(/hfmm-(\d+)/) ?? [])[1] ?? "0", 10)).filter((n) => !isNaN(n));
+    return "hfmm-" + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, "0");
+  })();
+  const [f, setF] = useState({
+    empId: nextId, name: "", email: "", mobile: "", role: "SPO" as User["role"],
+    team: "Ops Team (SPO)", leaderId: state.users.find((u) => u.role === "TL")?.id ?? "", note: "",
+  });
+  const empTaken = state.users.some((u) => u.empId === f.empId.trim() || u.id === f.empId.trim());
+  const valid = f.name.trim().length > 1 && f.empId.trim().length > 0 && !empTaken;
   return (
-    <Modal open onClose={onClose} title="New user" width={480}
+    <Modal open onClose={onClose} title="New user" width={520}
       footer={<><Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn disabled={!f.name.trim()} onClick={() => { dispatch({ t: "ADD_USER", user: { id: "u" + uid(), empId: "HF-0" + (31 + state.users.length), name: f.name.trim(), email: f.email || `${f.name.trim().split(" ")[0].toLowerCase()}@hfmc.ae`, mobile: "", role: f.role, team: f.team, leaderId: f.leaderId || undefined, active: true, createdAt: todayISO() } }); onClose(); }}>Create user</Btn></>}>
+        <Btn disabled={!valid} onClick={() => {
+          const empId = f.empId.trim();
+          dispatch({
+            t: "ADD_USER",
+            user: {
+              id: empId, empId, name: f.name.trim(),
+              email: f.email.trim() || `${f.name.trim().split(" ")[0].toLowerCase()}@hfmc.ae`,
+              mobile: f.mobile.trim(), role: f.role, team: f.team,
+              leaderId: f.leaderId || undefined, active: true, createdAt: todayISO(),
+              note: f.note.trim() || undefined,
+            },
+          });
+          onClose();
+        }}><Ic n="plus" size={14} /> Create user</Btn></>}>
       <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2"><Field label="Full name" req><TextInput value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field></div>
+        <Field label="Employee ID" req hint={empTaken ? "This ID is already in use" : "Unique login / reference ID"}>
+          <TextInput value={f.empId} onChange={(e) => setF({ ...f, empId: e.target.value })} className={empTaken ? "border-rust-500 text-rust-600" : ""} />
+        </Field>
+        <Field label="Designation" req><Select value={f.role} onChange={(v) => setF({ ...f, role: v as User["role"] })} options={Object.keys(ROLE_LABEL).map((r) => ({ v: r, l: ROLE_LABEL[r] }))} /></Field>
+        <div className="col-span-2"><Field label="Full name" req><TextInput value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Arjun Malhotra" /></Field></div>
+        <Field label="Team"><Select value={f.team} onChange={(v) => setF({ ...f, team: v })} options={TEAMS.map((t) => ({ v: t, l: t }))} /></Field>
+        <Field label="Reporting manager"><Select value={f.leaderId} onChange={(v) => setF({ ...f, leaderId: v })} options={[{ v: "", l: "—" }, ...state.users.filter((u) => u.active && u.id !== f.empId.trim()).map((u) => ({ v: u.id, l: `${u.name} (${u.empId})` }))]} /></Field>
         <Field label="Email"><TextInput value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="auto if empty" /></Field>
-        <Field label="Role"><Select value={f.role} onChange={(v) => setF({ ...f, role: v as User["role"] })} options={Object.keys(ROLE_LABEL).map((r) => ({ v: r, l: ROLE_LABEL[r] }))} /></Field>
-        <Field label="Team"><TextInput value={f.team} onChange={(e) => setF({ ...f, team: e.target.value })} /></Field>
-        <Field label="Reporting manager"><Select value={f.leaderId} onChange={(v) => setF({ ...f, leaderId: v })} options={[{ v: "", l: "—" }, ...state.users.map((u) => ({ v: u.id, l: u.name }))]} /></Field>
+        <Field label="Mobile"><TextInput value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} placeholder="+971 …" /></Field>
+        <div className="col-span-2"><Field label="Note (optional)"><TextInput value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="e.g. New joiner — designation to be confirmed" /></Field></div>
       </div>
+      <p className="text-[11px] text-ink-soft mt-3">The Employee ID becomes the user's unique reference across tasks, cases, audit trail and escalations. Suggested next: <span className="num font-semibold text-pine-700">{nextId}</span>.</p>
     </Modal>
   );
 }

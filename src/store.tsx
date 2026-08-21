@@ -118,8 +118,10 @@ function reducer(state: AppState, a: Action): AppState {
     case "ADD_TASK": return log({ ...state, tasks: [a.task, ...state.tasks] }, { module: "TASK", action: "Task created", target: a.task.title, caseId: a.task.caseId });
     case "UPDATE_TASK": {
       const before = state.tasks.find((t) => t.id === a.id);
-      const s = { ...state, tasks: state.tasks.map((t) => (t.id === a.id ? { ...t, ...a.patch } : t)) };
+      const stamp = a.patch.status === "DONE" ? { completedBy: state.session ?? "system" } : a.patch.status === "OPEN" ? { completedBy: undefined } : {};
+      const s = { ...state, tasks: state.tasks.map((t) => (t.id === a.id ? { ...t, ...a.patch, ...stamp } : t)) };
       if (a.patch.status === "DONE" && before) return log(s, { module: "TASK", action: "Task completed", target: before.title, caseId: before.caseId });
+      if (a.patch.status === "OPEN" && before) return log(s, { module: "TASK", action: "Task reopened", target: before.title, caseId: before.caseId });
       return s;
     }
     case "SET_DOC": {

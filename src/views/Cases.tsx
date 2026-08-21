@@ -418,7 +418,9 @@ function TaskRow({ t, editable }: { t: Task; editable: boolean }) {
         <p className="text-[10.5px] text-ink-soft num">{t.type} · {state.stages.find((s) => s.id === t.stageId)?.short} · {state.users.find((u) => u.id === t.ownerId)?.name}{t.waitingFor ? ` · waiting: ${t.waitingFor}` : ""}{t.pendingReason ? ` · ${t.pendingReason}` : ""}</p>
       </div>
       <Pill tone={t.priority === "HIGH" ? "rust" : t.priority === "MEDIUM" ? "amber" : "gr"}>{t.priority}</Pill>
-      {done ? <span className="text-[11px] num text-ink-soft">done {fmtDate(t.completedAt?.slice(0, 10))}</span> : <DueChip iso={t.due} />}
+      {done
+        ? <span className="text-[11px] num text-ink-soft">done {t.completedAt ? fmtDate(t.completedAt.slice(0, 10)) : "—"}{t.completedBy ? ` · by ${state.users.find((u) => u.id === t.completedBy)?.name ?? t.completedBy}` : ""}</span>
+        : <DueChip iso={t.due} />}
     </div>
   );
 }

@@ -68,7 +68,7 @@ export interface Task {
   id: string; caseId: string; stageId: string; type: string; title: string;
   ownerId: string; priority: "HIGH" | "MEDIUM" | "LOW"; due?: string;
   status: "OPEN" | "DONE"; waitingFor?: string; pendingReason?: string;
-  createdAt: string; completedAt?: string; remarks?: string;
+  createdAt: string; completedAt?: string; completedBy?: string; remarks?: string;
 }
 
 export interface BankQuery {

@@ -199,6 +199,55 @@ export function buyoutCalc(state: AppState, i: {
   return { ltvPct: ltv.pct, maxFinance, settlementPct: settle.pct, settlementCap: settle.cap, settlementAmount, newLoan, equity, fees: fees.lines, feesTotal: fees.total, netToCustomer, emi: monthlyEmi, dbr, dbrCapPct: dbrCap.pct, blocked: newLoan < needed, rulesUsed };
 }
 
+/* ---------- TAT & escalation engine ---------- */
+const dISO = (dt: Date) => dt.toISOString().slice(0, 10);
+const addD = (iso: string, n: number) => { const dt = new Date(iso + "T00:00:00"); dt.setDate(dt.getDate() + n); return dISO(dt); };
+const dayDiff = (a: string, b: string) => Math.round((new Date(a + "T00:00:00").getTime() - new Date(b + "T00:00:00").getTime()) / 86400000);
+
+export interface TatInfo { trigger?: string; target?: string; elapsed: number; daysOver: number; level: 0 | 1 | 2 | 3 }
+
+export function tatFor(c: Case, stageId: string, stageList: { id: string; sla: number }[], today: string): TatInfo {
+  const def = stageList.find((s) => s.id === stageId);
+  const trigger = c.triggerDates?.[stageId];
+  const sla = def?.sla ?? 0;
+  if (!trigger) return { elapsed: 0, daysOver: 0, level: 0 };
+  const elapsed = Math.max(0, dayDiff(today, trigger));
+  const daysOver = Math.max(0, elapsed - sla);
+  const level = daysOver < 1 ? 0 : daysOver === 1 ? 1 : daysOver === 2 ? 2 : 3;
+  return { trigger, target: addD(trigger, sla), elapsed, daysOver, level };
+}
+
+export const ESC_LEVELS: { level: 0 | 1 | 2 | 3; tag: string; label: string; action: string; who: string; copied: string; dot: string; chip: string }[] = [
+  { level: 0, tag: "ON TRACK", label: "Deadline not yet reached", action: "Normal follow-up call / email to bank or party — document in audit trail", who: "Team member (VRM/SPO)", copied: "—", dot: "bg-pine-500", chip: "bg-pine-100 text-pine-800" },
+  { level: 1, tag: "LEVEL 1", label: "1 day after deadline", action: "Formal follow-up — flag to Team Leader", who: "Team member", copied: "Team Leader", dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
+  { level: 2, tag: "LEVEL 2", label: "2 days after deadline", action: "Team Leader sends escalation email", who: "Team Leader", copied: "Department Head", dot: "bg-rust-500", chip: "bg-rust-100 text-rust-700" },
+  { level: 3, tag: "LEVEL 3", label: "3+ days after deadline", action: "Department Head escalates to Kiran", who: "Department Head", copied: "Kiran Suvarna (Owner)", dot: "bg-ink", chip: "bg-ink text-paper" },
+];
+
+export function escalationEmail(level: 1 | 2 | 3, client: string, bank: string, stage: string, ref: string, daysOver: number): { subject: string; body: string } {
+  if (level === 1) return {
+    subject: `[Level 1] Stage Overdue — ${client} / ${bank}`,
+    body: `Dear Team,\n\nPlease note the ${stage} stage for ${client} (${ref}, ${bank}) is now ${daysOver} day(s) past its target deadline. The TAT tracker is attached.\n\nRequesting urgent follow-up.\n\nRegards,\nHFMC Mortgage Operations`,
+  };
+  if (level === 2) return {
+    subject: `[Level 2 Escalation] — ${client} / ${stage}`,
+    body: `Dear Team,\n\nThe ${stage} stage for ${client} (${ref}, ${bank}) has not progressed despite Level 1 follow-up and is ${daysOver} days past its target deadline.\n\nPlease advise on next steps to avoid transaction risk.\n\nRegards,\nHFMC Mortgage Operations`,
+  };
+  return {
+    subject: `[URGENT Level 3] Transaction at Risk — ${client}`,
+    body: `Dear Sir,\n\nDespite Level 1 & 2 escalations, the ${stage} stage for ${client} (${ref}, ${bank}) remains unresolved — ${daysOver} days past its target deadline. Transaction risk is HIGH.\n\nRequesting your direct intervention.\n\nRegards,\nHFMC Mortgage Operations`,
+  };
+}
+
+/* ---------- duration formatting (days · hours · minutes) ---------- */
+export const fmtDur = (min?: number) => {
+  if (!min || min <= 0) return "—";
+  const dd = Math.floor(min / 1440), hh = Math.floor((min % 1440) / 60), mm = min % 60;
+  const p: string[] = [];
+  if (dd) p.push(`${dd}d`); if (hh) p.push(`${hh}h`); if (mm || !p.length) p.push(`${mm}m`);
+  return p.join(" ");
+};
+
 /* ---------- stage gates ---------- */
 export interface GateCheck { label: string; pass: boolean; detail: string }
 export function stageGates(state: AppState, c: Case): { checks: GateCheck[]; pass: boolean; nextStage?: string } {

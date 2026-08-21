@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { Case, DocStatus, Task } from "../types";
+import type { Case, DocStatus, Person, Task } from "../types";
 import { useMe, useNav, useStore } from "../store";
-import { emi, stageGates } from "../calc";
+import { ESC_LEVELS, emi, escalationEmail, fmtDur, stageGates, tatFor } from "../calc";
 import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextArea, TextInput, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtPct, fmtTime, nowISO, todayISO, uid } from "../ui";
 
 const DOC_STATUSES: { v: DocStatus; l: string; cls: string; on: string }[] = [
@@ -95,7 +95,7 @@ export function Case360({ id }: { id: string }) {
   const nav = useNav();
   const me = useMe();
   const c = state.cases.find((x) => x.id === id);
-  const [tab, setTab] = useState("docs");
+  const [tab, setTab] = useState(() => (typeof nav.params.tab === "string" ? nav.params.tab : "docs"));
   const [gateOpen, setGateOpen] = useState(false);
   const [editPanel, setEditPanel] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
@@ -222,6 +222,7 @@ export function Case360({ id }: { id: string }) {
         <div className="px-4 pt-1">
           <div className="flex gap-1 border-b border-mist overflow-x-auto">
             {[
+              { id: "tat", l: "TAT & Escalation", count: (c.conditionsDone ? Object.keys(c.conditionsDone).length : 0) },
               { id: "docs", l: "Documents & QC", count: c.docs.length },
               { id: "tasks", l: "Tasks", count: tasks.filter((t) => t.status === "OPEN").length },
               { id: "queries", l: "Bank queries", count: queries.filter((qq) => qq.status === "OPEN").length },
@@ -239,6 +240,8 @@ export function Case360({ id }: { id: string }) {
         </div>
 
         <div className="p-4">
+          {tab === "tat" && <TatTab c={c} person={person} />}
+
           {tab === "docs" && (
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -416,6 +419,7 @@ function TaskRow({ t, editable }: { t: Task; editable: boolean }) {
       <div className="flex-1 min-w-[180px]">
         <p className={cx("text-[13px] font-semibold", done && "line-through")}>{t.title}</p>
         <p className="text-[10.5px] text-ink-soft num">{t.type} · {state.stages.find((s) => s.id === t.stageId)?.short} · {state.users.find((u) => u.id === t.ownerId)?.name}{t.waitingFor ? ` · waiting: ${t.waitingFor}` : ""}{t.pendingReason ? ` · ${t.pendingReason}` : ""}</p>
+        <p className="text-[10px] text-ink-soft num mt-0.5">logged {fmtTime(t.createdAt)}{t.estimateMinutes ? <> · <span className="font-semibold text-pine-700">est. {fmtDur(t.estimateMinutes)}</span></> : null}</p>
       </div>
       <Pill tone={t.priority === "HIGH" ? "rust" : t.priority === "MEDIUM" ? "amber" : "gr"}>{t.priority}</Pill>
       {done
@@ -454,11 +458,12 @@ function ControlPanelDrawer({ c, onClose }: { c: Case; onClose: () => void }) {
 function AddTask({ caseId, stageId, onClose }: { caseId: string; stageId: string; onClose: () => void }) {
   const { state, dispatch } = useStore();
   const me = useMe();
-  const [f, setF] = useState({ title: "", type: state.taskTypes[0], ownerId: me?.id ?? "", priority: "MEDIUM" as Task["priority"], due: todayISO(), stageId });
+  const [f, setF] = useState({ title: "", type: state.taskTypes[0], ownerId: me?.id ?? "", priority: "MEDIUM" as Task["priority"], due: todayISO(), stageId, ed: 0, eh: 0, em: 0 });
+  const estMin = f.ed * 1440 + f.eh * 60 + f.em;
   return (
     <Modal open onClose={onClose} title="New task" width={520}
       footer={<><Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn disabled={!f.title.trim()} onClick={() => { dispatch({ t: "ADD_TASK", task: { id: "t" + uid(), caseId, stageId: f.stageId, type: f.type, title: f.title.trim(), ownerId: f.ownerId, priority: f.priority, due: f.due, status: "OPEN", createdAt: nowISO() } }); onClose(); }}>Create task</Btn></>}>
+        <Btn disabled={!f.title.trim()} onClick={() => { dispatch({ t: "ADD_TASK", task: { id: "t" + uid(), caseId, stageId: f.stageId, type: f.type, title: f.title.trim(), ownerId: f.ownerId, priority: f.priority, due: f.due, status: "OPEN", createdAt: nowISO(), estimateMinutes: estMin || undefined } }); onClose(); }}>Create task</Btn></>}>
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2"><Field label="Task" req><TextInput value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Collect updated bank statements" /></Field></div>
         <Field label="Stage"><Select value={f.stageId} onChange={(v) => setF({ ...f, stageId: v })} options={state.stages.map((s) => ({ v: s.id, l: s.name }))} /></Field>
@@ -466,6 +471,13 @@ function AddTask({ caseId, stageId, onClose }: { caseId: string; stageId: string
         <Field label="Owner"><Select value={f.ownerId} onChange={(v) => setF({ ...f, ownerId: v })} options={state.users.filter((u) => u.active).map((u) => ({ v: u.id, l: u.name }))} /></Field>
         <Field label="Priority"><Select value={f.priority} onChange={(v) => setF({ ...f, priority: v as Task["priority"] })} options={[{ v: "HIGH", l: "High" }, { v: "MEDIUM", l: "Medium" }, { v: "LOW", l: "Low" }]} /></Field>
         <Field label="Due"><DateInput value={f.due} onChange={(e) => setF({ ...f, due: e.target.value })} /></Field>
+        <Field label="Expected time to complete" hint={estMin ? `= ${fmtDur(estMin)}` : "days · hours · minutes"}>
+          <div className="grid grid-cols-3 gap-2">
+            <NumInput value={f.ed} onChange={(n) => setF({ ...f, ed: n })} suffix="d" />
+            <NumInput value={f.eh} onChange={(n) => setF({ ...f, eh: n })} suffix="h" />
+            <NumInput value={f.em} onChange={(n) => setF({ ...f, em: n })} suffix="m" />
+          </div>
+        </Field>
       </div>
     </Modal>
   );
@@ -489,6 +501,187 @@ function AddQuery({ caze, onClose }: { caze: Case; onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+function TatTab({ c, person }: { c: Case; person: Person }) {
+  const { state, dispatch } = useStore();
+  const me = useMe();
+  const [note, setNote] = useState("");
+  const [copied, setCopied] = useState(false);
+  const today = todayISO();
+  const cur = tatFor(c, c.stage, state.stages, today);
+  const curDef = state.stages.find((s) => s.id === c.stage);
+  const histStages = c.stageHistory.map((h) => h.stageId).filter((v, i, a) => a.indexOf(v) === i);
+  const curLevel = ESC_LEVELS[cur.level];
+
+  const copyEmail = async () => {
+    if (cur.level < 1) return;
+    const bank = state.banks.find((b) => b.id === c.bankId)?.short ?? "";
+    const em = escalationEmail(cur.level as 1 | 2 | 3, person.name, bank, curDef?.name ?? c.stage, c.ref, cur.daysOver);
+    const text = `Subject: ${em.subject}\n\n${em.body}`;
+    try { await navigator.clipboard.writeText(text); }
+    catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    setCopied(true); setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* rule legend */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 bg-ink text-paper rounded-lg px-4 py-2.5 text-[11px] font-display">
+        <span className="font-bold tracking-[0.1em] uppercase text-[10px] text-paper/60">Escalation rules</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-pine-400 mr-1.5" />Day 1 — normal follow-up</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />Day 2 — Level 1 → Team Leader</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-rust-500 mr-1.5" />Day 3 — Level 2 → Dept Head CC'd</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-paper mr-1.5" />Day 4+ — Level 3 → Dept Head copies Kiran</span>
+      </div>
+
+      {/* stage TAT cards */}
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {histStages.map((sid) => {
+          const def = state.stages.find((s) => s.id === sid);
+          const t = tatFor(c, sid, state.stages, today);
+          const lv = ESC_LEVELS[t.level];
+          const conds = def?.conditions ?? [];
+          const done = conds.filter((_, ci) => c.conditionsDone?.[`${sid}:${ci}`]).length;
+          const isCur = sid === c.stage;
+          return (
+            <div key={sid} className={cx("border rounded-lg p-3.5 transition-all anim-up", isCur ? "border-pine-600 shadow-md bg-pine-50/40" : "border-mist bg-card")}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-display font-bold text-[13.5px] tracking-tight">{def?.name}</p>
+                <span className={cx("inline-flex items-center gap-1.5 rounded px-2 py-[3px] text-[9.5px] font-display font-bold tracking-[0.08em]", lv.chip)}>
+                  <span className={cx("w-1.5 h-1.5 rounded-full", lv.dot, t.level >= 2 && "pulse-dot")} />{isCur ? lv.tag : done === conds.length && conds.length ? "CLEARED" : lv.tag}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-2.5">
+                <div>
+                  <p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">Trigger date</p>
+                  <input type="date" value={t.trigger ?? ""} onChange={(e) => e.target.value && dispatch({ t: "SET_TRIGGER", caseId: c.id, stageId: sid, date: e.target.value })}
+                    className="focusable num mt-0.5 w-full text-[11.5px] bg-transparent border-b border-mist pb-0.5" />
+                </div>
+                <div>
+                  <p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">Target (SLA {def?.sla}d)</p>
+                  <p className="num text-[11.5px] font-semibold mt-1">{t.target ? fmtDate(t.target) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">Elapsed</p>
+                  <p className={cx("num text-[11.5px] font-semibold mt-1", t.daysOver > 0 && "text-rust-600")}>{t.trigger ? `${t.elapsed}d${t.daysOver > 0 ? ` (+${t.daysOver})` : ""}` : "—"}</p>
+                </div>
+              </div>
+              {conds.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] uppercase tracking-[0.09em] font-display font-bold text-ink-soft">Stage conditions</p>
+                    <span className={cx("num text-[10px] font-bold px-1.5 py-0.5 rounded", done === conds.length ? "bg-pine-100 text-pine-800" : "bg-amber-100 text-amber-700")}>{done}/{conds.length}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {conds.map((cd, ci) => {
+                      const key = `${sid}:${ci}`;
+                      const on = !!c.conditionsDone?.[key];
+                      return (
+                        <button key={key} onClick={() => dispatch({ t: "TOGGLE_CONDITION", caseId: c.id, key, label: cd })}
+                          className="focusable w-full flex items-start gap-2 text-left group py-0.5">
+                          <span className={cx("mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all", on ? "bg-pine-600 border-pine-600 text-pine-50" : "border-gr-300 bg-card group-hover:border-pine-500")}>
+                            {on && <Ic n="check" size={10} />}
+                          </span>
+                          <span className={cx("text-[11.5px] leading-snug", on ? "text-ink-soft line-through" : "text-ink")}>{cd}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {isCur && def?.tatNote && (
+                <p className="mt-3 text-[11px] leading-snug border-l-2 border-amber-500 bg-amber-100/50 rounded-r px-2.5 py-1.5 text-amber-700 font-medium">{def.tatNote}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* escalation email */}
+      {cur.level >= 1 && c.status === "OPEN" && (
+        <div className={cx("border rounded-lg p-4 anim-up", cur.level >= 2 ? "border-rust-500/50 bg-rust-100/30" : "border-amber-500/50 bg-amber-100/30")}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-display font-bold text-[13.5px] tracking-tight">
+              {curLevel.tag} escalation ready — <span className="text-ink-soft font-medium">send: {curLevel.who} · cc: {curLevel.copied}</span>
+            </p>
+            <Btn size="sm" variant="dark" onClick={copyEmail}><Ic n={copied ? "check" : "copy"} size={12} /> {copied ? "Copied" : "Copy escalation email"}</Btn>
+          </div>
+          {(() => {
+            const bank = state.banks.find((b) => b.id === c.bankId)?.short ?? "";
+            const em = escalationEmail(cur.level as 1 | 2 | 3, person.name, bank, curDef?.name ?? c.stage, c.ref, cur.daysOver);
+            return <pre className="mt-3 text-[11.5px] leading-relaxed whitespace-pre-wrap font-body bg-card/80 border border-mist rounded-md px-3.5 py-3">{`Subject: ${em.subject}\n\n${em.body}`}</pre>;
+          })()}
+        </div>
+      )}
+
+      {/* bank application + client profile */}
+      {(c.bankApp || person.profile) && (
+        <div className="grid lg:grid-cols-2 gap-3">
+          {c.bankApp && (
+            <div className="border border-mist bg-card rounded-lg p-4 anim-up">
+              <p className="font-display font-bold text-[13px] tracking-tight mb-2.5">Bank application — {state.banks.find((b) => b.id === c.bankId)?.name}</p>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[12px]">
+                {[
+                  ["Bank officer", c.bankApp.officer], ["Officer email", c.bankApp.officerEmail],
+                  ["Application ref", c.bankApp.appRef], ["Status", c.bankApp.status ? `${c.bankApp.status} · ${c.bankApp.statusDate ? fmtDate(c.bankApp.statusDate) : ""}` : undefined],
+                  ["Rate", c.bankApp.rate != null ? `${c.bankApp.rate}%` : undefined], ["LTV", c.bankApp.ltv != null ? `${c.bankApp.ltv}%` : undefined],
+                  ["Valuation fee", c.bankApp.valuationFee != null ? fmtAED(c.bankApp.valuationFee) : undefined], ["Offer expiry", c.bankApp.offerExpiry ? fmtDate(c.bankApp.offerExpiry) : undefined],
+                  ["Insurance", c.bankApp.insuranceProvider],
+                ].filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k as string} className="flex justify-between gap-3 border-b border-mist/50 py-1">
+                    <span className="text-ink-soft">{k}</span><span className="num font-semibold text-right">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {person.profile && (
+            <div className="border border-mist bg-card rounded-lg p-4 anim-up">
+              <p className="font-display font-bold text-[13px] tracking-tight mb-2.5">Client information — {person.name}</p>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[12px]">
+                {Object.entries(person.profile).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-3 border-b border-mist/50 py-1">
+                    <span className="text-ink-soft">{k}</span><span className="num font-semibold text-right">{String(v)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Monthly salary</span><span className="num font-semibold">{fmtAED(person.monthlySalary)}</span></div>
+                <div className="flex justify-between gap-3 border-b border-mist/50 py-1"><span className="text-ink-soft">Existing liabilities</span><span className="num font-semibold">{fmtAED(person.liabilities.reduce((s, l) => s + l.monthly, 0))}/m</span></div>
+                <div className="flex justify-between gap-3 py-1"><span className="text-ink-soft">DBR (auto)</span><span className={cx("num font-bold", person.monthlySalary ? (person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100 >= 50 ? "text-rust-600" : "text-pine-700" : "")}>{person.monthlySalary ? `${((person.liabilities.reduce((s, l) => s + l.monthly, 0) / person.monthlySalary) * 100).toFixed(1)}%` : "—"}</span></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* notes / clarifications */}
+      <div className="border border-mist bg-card rounded-lg p-4 anim-up">
+        <p className="font-display font-bold text-[13px] tracking-tight">Notes / clarifications <span className="text-ink-soft font-body font-normal text-[11.5px]">— save all comms for this file here</span></p>
+        {c.status === "OPEN" && (
+          <div className="flex gap-2 mt-2.5">
+            <input value={note} onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && note.trim()) { dispatch({ t: "ADD_CASE_NOTE", caseId: c.id, text: note }); setNote(""); } }}
+              placeholder="e.g. Called banker Babar — FOL expected tomorrow before noon…"
+              className="focusable flex-1 h-[34px] rounded-md border border-mist bg-paper/60 px-3 text-[12.5px]" />
+            <Btn size="sm" disabled={!note.trim()} onClick={() => { dispatch({ t: "ADD_CASE_NOTE", caseId: c.id, text: note }); setNote(""); }}><Ic n="plus" size={13} /> Save</Btn>
+          </div>
+        )}
+        <div className="mt-3 space-y-2">
+          {[...(c.caseNotes ?? [])].sort((a, b) => b.at.localeCompare(a.at)).map((n) => (
+            <div key={n.id} className="flex gap-2.5 anim-tick">
+              <Avatar name={state.users.find((u) => u.id === n.by)?.name ?? n.by} size={22} />
+              <div className="min-w-0">
+                <p className="text-[10.5px] text-ink-soft num">{state.users.find((u) => u.id === n.by)?.name ?? n.by} · {fmtTime(n.at)}</p>
+                <p className="text-[12.5px] leading-relaxed">{n.text}</p>
+              </div>
+            </div>
+          ))}
+          {!(c.caseNotes ?? []).length && <p className="text-[12px] text-ink-soft italic">No notes saved yet.</p>}
+        </div>
+      </div>
+      <p className="text-[10.5px] text-ink-soft">Logged by {me?.name} · trigger changes, condition clears and notes are written to the audit trail · source: Ops Guide Book Batch 1</p>
+    </div>
   );
 }
 

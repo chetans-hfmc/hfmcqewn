@@ -35,6 +35,9 @@ export type Action =
   | { t: "SAVE_CALC"; calc: CalcRecord }
   | { t: "SET_TRACKER"; caseId: string; date: string; note: string }
   | { t: "ADD_TRACKER_DAY"; date: string }
+  | { t: "SET_TRIGGER"; caseId: string; stageId: string; date: string }
+  | { t: "TOGGLE_CONDITION"; caseId: string; key: string; label: string }
+  | { t: "ADD_CASE_NOTE"; caseId: string; text: string }
   | { t: "UPSERT_RULE"; rule: Rule; isNew?: boolean }
   | { t: "ADD_EIBOR"; row: AppState["eibor"][number] }
   | { t: "ADD_USER"; user: User } | { t: "UPDATE_USER"; id: string; patch: Partial<User> };
@@ -99,6 +102,7 @@ function reducer(state: AppState, a: Action): AppState {
       const updated: Case = {
         ...c, stage: next.id,
         stageHistory: [...c.stageHistory, { stageId: next.id, at: nowISO(), by: state.session ?? "", note: a.note }],
+        triggerDates: { ...(c.triggerDates ?? {}), [next.id]: todayISO() },
         nextAction: next.tasks[0] ?? undefined,
         nextActionDue: addDays(todayISO(), next.sla),
         waitingFor: undefined, pendingReason: undefined, blocker: undefined,
@@ -156,6 +160,29 @@ function reducer(state: AppState, a: Action): AppState {
     case "ADD_TRACKER_DAY": {
       if (state.trackerDates.includes(a.date)) return state;
       return log({ ...state, trackerDates: [...state.trackerDates, a.date].sort() }, { module: "TRACKER", action: "Tracker day added", target: a.date });
+    }
+    case "SET_TRIGGER": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze) return state;
+      const stageName = state.stages.find((s) => s.id === a.stageId)?.name ?? a.stageId;
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, triggerDates: { ...(c.triggerDates ?? {}), [a.stageId]: a.date } } : c)) };
+      return log(s, { module: "TAT", action: "Trigger date set", target: caze.ref, detail: `${stageName} → ${a.date}`, caseId: a.caseId });
+    }
+    case "TOGGLE_CONDITION": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze) return state;
+      const done = { ...(caze.conditionsDone ?? {}) };
+      const next = !done[a.key];
+      if (next) done[a.key] = true; else delete done[a.key];
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, conditionsDone: done } : c)) };
+      return next ? log(s, { module: "TAT", action: "Stage condition cleared", target: caze.ref, detail: a.label, caseId: a.caseId }) : s;
+    }
+    case "ADD_CASE_NOTE": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze || !a.text.trim()) return state;
+      const note = { id: "cn" + uid(), at: nowISO(), by: state.session ?? "system", text: a.text.trim() };
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, caseNotes: [...(c.caseNotes ?? []), note] } : c)) };
+      return log(s, { module: "TAT", action: "Case note saved", target: caze.ref, detail: a.text.trim().slice(0, 90), caseId: a.caseId });
     }
     case "UPSERT_RULE": {
       if (a.isNew) return log({ ...state, rules: [...state.rules, a.rule] }, { module: "RULE", action: "Rule created", target: `${a.rule.code} = ${a.rule.value}` });

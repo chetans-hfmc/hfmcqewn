@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { DocStatus, Task } from "../types";
 import { useMe, useNav, useStore } from "../store";
 import { Avatar, Btn, DateInput, DueChip, EmptyState, Field, Ic, Modal, Pill, SectionHead, Segmented, Select, TextArea, TextInput, cx, fmtDate, fmtTime, nowISO, todayISO, uid } from "../ui";
+import { fmtDur } from "../calc";
 
 function useNames() {
   const { state } = useStore();
@@ -50,6 +51,7 @@ export function TasksView() {
                 <p className="text-[10.5px] text-ink-soft num">
                   {c?.ref} · {state.stages.find((s) => s.id === t.stageId)?.name} · {n.person(c?.personId ?? "")}{t.waitingFor ? ` · waiting: ${t.waitingFor}` : ""}{t.pendingReason ? ` · ${t.pendingReason}` : ""}
                 </p>
+                <p className="text-[10px] text-ink-soft num mt-0.5">logged {fmtTime(t.createdAt)}{t.estimateMinutes ? <> · <span className="font-semibold text-pine-700">est. {fmtDur(t.estimateMinutes)}</span></> : null}{t.completedAt ? ` · done ${fmtTime(t.completedAt)}` : ""}</p>
               </div>
               <Pill tone={t.priority === "HIGH" ? "rust" : t.priority === "MEDIUM" ? "amber" : "gr"}>{t.priority}</Pill>
               <Avatar name={n.user(t.ownerId)} size={22} />

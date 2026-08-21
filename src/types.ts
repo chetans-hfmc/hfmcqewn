@@ -17,6 +17,7 @@ export interface Person {
   cards: { bank: string; limit: number }[];
   liabilities: { type: string; monthly: number }[];
   kyc: { passport: boolean; eid: boolean; visa: boolean; address: boolean };
+  profile?: Record<string, string | number>;
   createdAt: string;
 }
 
@@ -38,6 +39,7 @@ export interface Product {
 export interface StageDef {
   id: string; name: string; short: string; sla: number;
   docs: string[]; tasks: string[]; gate?: string;
+  conditions: string[]; tatNote?: string;
 }
 
 export interface DocType { id: string; name: string; }
@@ -51,11 +53,22 @@ export interface DocItem {
 
 export interface TrackerEntry { date: string; note: string; }
 
+export interface CaseNote { id: string; at: string; by: string; text: string }
+
+export interface BankApp {
+  officer?: string; officerEmail?: string; appRef?: string; status?: string; statusDate?: string;
+  rate?: number; ltv?: number; valuationFee?: number; offerExpiry?: string; insuranceProvider?: string;
+}
+
 export interface Case {
   id: string; ref: string; personId: string; leadId?: string; ownerId: string;
   bankId: string; productId: string; txType: TxType;
   deal?: string; bankRm?: string; channel?: string; outcome?: "WON" | "LOST";
   tracker?: TrackerEntry[];
+  triggerDates?: Record<string, string>;
+  conditionsDone?: Record<string, boolean>;
+  caseNotes?: CaseNote[];
+  bankApp?: BankApp;
   propertyValue: number; loanAmount: number; rate: number; tenureMonths: number;
   stage: string; status: "OPEN" | "CLOSED";
   stageHistory: { stageId: string; at: string; by: string; note?: string }[];
@@ -69,6 +82,7 @@ export interface Task {
   ownerId: string; priority: "HIGH" | "MEDIUM" | "LOW"; due?: string;
   status: "OPEN" | "DONE"; waitingFor?: string; pendingReason?: string;
   createdAt: string; completedAt?: string; completedBy?: string; remarks?: string;
+  estimateMinutes?: number;
 }
 
 export interface BankQuery {
@@ -118,8 +132,8 @@ export interface AppState {
 }
 
 export type View =
-  | "dashboard" | "tracker" | "people" | "leads" | "cases" | "tasks" | "documents"
-  | "queries" | "calculators" | "rules" | "users" | "audit";
+  | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
+  | "queries" | "calculators" | "rules" | "users" | "audit" | "guide";
 
 export interface NavState {
   view: View; caseId: string | null; params: Record<string, unknown>;

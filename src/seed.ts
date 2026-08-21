@@ -16,20 +16,20 @@ const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
 export const TRACKER_DATES = ["2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20"];
 
 const stages: AppState["stages"] = [
-  { id: "HANDOVER", name: "Handover", short: "HO", sla: 2, docs: [], tasks: ["Sales→Ops handover briefing", "Validate lead file & calculator snapshot"] },
-  { id: "INTAKE", name: "File Intake / KYC", short: "KYC", sla: 3, docs: ["PASSPORT", "EID", "VISA"], tasks: ["Collect KYC documents", "Run affordability calculator"] },
-  { id: "FILEQC", name: "File QC", short: "QC", sla: 2, docs: ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], tasks: ["Complete file QC checklist", "QC review by Team Leader"], gate: "QC" },
-  { id: "SUBMIT", name: "Bank Submission", short: "SUB", sla: 2, docs: ["APPFORM"], tasks: ["Submit file to bank", "Log submission reference"] },
-  { id: "PREAPP", name: "Pre-Approval", short: "PA", sla: 5, docs: [], tasks: ["Follow up with bank", "Capture pre-approval terms"] },
-  { id: "QUERY", name: "Bank Query", short: "QRY", sla: 3, docs: [], tasks: ["Respond to bank query"] },
-  { id: "VALUATION", name: "Valuation", short: "VAL", sla: 4, docs: ["VALREP"], tasks: ["Order property valuation", "Review valuation report"] },
-  { id: "FOL", name: "FOL", short: "FOL", sla: 3, docs: ["FOL"], tasks: ["Review Final Offer Letter", "Clarify FOL conditions"] },
-  { id: "DDA", name: "DDA / Signing", short: "DDA", sla: 3, docs: ["DDA"], tasks: ["Sign DDA with client", "Collect security cheques"] },
-  { id: "BOOKING", name: "Loan Booking", short: "BKG", sla: 2, docs: [], tasks: ["Book loan with bank"] },
-  { id: "RELEASE", name: "Liability / Release", short: "REL", sla: 4, docs: ["NOC"], tasks: ["Settle existing liability", "Obtain mortgage release NOC"] },
-  { id: "TRANSFER", name: "Final Transfer", short: "TRF", sla: 3, docs: ["TITLE"], tasks: ["Coordinate trustee transfer", "Pay DLD fees"] },
-  { id: "TITLEQC", name: "Title Deed QC", short: "TD", sla: 2, docs: ["NEWTITLE"], tasks: ["QC new title deed", "Verify mortgage registration"] },
-  { id: "CLOSURE", name: "Closure", short: "CL", sla: 2, docs: [], tasks: ["File closure review", "Archive golden record"] },
+  { id: "HANDOVER", name: "Handover", short: "HO", sla: 2, docs: [], tasks: ["Sales→Ops handover briefing", "Validate lead file & calculator snapshot"], conditions: ["Lead file & calculator snapshot received", "Transaction type identified before building the file"] },
+  { id: "INTAKE", name: "File Intake / KYC", short: "KYC", sla: 3, docs: ["PASSPORT", "EID", "VISA"], tasks: ["Collect KYC documents", "Run affordability calculator"], conditions: ["Client profile fully completed", "All personal docs received (EID, Passport, Visa)", "Salary slips & bank statements collected", "Client file saved in correct folder"] },
+  { id: "FILEQC", name: "File QC", short: "QC", sla: 2, docs: ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], tasks: ["Complete file QC checklist", "QC review by Team Leader"], gate: "QC", conditions: ["KYC verified against application & bank forms", "Transaction info verified against property documents", "Discrepancies recorded & resolved"] },
+  { id: "SUBMIT", name: "Bank Submission", short: "SUB", sla: 2, docs: ["APPFORM"], tasks: ["Submit file to bank", "Log submission reference"], conditions: ["Client profile fully completed", "All personal docs received (EID, Passport, Visa)", "Salary slips & bank statements collected", "Form F / SPA received", "Client file saved in correct folder"], tatNote: "Enter the trigger date when the file is first registered at the bank." },
+  { id: "PREAPP", name: "Pre-Approval", short: "PA", sla: 5, docs: [], tasks: ["Follow up with bank", "Capture pre-approval terms"], conditions: ["Application submitted to bank", "DBR calculated & within bank limit", "Credit score confirmed", "NSTL rate offer used if salary not transferring to bank", "Pre-approval letter received from bank", "Shared with client & client confirmed"], tatNote: "Pre-approval normally takes 3–5 working days. Check NSTL vs STL pricing." },
+  { id: "QUERY", name: "Bank Query", short: "QRY", sla: 3, docs: [], tasks: ["Respond to bank query"], conditions: ["Query logged with action points & owner", "Response prepared & QC'd", "Evidence shared with bank same day"] },
+  { id: "VALUATION", name: "Valuation", short: "VAL", sla: 4, docs: ["VALREP"], tasks: ["Order property valuation", "Review valuation report"], conditions: ["Client advised to pay valuation fee (same day as pre-approval)", "Property documents sent to bank for evaluation", "Valuation appointment confirmed", "Valuation report received", "LTV confirmed within bank policy", "Pre-approval conditions satisfied during this stage", "Bank account opened (if required by bank)", "Downpayment confirmed ready (unless personal loan for DP)"], tatNote: "Push bank evaluation in parallel with pre-approval. Target: completed D+3 to D+4 after client pays fees." },
+  { id: "FOL", name: "FOL", short: "FOL", sla: 3, docs: ["FOL"], tasks: ["Review Final Offer Letter", "Clarify FOL conditions"], conditions: ["FOL submitted same day valuation report received", "Security cheque ready (min 6–10 cheque leaves)", "Valid passport / visa / EID confirmed", "Salary certificate addressed to specific bank", "Insurance completed (medical disclosure or full medical per bank policy)", "Seller/client liability letter requested — address matches title deed & valuation", "FOL / Loan Agreement received", "FOL shared with client & signed"], tatNote: "FOL must be received within 3–5 working days. If a query is raised by bank — respond same day." },
+  { id: "DDA", name: "DDA / Signing", short: "DDA", sla: 3, docs: ["DDA"], tasks: ["Sign DDA with client", "Collect security cheques"], conditions: ["FOL signed (digital + manual)", "DDA activated by client", "Funding / security cheques confirmed"] },
+  { id: "BOOKING", name: "Loan Booking", short: "BKG", sla: 2, docs: [], tasks: ["Book loan with bank"], conditions: ["FOL signed (digital + manual)", "All pre-approval & FOL conditions fulfilled", "Liability letter obtained (buyout/seller buyout) — must match property address in FOL", "Original liability letter + seller undertaking (per bank policy)", "Tracker booked in system", "Manager's cheque for final payment to developer arranged"], tatNote: "Loan booking should complete in max 5–6 working days. Manager's cheque to developer due by D+4 to D+7." },
+  { id: "RELEASE", name: "Liability / Release", short: "REL", sla: 4, docs: ["NOC"], tasks: ["Settle existing liability", "Obtain mortgage release NOC"], conditions: ["Existing liability settled", "Mortgage release letter obtained (7–10 working days — arrange early)", "Clearance / release documents available"] },
+  { id: "TRANSFER", name: "Final Transfer", short: "TRF", sla: 3, docs: ["TITLE"], tasks: ["Coordinate trustee transfer", "Pay DLD fees"], conditions: ["Valid Developer NOC obtained", "ADREC / ADGM / DLD evaluation report valid", "Cash seller: straight transfer with NOC + valid evaluation", "Finance/buyout: settlement appointment coordinated with banker", "Mortgage release letter obtained (7–10 working days — arrange early)", "ADREC: mortgage release bank rep physically present OR letter attested", "ADGM: both finance bank + mortgage release bank reps physically present", "Equity release: client + finance bank rep present (in person or digital)", "Title deed issued — follow up with developer"], tatNote: "Title deed may take time — start chasing developer as soon as transfer is done." },
+  { id: "TITLEQC", name: "Title Deed QC", short: "TD", sla: 2, docs: ["NEWTITLE"], tasks: ["QC new title deed", "Verify mortgage registration"], conditions: ["Title deed received", "Title deed QC email sent", "Mortgage registration verified"] },
+  { id: "CLOSURE", name: "Closure", short: "CL", sla: 2, docs: [], tasks: ["File closure review", "Archive golden record"], conditions: ["File closure review complete", "Golden record archived"] },
 ];
 
 const R = (r: Omit<Rule, "active" | "history"> & { active?: boolean; history?: Rule["history"] }): Rule => ({
@@ -524,6 +524,83 @@ NL("Ismail Shaikh", { vrm: "hfmm-07", opened: 0, type: "BUYOUT_EQUITY", status: 
 /* Sharafi (closed) — valuation refund instruction */
 audit.push({ id: "ax" + ++ax, at: ts(-1), by: "hfmm-06", module: "MILESTONE", action: "Valuation refund instructed", target: byRef("Mr Sharafi", "b-dib").ref, detail: "Refund valuation amount per Sir Kiran's email (4-Aug)", caseId: byRef("Mr Sharafi", "b-dib").id });
 
+/* ================================================================
+   DINA KHALID SAEED ALALAMI — full TAT flagship file (Ops Guide Book)
+   Salaried UAE National · Govt · AED 60,679 · liabilities 30,842 (DBR 50.8%)
+   Current stage: FOL · Bank: DIB (Mr. Babar) · Ref DIB-2026-00123
+   ================================================================ */
+const dina = persons.find((p) => p.name.startsWith("Dina Khalid"))!;
+Object.assign(dina, {
+  dob: "1973-08-22", nationality: "UAE", customerType: "NATIONAL", employment: "SALARIED",
+  mobile: "+971 52 696 9845", email: "dina.alalami@gmail.com", employer: "Abu Dhabi School of Government",
+  monthlySalary: 60679, otherIncome: 0, financeCount: 1,
+  liabilities: [{ type: "Existing financing", monthly: 30842 }],
+  kyc: { passport: true, eid: true, visa: true, address: true },
+  profile: {
+    "Preferred name": "Dina", Gender: "Female", WhatsApp: "+971 52 696 9845", "Country of birth": "UAE",
+    Residency: "Citizen", Emirate: "Abu Dhabi", "Emirates ID": "784-1973-0613762-7", Passport: "AA0076779",
+    "Job sector": "Government", "Years employed": 7, "Credit score": "Good", "Assigned team": "VRM2",
+    "Assigned RM": "Adnan Mahmood", "Lead source": "Referral",
+  },
+});
+{
+  const dibProd = products.find((p) => p.bankId === "b-dib")!;
+  const stg = (id: string, at: number) => ({ stageId: id, at: ts(at), by: "hfmm-06" });
+  const dinaCase: Case = {
+    id: "c-dina", ref: "HF-" + (3000 + cases.length + 1), personId: dina.id, ownerId: "hfmm-06",
+    bankId: "b-dib", productId: dibProd.id, txType: "BUYOUT", propertyValue: 0, loanAmount: 0,
+    rate: 3.99, tenureMonths: 300, stage: "FOL", status: "OPEN",
+    stageHistory: [stg("INTAKE", -11), stg("FILEQC", -10), stg("SUBMIT", -9), stg("PREAPP", -7), stg("VALUATION", -4), stg("FOL", -1)],
+    triggerDates: { INTAKE: d(-11), FILEQC: d(-10), SUBMIT: d(-9), PREAPP: d(-7), VALUATION: d(-4), FOL: d(-1) },
+    conditionsDone: {
+      "INTAKE:0": true, "INTAKE:1": true, "INTAKE:2": true, "INTAKE:3": true,
+      "FILEQC:0": true, "FILEQC:1": true, "FILEQC:2": true,
+      "SUBMIT:0": true, "SUBMIT:1": true, "SUBMIT:2": true, "SUBMIT:3": true, "SUBMIT:4": true,
+      "PREAPP:0": true, "PREAPP:1": true, "PREAPP:2": true, "PREAPP:4": true, "PREAPP:5": true,
+      "VALUATION:0": true, "VALUATION:1": true, "VALUATION:2": true, "VALUATION:3": true, "VALUATION:4": true, "VALUATION:5": true, "VALUATION:6": true,
+      "FOL:0": true, "FOL:1": true,
+    },
+    nextAction: "FOL received — share with client for signing", nextActionDue: d(1), waitingFor: "Client",
+    expectedCompletion: d(20), expectedRevenue: 0, createdAt: d(-11),
+    bankApp: {
+      officer: "Mr. Babar", officerEmail: "babar@dib.ae", appRef: "DIB-2026-00123", status: "Pre-Approval",
+      statusDate: "2026-04-20", rate: 3.99, ltv: 75, valuationFee: 2500, offerExpiry: "2026-04-30", insuranceProvider: "DIB Takaful",
+    },
+    caseNotes: [
+      { id: "cn-d1", at: ts(-4), by: "hfmm-11", text: "Case study shared with Kiran Sir. Pre-approval conditions satisfied during valuation stage; bank account opening confirmed with DIB." },
+      { id: "cn-d2", at: ts(-1), by: "hfmm-06", text: "FOL submitted same day valuation report received. Security cheque book confirmed (10 leaves). Salary certificate re-issued addressed to DIB." },
+    ],
+    docs: [],
+  };
+  const DD = (typeId: string, status: DocStatus): DocItem => ({ id: "dd" + ++dn, typeId, stageId: "INTAKE", status, updatedAt: ts(-2), updatedBy: "hfmm-11" });
+  dinaCase.docs = [
+    DD("EID", "VERIFIED"), DD("PASSPORT", "VERIFIED"), DD("VISA", "VERIFIED"), DD("PHOTO", "RECEIVED"),
+    DD("SALCERT", "MISSING"), DD("PAYSLIPS", "VERIFIED"), DD("BANKSTMT", "VERIFIED"), DD("LIABILITY", "RECEIVED"),
+    DD("EMPCONTRACT", "VERIFIED"), DD("SPA", "VERIFIED"), DD("FORMF", "RECEIVED"), DD("NOCDEV", "MISSING"),
+    DD("FLOORPLAN", "RECEIVED"), DD("TRADELIC", "NA"), DD("AUDITREP", "NA"), DD("LOANSTMT", "VERIFIED"), DD("POA", "NA"),
+    { id: "dd" + ++dn, typeId: "FOL", stageId: "FOL", status: "RECEIVED", updatedAt: ts(-1), updatedBy: "hfmm-06" },
+  ];
+  cases.push(dinaCase);
+  const dl = leads.find((l) => l.personId === dina.id);
+  if (dl) { dl.status = "CONVERTED"; dl.bankId = "b-dib"; dl.notes = `Converted to ${dinaCase.ref}`; }
+  tasks.push(
+    { id: "t-dina1", caseId: dinaCase.id, stageId: "FOL", type: "FOL check", title: "Verify FOL terms against pre-approval (rate 3.99%, LTV 75)", ownerId: "hfmm-06", priority: "HIGH", due: d(0), status: "OPEN", createdAt: ts(-1), estimateMinutes: 240 },
+    { id: "t-dina2", caseId: dinaCase.id, stageId: "FOL", type: "Client coordination", title: "Share FOL with Dina & obtain signed copy", ownerId: "hfmm-11", priority: "MEDIUM", due: d(2), status: "OPEN", createdAt: ts(-1), estimateMinutes: 1440, waitingFor: "Client" },
+    { id: "t-dina3", caseId: dinaCase.id, stageId: "FOL", type: "Collect document", title: "Collect re-issued salary certificate (bank format)", ownerId: "hfmm-11", priority: "MEDIUM", due: d(1), status: "OPEN", createdAt: ts(-2), estimateMinutes: 2880, waitingFor: "Client" },
+  );
+  audit.unshift({ id: "a-dina", at: ts(-0.9), by: "hfmm-06", module: "TAT", action: "Trigger date set", target: dinaCase.ref, detail: `FOL stage started — target ${d(2)}`, caseId: dinaCase.id });
+  audit.unshift({ id: "a-dina2", at: ts(-0.5), by: "hfmm-11", module: "LEAD", action: "Lead converted", target: `${dl?.ref ?? "L-DINA"} → ${dinaCase.ref}` });
+}
+
+/* task time estimates — expected time to complete (days/hours/minutes) */
+([
+  ["FOL signing 31-Aug", 480], ["Chase HSBC mortgage release", 2880], ["Collect valuation payment", 1440],
+  ["Obtain title deed for final transfer", 4320], ["HOLD — await", 7200], ["Client visit to Aldar", 300],
+] as [string, number][]).forEach(([frag, min]) => {
+  const t = tasks.find((x) => x.title.includes(frag));
+  if (t) t.estimateMinutes = min;
+});
+
 export function buildSeed(): AppState {
   return {
     version: SEED_VERSION,
@@ -558,6 +635,12 @@ export function buildSeed(): AppState {
       { id: "FOL", name: "Final Offer Letter" }, { id: "DDA", name: "DDA & Security Cheques" },
       { id: "NOC", name: "Mortgage Release NOC" }, { id: "TITLE", name: "Transfer Receipt" },
       { id: "NEWTITLE", name: "New Title Deed" },
+      { id: "PHOTO", name: "Recent Photograph" }, { id: "PAYSLIPS", name: "Salary Slips (3M)" },
+      { id: "EMPCONTRACT", name: "Employment Contract" }, { id: "SPA", name: "Title Deed / SPA" },
+      { id: "FORMF", name: "Form F / MOU" }, { id: "NOCDEV", name: "Developer NOC" },
+      { id: "FLOORPLAN", name: "Floor Plan" }, { id: "TRADELIC", name: "Trade Licence (self-employed)" },
+      { id: "AUDITREP", name: "Audit Report (self-employed)" }, { id: "LOANSTMT", name: "Existing Loan Statement" },
+      { id: "POA", name: "Power of Attorney" },
     ],
     taskTypes: ["Follow up with bank", "Collect documents from client", "Respond to bank query", "Schedule appointment", "Verify original documents", "Update client"],
     waitingTypes: ["Bank", "Client", "Sir Kiran", "VRM", "Seller", "Realtor", "Valuer", "Employer", "Developer", "Trustee Office", "Insurance", "Team Leader"],

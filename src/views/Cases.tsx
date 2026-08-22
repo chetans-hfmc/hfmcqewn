@@ -13,41 +13,218 @@ const DOC_STATUSES: { v: DocStatus; l: string; cls: string; on: string }[] = [
   { v: "NA", l: "N/A", cls: "text-ink-soft", on: "bg-ink text-paper border-ink" },
 ];
 
+const SEV: Record<string, number> = { overdue: 0, query: 1, risk: 2, ready: 3, waiting: 4, noaction: 5 };
+
+function CaseOverview({ caze, onClose, onHandoff }: { caze: Case; onClose: () => void; onHandoff: (c: Case) => void }) {
+  const { state } = useStore();
+  const nav = useNav();
+  const person = state.persons.find((p) => p.id === caze.personId);
+  const bank = state.banks.find((b) => b.id === caze.bankId);
+  const idx = state.stages.findIndex((s) => s.id === caze.stage);
+  const def = state.stages[idx];
+  const t = tatFor(caze, caze.stage, state.stages, todayISO());
+  const lv = ESC_LEVELS[t.level];
+  const tasks = state.tasks.filter((x) => x.caseId === caze.id && x.status === "OPEN");
+  const openQ = state.queries.filter((x) => x.caseId === caze.id && x.status === "OPEN");
+  const docs = caze.docs ?? [];
+  const docOk = docs.filter((d) => d.status === "VERIFIED" || d.status === "NA").length;
+  const lastNote = caze.tracker?.length ? caze.tracker[caze.tracker.length - 1] : undefined;
+  const chain = caze.handoffs ?? [];
+  const uName = (id: string) => state.users.find((u) => u.id === id)?.name ?? id;
+  const monthly = caze.loanAmount ? emi(caze.loanAmount, caze.rate, caze.tenureMonths) : 0;
+  return (
+    <Drawer open onClose={onClose} title={<span className="num">{caze.ref} · {person?.name}</span>} width={540}
+      footer={<>
+        <Btn variant="outline" onClick={() => onHandoff(caze)} disabled={caze.status !== "OPEN"}><Ic n="arrowR" size={13} /> Hand off</Btn>
+        <Btn variant="dark" onClick={() => nav.go("cases", { caseId: caze.id })}><Ic n="briefcase" size={13} /> Open Case 360</Btn>
+      </>}>
+      <div className="space-y-4">
+        {/* where it stands */}
+        <div className="rounded-lg border border-mist bg-paper/50 p-4">
+          <div className="flex items-center justify-between">
+            <p className="font-display font-bold text-[14px] tracking-tight">{def?.name}</p>
+            <span className={cx("inline-flex items-center gap-1.5 rounded px-2 py-[3px] text-[9.5px] font-display font-bold tracking-[0.08em]", lv.chip)}>
+              <span className={cx("w-1.5 h-1.5 rounded-full", lv.dot)} />{lv.tag}
+            </span>
+          </div>
+          <div className="flex gap-0.5 mt-2.5">{state.stages.map((s, j) => <span key={s.id} title={s.name} className={cx("h-[4px] flex-1 rounded-full", j < idx ? "bg-pine-500" : j === idx ? "bg-ink" : "bg-ink/12")} />)}</div>
+          <p className="num text-[10.5px] text-ink-soft mt-1.5">stage {idx + 1} of {state.stages.length}{t.target ? ` · target ${fmtDate(t.target)}` : ""}{t.daysOver > 0 ? ` · ${t.daysOver}d over` : ""}</p>
+        </div>
+
+        {/* control summary */}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-[12px]">
+          <KV k="Owner" v={uName(caze.ownerId)} mono={false} />
+          <KV k="Waiting for" v={caze.waitingFor ?? "—"} mono={false} />
+          <KV k="Next action" v={caze.nextAction ?? "—"} mono={false} />
+          <KV k="Due" v={caze.nextActionDue ? fmtDate(caze.nextActionDue) : "—"} mono={false} />
+          <KV k="Pending reason" v={caze.pendingReason ?? "—"} mono={false} />
+          <KV k="Blocker" v={caze.blocker ?? "none"} mono={false} />
+          <KV k="Bank · channel" v={`${bank?.short ?? "—"} · ${caze.channel ?? "—"}`} mono={false} />
+          <KV k="Bank RM" v={caze.bankRm ?? "—"} mono={false} />
+        </div>
+
+        {/* finance */}
+        {(caze.loanAmount > 0 || caze.propertyValue > 0) && (
+          <div className="rounded-lg border border-pine-200 bg-pine-50/50 p-3.5">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div><p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">Finance</p><p className="num text-[14px] font-semibold text-pine-800 mt-0.5">{caze.loanAmount ? fmtAED(caze.loanAmount) : "—"}</p></div>
+              <div><p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">LTV</p><p className="num text-[14px] font-semibold mt-0.5">{caze.propertyValue ? fmtPct((caze.loanAmount / caze.propertyValue) * 100, 0) : "—"}</p></div>
+              <div><p className="text-[9.5px] uppercase tracking-[0.08em] font-display font-semibold text-ink-soft">EMI / mo</p><p className="num text-[14px] font-semibold mt-0.5">{monthly ? fmtAED(monthly) : "—"}</p></div>
+            </div>
+            <p className="num text-[10.5px] text-ink-soft text-center mt-2">rate {caze.rate}% · tenure {caze.tenureMonths} mo · property {caze.propertyValue ? fmtAED(caze.propertyValue) : "n/a"}</p>
+          </div>
+        )}
+
+        {/* docs + queries + tasks at a glance */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-md border border-mist px-2 py-2.5">
+            <p className="num text-[18px] font-semibold text-pine-700">{docs.length ? `${docOk}/${docs.length}` : "—"}</p>
+            <p className="text-[9.5px] uppercase tracking-[0.07em] font-display font-semibold text-ink-soft">docs verified</p>
+          </div>
+          <div className="rounded-md border border-mist px-2 py-2.5">
+            <p className="num text-[18px] font-semibold">{tasks.length}</p>
+            <p className="text-[9.5px] uppercase tracking-[0.07em] font-display font-semibold text-ink-soft">open tasks</p>
+          </div>
+          <div className="rounded-md border border-mist px-2 py-2.5">
+            <p className={cx("num text-[18px] font-semibold", openQ.length ? "text-rust-600" : "")}>{openQ.length}</p>
+            <p className="text-[9.5px] uppercase tracking-[0.07em] font-display font-semibold text-ink-soft">bank queries</p>
+          </div>
+        </div>
+        {tasks.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.09em] font-display font-bold text-ink-soft mb-1.5">Open tasks (top 3)</p>
+            {tasks.slice(0, 3).map((tk) => (
+              <div key={tk.id} className="flex items-center justify-between gap-2 border border-mist rounded-md px-3 py-2 mb-1.5 text-[12px]">
+                <span className="truncate">{tk.title}</span>
+                <DueChip iso={tk.due} />
+              </div>
+            ))}
+          </div>
+        )}
+        {lastNote && (
+          <div className="border-l-2 border-pine-500 bg-paper/60 rounded-r-md px-3 py-2">
+            <p className="num text-[10px] text-ink-soft font-semibold">{fmtDate(lastNote.date)} · daily log</p>
+            <p className="text-[12px] leading-snug mt-0.5 line-clamp-2">{lastNote.note}</p>
+          </div>
+        )}
+        {chain.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.09em] font-display font-bold text-ink-soft mb-1.5">Custody chain</p>
+            <div className="space-y-1">
+              {[...chain].reverse().map((h, i) => (
+                <p key={i} className="num text-[11px] text-ink-soft"><span className="text-ink font-semibold text-ink/90">{uName(h.fromId)}</span> → <span className="text-ink font-semibold text-ink/90">{uName(h.toId)}</span> · {h.kind} · {fmtDate(h.at.slice(0, 10))}</p>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Drawer>
+  );
+}
+
 export function CasesView() {
   const { state } = useStore();
   const nav = useNav();
   const me = useMe();
   const scoped = !!me && ["VRM", "SPO"].includes(me.role);
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
+  const [status, setStatus] = useState<"ALL" | "OPEN" | "CLOSED">("OPEN");
   const [stageF, setStageF] = useState("ALL");
   const [ownerF, setOwnerF] = useState(scoped && me ? me.id : "ALL");
+  const [sort, setSort] = useState("urgency");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [handoff, setHandoff] = useState<Case | null>(null);
+  const [overview, setOverview] = useState<Case | null>(null);
 
-  const list = state.cases.filter((c) =>
+  const personName = (id: string) => state.persons.find((p) => p.id === id)?.name ?? "—";
+  const userName = (id: string) => state.users.find((u) => u.id === id)?.name ?? "—";
+
+  /* pipeline strip: count + financed value per stage */
+  const open = state.cases.filter((c) => c.status === "OPEN");
+  const strip = state.stages.map((s) => {
+    const cs = open.filter((c) => c.stage === s.id);
+    return { s, n: cs.length, fin: cs.reduce((a, c) => a + c.loanAmount, 0) };
+  });
+
+  const filtered = state.cases.filter((c) =>
     (status === "ALL" || c.status === status) &&
     (stageF === "ALL" || c.stage === stageF) &&
     (ownerF === "ALL" || c.ownerId === ownerF) &&
-    (c.ref + (state.persons.find((p) => p.id === c.personId)?.name ?? "")).toLowerCase().includes(q.toLowerCase())
+    (c.ref + " " + (state.persons.find((p) => p.id === c.personId)?.name ?? "")).toLowerCase().includes(q.trim().toLowerCase())
   );
-  const personName = (id: string) => state.persons.find((p) => p.id === id)?.name ?? "—";
-  const userName = (id: string) => state.users.find((u) => u.id === id)?.name ?? "—";
+
+  const sorted = useMemo(() => {
+    const sev = (c: Case) => {
+      if (c.status === "CLOSED") return 9;
+      const b = caseBucket(state, c);
+      return b ? SEV[b] ?? 6 : 6;
+    };
+    const arr = [...filtered];
+    if (sort === "urgency") arr.sort((a, b) => sev(a) - sev(b) || (a.nextActionDue ?? "9999").localeCompare(b.nextActionDue ?? "9999"));
+    else if (sort === "newest") arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    else if (sort === "oldest") arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    else if (sort === "stage") arr.sort((a, b) => state.stages.findIndex((s) => s.id === a.stage) - state.stages.findIndex((s) => s.id === b.stage));
+    else if (sort === "owner") arr.sort((a, b) => userName(a.ownerId).localeCompare(userName(b.ownerId)));
+    return arr;
+  }, [filtered, sort, state]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const cur = Math.min(page, totalPages);
+  const pageRows = sorted.slice((cur - 1) * pageSize, cur * pageSize);
+  const setPg = (n: number) => { setPage(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const pageWindow = useMemo(() => {
+    const w: number[] = [];
+    const start = Math.max(1, Math.min(cur - 2, totalPages - 4));
+    for (let i = start; i <= Math.min(totalPages, start + 4); i++) w.push(i);
+    return w;
+  }, [cur, totalPages]);
 
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4 mb-4 anim-up">
         <div>
           <h1 className="font-display font-bold text-[26px] tracking-tight">Cases</h1>
-          <p className="text-[13px] text-ink-soft mt-0.5">One case = one golden record. Open any file for Case 360.</p>
+          <p className="text-[13px] text-ink-soft mt-0.5">
+            One case = one golden record. Click a row for the <strong className="text-ink">overview</strong>, then open Case 360 for the full file.
+            {scoped && <> Showing <strong className="text-ink">your files</strong> — switch owner to view others read-only.</>}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="relative"><Ic n="search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft" /><TextInput className="pl-8 w-48" placeholder="Ref or client…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <Select className="w-40" value={status} onChange={(v) => setStatus(v as never)} options={[{ v: "ALL", l: "All statuses" }, { v: "OPEN", l: "Open" }, { v: "CLOSED", l: "Closed" }]} />
-          <Select className="w-44" value={stageF} onChange={setStageF} options={[{ v: "ALL", l: "All stages" }, ...state.stages.map((s) => ({ v: s.id, l: s.name }))]} />
-          <Select className="w-40" value={ownerF} onChange={setOwnerF} options={[{ v: "ALL", l: "All owners" }, ...state.users.map((u) => ({ v: u.id, l: u.name }))]} />
+          <div className="relative"><Ic n="search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft" /><TextInput className="pl-8 w-48" placeholder="Ref or client…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} /></div>
+          <Select className="w-36" value={sort} onChange={(v) => { setSort(v); setPage(1); }} options={[{ v: "urgency", l: "Sort: Urgency" }, { v: "newest", l: "Sort: Newest" }, { v: "oldest", l: "Sort: Oldest" }, { v: "stage", l: "Sort: Stage" }, { v: "owner", l: "Sort: Owner" }]} />
+          <Select className="w-36" value={ownerF} onChange={(v) => { setOwnerF(v); setPage(1); }} options={[{ v: "ALL", l: "All owners" }, ...state.users.map((u) => ({ v: u.id, l: u.name }))]} />
         </div>
       </div>
-      <div className="bg-card border border-mist rounded-lg overflow-x-auto anim-up">
+
+      {/* pipeline strip */}
+      <div className="anim-up mb-4 bg-card border border-mist rounded-lg px-3 py-2.5 flex gap-1.5 overflow-x-auto" style={{ animationDelay: "60ms" }}>
+        <button onClick={() => { setStageF("ALL"); setPage(1); }}
+          className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all", stageF === "ALL" ? "border-ink bg-ink text-paper shadow-sm" : "border-mist bg-paper/50 hover:border-ink/40")}>
+          <p className={cx("num text-[15px] font-semibold leading-none", stageF === "ALL" ? "text-paper" : "text-ink")}>{open.length}</p>
+          <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", stageF === "ALL" ? "text-paper/70" : "text-ink-soft")}>All open</p>
+        </button>
+        <span className="w-px bg-mist self-stretch my-1" />
+        {strip.map(({ s, n, fin }) => (
+          <button key={s.id} onClick={() => { setStageF(stageF === s.id ? "ALL" : s.id); setStatus("OPEN"); setPage(1); }}
+            title={`${s.name} — ${n} open · ${fin ? fmtAED(fin) : "no finance"} in stage`}
+            className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all group",
+              stageF === s.id ? "border-pine-700 bg-pine-700 text-paper shadow-sm" : "border-mist bg-paper/50 hover:border-pine-500 hover:-translate-y-px")}>
+            <p className={cx("num text-[15px] font-semibold leading-none", stageF === s.id ? "text-paper" : n ? "text-ink" : "text-ink-soft/50")}>{n}</p>
+            <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", stageF === s.id ? "text-paper/80" : "text-ink-soft")}>{s.short}</p>
+            {n > 0 && <span className={cx("block h-[3px] rounded-full mt-1 transition-all", stageF === s.id ? "bg-paper/70" : "bg-pine-500")} style={{ width: `${Math.max(18, Math.min(100, (n / Math.max(1, open.length)) * 100))}%` }} />}
+          </button>
+        ))}
+        <span className="w-px bg-mist self-stretch my-1" />
+        <button onClick={() => { setStatus(status === "CLOSED" ? "ALL" : "CLOSED"); setStageF("ALL"); setPage(1); }}
+          className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all", status === "CLOSED" ? "border-gr-700 bg-gr-700 text-paper" : "border-mist bg-paper/50 hover:border-gr-500")}>
+          <p className={cx("num text-[15px] font-semibold leading-none", status === "CLOSED" ? "text-paper" : "text-ink-soft")}>{state.cases.length - open.length}</p>
+          <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", status === "CLOSED" ? "text-paper/70" : "text-ink-soft")}>Closed</p>
+        </button>
+      </div>
+
+      {/* table */}
+      <div className="bg-card border border-mist rounded-lg overflow-x-auto anim-up" style={{ animationDelay: "120ms" }}>
         <table className="w-full text-[13px] min-w-[980px]">
           <thead>
             <tr className="text-left text-[10.5px] uppercase tracking-[0.09em] font-display text-ink-soft border-b border-mist bg-paper/60">
@@ -58,13 +235,13 @@ export function CasesView() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c, i) => {
+            {pageRows.map((c, i) => {
               const st = state.stages.find((s) => s.id === c.stage);
               const idx = state.stages.findIndex((s) => s.id === c.stage);
               const openQ = state.queries.some((qq) => qq.caseId === c.id && qq.status === "OPEN");
               return (
-                <tr key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
-                  className="group border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${i * 25}ms` }}>
+                <tr key={c.id} onClick={() => setOverview(c)}
+                  className="group border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}>
                   <td className="px-4 py-3"><p className="num font-semibold text-pine-700">{c.ref}</p><p className="text-[10.5px] text-ink-soft">opened {fmtDate(c.createdAt)}</p></td>
                   <td className="px-3 py-3"><div className="flex items-center gap-2"><Avatar name={personName(c.personId)} size={26} /><div><p className="font-semibold leading-tight">{personName(c.personId)}</p>{c.deal && <p className="text-[10.5px] text-amber-700 font-medium">{c.deal}</p>}</div></div></td>
                   <td className="px-3 py-3"><p className="font-medium">{state.banks.find((b) => b.id === c.bankId)?.short} <span className="text-[10px] text-ink-soft font-normal">· {c.channel}</span></p><p className="text-[10.5px] text-ink-soft max-w-[170px] truncate">RM {c.bankRm ?? "—"}</p></td>
@@ -92,14 +269,54 @@ export function CasesView() {
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-3"><Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill></td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill>
+                      <button onClick={(e) => { e.stopPropagation(); nav.go("cases", { caseId: c.id }); }} title="Open Case 360"
+                        className="focusable w-6 h-6 rounded border border-mist flex items-center justify-center text-ink-soft hover:border-pine-600 hover:text-pine-700 hover:bg-pine-50 transition-all opacity-0 group-hover:opacity-100">
+                        <Ic n="arrowR" size={12} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {list.length === 0 && <EmptyState icon="briefcase" title="No cases match" sub="Adjust filters or convert a lead to open a case." />}
+        {sorted.length === 0 && <EmptyState icon="briefcase" title="No cases match" sub="Adjust the pipeline strip, filters, or owner scope." />}
       </div>
+
+      {/* smart pagination */}
+      {sorted.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mt-3 anim-up" style={{ animationDelay: "180ms" }}>
+          <p className="text-[12px] text-ink-soft num">
+            Showing <strong className="text-ink">{(cur - 1) * pageSize + 1}–{Math.min(cur * pageSize, sorted.length)}</strong> of <strong className="text-ink">{sorted.length}</strong>
+            {stageF !== "ALL" && <> in <strong className="text-ink">{state.stages.find((s) => s.id === stageF)?.name}</strong></>}
+          </p>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button onClick={() => setPg(Math.max(1, cur - 1))} disabled={cur === 1}
+              className="focusable w-8 h-8 rounded-md border border-mist bg-card flex items-center justify-center text-ink-soft hover:border-pine-600 hover:text-pine-700 disabled:opacity-40 disabled:pointer-events-none transition-all">
+              <Ic n="chevL" size={15} />
+            </button>
+            {pageWindow[0] > 1 && <><button onClick={() => setPg(1)} className="focusable w-8 h-8 rounded-md border border-mist bg-card num text-[12px] hover:border-pine-600 hover:text-pine-700 transition-all">1</button><span className="text-ink-soft px-1">…</span></>}
+            {pageWindow.map((n) => (
+              <button key={n} onClick={() => setPg(n)}
+                className={cx("focusable w-8 h-8 rounded-md border num text-[12px] font-semibold transition-all", n === cur ? "border-ink bg-ink text-paper" : "border-mist bg-card hover:border-pine-600 hover:text-pine-700")}>
+                {n}
+              </button>
+            ))}
+            {pageWindow[pageWindow.length - 1] < totalPages && <><span className="text-ink-soft px-1">…</span><button onClick={() => setPg(totalPages)} className="focusable w-8 h-8 rounded-md border border-mist bg-card num text-[12px] hover:border-pine-600 hover:text-pine-700 transition-all">{totalPages}</button></>}
+            <button onClick={() => setPg(Math.min(totalPages, cur + 1))} disabled={cur === totalPages}
+              className="focusable w-8 h-8 rounded-md border border-mist bg-card flex items-center justify-center text-ink-soft hover:border-pine-600 hover:text-pine-700 disabled:opacity-40 disabled:pointer-events-none transition-all">
+              <Ic n="chevR" size={15} />
+            </button>
+            <Select className="w-[110px]" value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+              options={[{ v: "10", l: "10 / page" }, { v: "25", l: "25 / page" }, { v: "50", l: "50 / page" }]} />
+          </div>
+        </div>
+      )}
+
+      {overview && <CaseOverview caze={overview} onClose={() => setOverview(null)} onHandoff={(cz) => { setOverview(null); setHandoff(cz); }} />}
       {handoff && <HandoffModal caze={handoff} onClose={() => setHandoff(null)} />}
     </div>
   );
@@ -135,6 +352,9 @@ export function Case360({ id }: { id: string }) {
   const [queryModal, setQueryModal] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditChecked, setAuditChecked] = useState<boolean[]>([]);
+  const [showMore, setShowMore] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
+  const [finOpen, setFinOpen] = useState(false);
 
   const person = state.persons.find((p) => p.id === c?.personId);
   const stages = state.stages;
@@ -200,56 +420,90 @@ export function Case360({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* finance strip */}
-      <div className="anim-up grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 bg-ink text-paper rounded-lg overflow-hidden" style={{ animationDelay: "60ms" }}>
-        {[
-          { k: "Property value", v: c.propertyValue ? fmtAED(c.propertyValue) : "—" },
-          { k: "Loan amount", v: c.loanAmount ? fmtAED(c.loanAmount) : "—" },
-          { k: "Applied LTV", v: c.loanAmount && c.propertyValue ? fmtPct(ltv, 1) : "—" },
-          { k: "Rate", v: `${fmtN(c.rate, 2)}%` },
-          { k: "Tenure", v: `${c.tenureMonths} mo` },
-          { k: "Monthly EMI", v: c.loanAmount ? fmtAED(monthly) : "—" },
-        ].map((x, i) => (
-          <div key={x.k} className={cx("px-4 py-3", i > 0 && "border-l border-paper/10")}>
-            <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-paper/60">{x.k}</p>
-            <p className="num text-[16px] font-semibold mt-0.5">{x.v}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* control panel */}
-      <div className="anim-up grid grid-cols-2 lg:grid-cols-4 gap-3" style={{ animationDelay: "120ms" }}>
-        {tiles.map((t, i) => (
-          <div key={i} className="bg-card border border-mist rounded-lg px-3.5 py-3 hover:shadow-sm transition-shadow">
-            <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-ink-soft mb-1">{t.k}</p>
-            <div className={t.tone}>{t.v}</div>
-            {t.sub && <div className="text-[11px] text-ink-soft mt-0.5">{t.sub}</div>}
-          </div>
-        ))}
-      </div>
-
-      {/* stage rail */}
-      <div className="anim-up bg-card border border-mist rounded-lg p-4 overflow-x-auto" style={{ animationDelay: "160ms" }}>
-        <div className="flex items-center gap-1 min-w-max">
-          {stages.map((s, j) => (
-            <div key={s.id} className="flex items-center">
-              <div title={s.name}
-                className={cx("flex flex-col items-center gap-1 px-2 py-1.5 rounded-md border transition-all",
-                  j < idx ? "border-pine-200 bg-pine-50" : j === idx ? "border-ink bg-ink text-paper shadow-md" : "border-mist bg-card opacity-70")}>
-                <span className={cx("num text-[9px] font-semibold", j === idx ? "text-paper/60" : "text-ink-soft")}>{String(j + 1).padStart(2, "0")}</span>
-                <span className={cx("font-display font-bold text-[11px] tracking-tight", j < idx && "text-pine-700")}>{s.short}</span>
+      {/* finance strip — collapsible */}
+      <div className="anim-up bg-ink text-paper rounded-lg overflow-hidden" style={{ animationDelay: "60ms" }}>
+        <button onClick={() => setFinOpen(!finOpen)} className="focusable w-full flex items-center gap-3 px-4 py-3 hover:bg-paper/5 transition-colors text-left">
+          <Ic n="calc" size={16} className="text-pine-300" />
+          <span className="font-display font-bold text-[13px] tracking-tight">Finance</span>
+          <span className="num text-[12px] text-paper/70">
+            {c.loanAmount ? <>loan {fmtAED(c.loanAmount)}{c.propertyValue ? <> · LTV {fmtPct(ltv, 0)}</> : null}</> : "no finance on tracker"}
+            {c.loanAmount ? <> · EMI {fmtAED(monthly)}/mo</> : null}
+          </span>
+          <Ic n="chevD" size={14} className={cx("ml-auto text-paper/60 transition-transform", finOpen && "rotate-180")} />
+        </button>
+        {finOpen && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 border-t border-paper/10">
+            {[
+              { k: "Property value", v: c.propertyValue ? fmtAED(c.propertyValue) : "—" },
+              { k: "Loan amount", v: c.loanAmount ? fmtAED(c.loanAmount) : "—" },
+              { k: "Applied LTV", v: c.loanAmount && c.propertyValue ? fmtPct(ltv, 1) : "—" },
+              { k: "Rate", v: `${fmtN(c.rate, 2)}%` },
+              { k: "Tenure", v: `${c.tenureMonths} mo` },
+              { k: "Monthly EMI", v: c.loanAmount ? fmtAED(monthly) : "—" },
+            ].map((x, i) => (
+              <div key={x.k} className={cx("px-4 py-3", i > 0 && "border-l border-paper/10")}>
+                <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-paper/60">{x.k}</p>
+                <p className="num text-[16px] font-semibold mt-0.5">{x.v}</p>
               </div>
-              {j < stages.length - 1 && <div className={cx("w-3 h-[2px]", j < idx ? "bg-pine-400" : "bg-ink/12")} />}
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* control panel — progressive disclosure */}
+      <div className="anim-up" style={{ animationDelay: "120ms" }}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(showMore ? tiles : tiles.slice(0, 4)).map((t, i) => (
+            <div key={i} className="bg-card border border-mist rounded-lg px-3.5 py-3 hover:shadow-sm transition-shadow">
+              <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-ink-soft mb-1">{t.k}</p>
+              <div className={t.tone}>{t.v}</div>
+              {t.sub && <div className="text-[11px] text-ink-soft mt-0.5">{t.sub}</div>}
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2 mt-2.5 text-[11px] text-ink-soft">
-          <Ic n="layers" size={13} />
-          <span>Stage history:</span>
-          {c.stageHistory.slice(-5).map((h, i) => (
-            <span key={i} className="num">{stages.find((s) => s.id === h.stageId)?.short} <span className="opacity-60">{fmtDate(h.at.slice(0, 10))}</span>{i < Math.min(c.stageHistory.length, 5) - 1 ? " →" : ""}</span>
-          ))}
-        </div>
+        <button onClick={() => setShowMore(!showMore)}
+          className="focusable mt-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-display font-semibold text-pine-700 hover:underline">
+          <Ic n={showMore ? "chevD" : "chevR"} size={12} className={cx("transition-transform", showMore && "rotate-90")} />
+          {showMore ? "Show fewer details" : `Show ${tiles.length - 4} more details (blocker, ageing, completion, revenue)`}
+        </button>
+      </div>
+
+      {/* stage rail — collapsible */}
+      <div className="anim-up bg-card border border-mist rounded-lg overflow-hidden" style={{ animationDelay: "160ms" }}>
+        <button onClick={() => setRailOpen(!railOpen)} className="focusable w-full flex items-center gap-3 px-4 py-3 hover:bg-paper/50 transition-colors text-left">
+          <span className="w-8 h-8 rounded-md bg-pine-700 text-paper flex items-center justify-center font-display font-bold text-[11px] shrink-0">{def.short}</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-bold text-[13px] tracking-tight truncate">{def.name} <span className="num text-[11px] text-ink-soft font-body font-normal">· stage {idx + 1} of {stages.length}</span></p>
+            <div className="flex gap-[3px] mt-1.5">
+              {stages.map((s, j) => <span key={s.id} title={s.name} className={cx("h-[4px] flex-1 rounded-full", j < idx ? "bg-pine-500" : j === idx ? "bg-ink" : "bg-ink/12")} />)}
+            </div>
+          </div>
+          <Ic n="chevD" size={14} className={cx("text-ink-soft transition-transform shrink-0", railOpen && "rotate-180")} />
+        </button>
+        {railOpen && (
+          <div className="p-4 pt-2 border-t border-mist overflow-x-auto">
+            <div className="flex items-center gap-1 min-w-max">
+              {stages.map((s, j) => (
+                <div key={s.id} className="flex items-center">
+                  <div title={s.name}
+                    className={cx("flex flex-col items-center gap-1 px-2 py-1.5 rounded-md border transition-all",
+                      j < idx ? "border-pine-200 bg-pine-50" : j === idx ? "border-ink bg-ink text-paper shadow-md" : "border-mist bg-card opacity-70")}>
+                    <span className={cx("num text-[9px] font-semibold", j === idx ? "text-paper/60" : "text-ink-soft")}>{String(j + 1).padStart(2, "0")}</span>
+                    <span className={cx("font-display font-bold text-[11px] tracking-tight", j < idx && "text-pine-700")}>{s.short}</span>
+                  </div>
+                  {j < stages.length - 1 && <div className={cx("w-3 h-[2px]", j < idx ? "bg-pine-400" : "bg-ink/12")} />}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-2.5 text-[11px] text-ink-soft">
+              <Ic n="layers" size={13} />
+              <span>Stage history:</span>
+              {c.stageHistory.slice(-5).map((h, i) => (
+                <span key={i} className="num">{stages.find((s) => s.id === h.stageId)?.short} <span className="opacity-60">{fmtDate(h.at.slice(0, 10))}</span>{i < Math.min(c.stageHistory.length, 5) - 1 ? " →" : ""}</span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* tabs */}

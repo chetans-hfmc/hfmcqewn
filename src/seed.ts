@@ -200,7 +200,10 @@ const persons: Person[] = CLIENTS.map((name, i) => ({
   dob: "", mobile: "", email: "", employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1,
   cards: [], liabilities: [], kyc: { passport: false, eid: false, visa: false, address: false }, createdAt: d(-30),
 }));
-const pid = (name: string) => persons.find((p) => p.name === name)!.id;
+const pid = (name: string) => {
+  const p = persons.find((x) => x.name === name) ?? persons.find((x) => x.name.toLowerCase().includes(name.toLowerCase()));
+  return p ? p.id : NP(name).id;
+};
 
 /* ---------- daily tracker rows (as received from operations) ---------- */
 const rep = (n: string): (string | null)[] => [n, n, n, n, n, n];
@@ -709,7 +712,7 @@ const ho = (client: string, bank: string, deal: string | undefined, fromId: stri
 /* VRM → SPO progression handoffs (custody chain) */
 ho("Parvez Ahmed", "b-dib", undefined, "hfmm-09", "progression", "Advancing to FOL — SPO takes over bank follow-up", 6);
 ho("Karolina & Angie Abbas Issa", "b-dib", undefined, "hfmm-07", "progression", "Valuation positive — handed to SPO for FOL conversion", 4);
-ho("Spencer Domingos", "b-dib", undefined, "hfmm-08", "progression", "Pre-approval received — SPO to request FOL", 5);
+ho("Spencer Domingos Guiao", "b-dib", undefined, "hfmm-08", "progression", "Pre-approval received — SPO to request FOL", 5);
 /* recent handoff into Mayur's inbox (absence cover) */
 {
   const c = cases.find((x) => x.status === "OPEN" && x.ownerId === "hfmm-06" && !x.handoffs?.length);

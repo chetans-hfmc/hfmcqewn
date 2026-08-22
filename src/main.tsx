@@ -3,6 +3,8 @@
  * - Harmless infra noise (Vite HMR / WebSocket in the sandboxed preview): ignored.
  * - Stray runtime errors after a good boot: small toast, app stays mounted. */
 
+import "./index.css";
+
 const ignorable = (msg: string) =>
   /@vite\/client|WebSocket|HMR|hot update|vite\.io|networkerror/i.test(msg);
 

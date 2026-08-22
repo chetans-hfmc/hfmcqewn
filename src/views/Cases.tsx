@@ -133,7 +133,7 @@ export function CasesView() {
   const [ownerF, setOwnerF] = useState(scoped && me ? me.id : "ALL");
   const [sort, setSort] = useState("urgency");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const [handoff, setHandoff] = useState<Case | null>(null);
   const [overview, setOverview] = useState<Case | null>(null);
 
@@ -197,30 +197,38 @@ export function CasesView() {
         </div>
       </div>
 
-      {/* pipeline strip */}
-      <div className="anim-up mb-4 bg-card border border-mist rounded-lg px-3 py-2.5 flex gap-1.5 overflow-x-auto" style={{ animationDelay: "60ms" }}>
-        <button onClick={() => { setStageF("ALL"); setPage(1); }}
-          className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all", stageF === "ALL" ? "border-ink bg-ink text-paper shadow-sm" : "border-mist bg-paper/50 hover:border-ink/40")}>
-          <p className={cx("num text-[15px] font-semibold leading-none", stageF === "ALL" ? "text-paper" : "text-ink")}>{open.length}</p>
-          <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", stageF === "ALL" ? "text-paper/70" : "text-ink-soft")}>All open</p>
-        </button>
-        <span className="w-px bg-mist self-stretch my-1" />
-        {strip.map(({ s, n, fin }) => (
-          <button key={s.id} onClick={() => { setStageF(stageF === s.id ? "ALL" : s.id); setStatus("OPEN"); setPage(1); }}
-            title={`${s.name} — ${n} open · ${fin ? fmtAED(fin) : "no finance"} in stage`}
-            className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all group",
-              stageF === s.id ? "border-pine-700 bg-pine-700 text-paper shadow-sm" : "border-mist bg-paper/50 hover:border-pine-500 hover:-translate-y-px")}>
-            <p className={cx("num text-[15px] font-semibold leading-none", stageF === s.id ? "text-paper" : n ? "text-ink" : "text-ink-soft/50")}>{n}</p>
-            <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", stageF === s.id ? "text-paper/80" : "text-ink-soft")}>{s.short}</p>
-            {n > 0 && <span className={cx("block h-[3px] rounded-full mt-1 transition-all", stageF === s.id ? "bg-paper/70" : "bg-pine-500")} style={{ width: `${Math.max(18, Math.min(100, (n / Math.max(1, open.length)) * 100))}%` }} />}
+      {/* pipeline strip — chevron flow, one arrow per stage */}
+      <div className="anim-up mb-2 bg-ink rounded-lg px-2.5 py-3 sidebar-texture" style={{ animationDelay: "60ms" }}>
+        <div className="flex items-center gap-0 overflow-x-auto">
+          <button onClick={() => { setStageF("ALL"); setStatus("ALL"); setPage(1); }}
+            className={cx("focusable shrink-0 text-left pl-4 pr-5 py-2.5 transition-all", stageF === "ALL" && status === "ALL" ? "text-paper" : "text-paper/65 hover:text-paper")}>
+            <p className="num text-[20px] font-semibold leading-none">{state.cases.length}</p>
+            <p className="text-[8.5px] font-display font-bold uppercase tracking-[0.11em] mt-1">All files</p>
           </button>
-        ))}
-        <span className="w-px bg-mist self-stretch my-1" />
-        <button onClick={() => { setStatus(status === "CLOSED" ? "ALL" : "CLOSED"); setStageF("ALL"); setPage(1); }}
-          className={cx("focusable shrink-0 rounded-md px-3 py-1.5 text-left border transition-all", status === "CLOSED" ? "border-gr-700 bg-gr-700 text-paper" : "border-mist bg-paper/50 hover:border-gr-500")}>
-          <p className={cx("num text-[15px] font-semibold leading-none", status === "CLOSED" ? "text-paper" : "text-ink-soft")}>{state.cases.length - open.length}</p>
-          <p className={cx("text-[9px] font-display font-bold uppercase tracking-[0.08em] mt-1", status === "CLOSED" ? "text-paper/70" : "text-ink-soft")}>Closed</p>
-        </button>
+          {strip.map(({ s, n, fin }, si) => {
+            const on = stageF === s.id;
+            return (
+              <button key={s.id} onClick={() => { setStageF(on ? "ALL" : s.id); setStatus("OPEN"); setPage(1); }}
+                title={`${s.name} — ${n} open · ${fin ? fmtAED(fin) : "no finance"} in stage`}
+                className={cx("focusable shrink-0 text-left pl-6 pr-7 py-2.5 transition-all relative -ml-2 first:ml-0",
+                  on ? "bg-pine-500 text-paper shadow-lg shadow-pine-950/40 z-[1]" : "text-paper/70 hover:text-paper hover:bg-paper/8")}
+                style={{ clipPath: "polygon(12px 0, 100% 0, calc(100% - 12px) 50%, 100% 100%, 12px 100%, 0 50%)" }}>
+                <p className="num text-[19px] font-semibold leading-none">{n}</p>
+                <p className="text-[8.5px] font-display font-bold uppercase tracking-[0.11em] mt-1 opacity-90">{String(si + 1).padStart(2, "0")} {s.short}</p>
+                {n > 0 && <span className={cx("absolute bottom-[3px] left-[16px] right-[18px] h-[3px] rounded-full", on ? "bg-paper/80" : "bg-pine-400/70")} style={{ width: `${Math.max(22, Math.min(82, (n / Math.max(1, open.length)) * 82))}%` }} />}
+              </button>
+            );
+          })}
+          <button onClick={() => { setStatus(status === "CLOSED" ? "ALL" : "CLOSED"); setStageF("ALL"); setPage(1); }}
+            className={cx("focusable shrink-0 text-left pl-6 pr-5 py-2.5 transition-all -ml-2", status === "CLOSED" ? "bg-gr-500 text-paper" : "text-paper/65 hover:text-paper hover:bg-paper/8")}
+            style={{ clipPath: "polygon(12px 0, 100% 0, 100% 100%, 12px 100%, 0 50%)" }}>
+            <p className="num text-[19px] font-semibold leading-none">{state.cases.length - open.length}</p>
+            <p className="text-[8.5px] font-display font-bold uppercase tracking-[0.11em] mt-1">Closed</p>
+          </button>
+        </div>
+        <p className="text-[10px] text-paper/50 font-display font-semibold tracking-wide mt-1.5 pl-2">
+          PIPELINE · click a stage arrow to filter — hover any row below for a <span className="text-paper/80">preview</span>, click it for the case overview
+        </p>
       </div>
 
       {/* table */}
@@ -242,7 +250,10 @@ export function CasesView() {
               return (
                 <tr key={c.id} onClick={() => setOverview(c)}
                   className="group border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}>
-                  <td className="px-4 py-3"><p className="num font-semibold text-pine-700">{c.ref}</p><p className="text-[10.5px] text-ink-soft">opened {fmtDate(c.createdAt)}</p></td>
+                  <td className="px-4 py-3">
+                    <p className="num font-semibold text-pine-700 flex items-center gap-1.5">{c.ref}<Ic n="eye" size={12} className="text-ink-soft/70 group-hover:text-pine-700 transition-colors" /></p>
+                    <p className="text-[10.5px] text-ink-soft">opened {fmtDate(c.createdAt)} · click to preview</p>
+                  </td>
                   <td className="px-3 py-3"><div className="flex items-center gap-2"><Avatar name={personName(c.personId)} size={26} /><div><p className="font-semibold leading-tight">{personName(c.personId)}</p>{c.deal && <p className="text-[10.5px] text-amber-700 font-medium">{c.deal}</p>}</div></div></td>
                   <td className="px-3 py-3"><p className="font-medium">{state.banks.find((b) => b.id === c.bankId)?.short} <span className="text-[10px] text-ink-soft font-normal">· {c.channel}</span></p><p className="text-[10.5px] text-ink-soft max-w-[170px] truncate">RM {c.bankRm ?? "—"}</p></td>
                   <td className="px-3 py-3">{c.loanAmount || c.propertyValue

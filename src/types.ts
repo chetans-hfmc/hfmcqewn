@@ -100,6 +100,7 @@ export interface Case {
   submitQc?: ChecklistItem[];
   huspyQc?: ChecklistItem[];
   preappDecision?: PreappDecision;
+  closureAudit?: string[];
   propertyValue: number; loanAmount: number; rate: number; tenureMonths: number;
   stage: string; status: "OPEN" | "CLOSED";
   stageHistory: { stageId: string; at: string; by: string; note?: string }[];

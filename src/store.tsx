@@ -28,7 +28,7 @@ export type Action =
   | { t: "CONVERT_LEAD"; leadId: string; caze: Case; tasks: Task[] }
   | { t: "PATCH_CASE"; id: string; patch: Partial<Case> }
   | { t: "ADVANCE_STAGE"; id: string; note?: string }
-  | { t: "CLOSE_CASE"; id: string }
+  | { t: "CLOSE_CASE"; id: string; audit?: string[] }
   | { t: "ADD_TASK"; task: Task } | { t: "UPDATE_TASK"; id: string; patch: Partial<Task> }
   | { t: "SET_DOC"; caseId: string; docId: string; status: DocStatus; note?: string; expiry?: string }
   | { t: "ADD_QUERY"; q: BankQuery } | { t: "UPDATE_QUERY"; id: string; patch: Partial<BankQuery> }
@@ -117,7 +117,8 @@ function reducer(state: AppState, a: Action): AppState {
     }
     case "CLOSE_CASE": {
       const c = state.cases.find((x) => x.id === a.id)!;
-      let s: AppState = { ...state, cases: state.cases.map((x) => (x.id === a.id ? { ...x, status: "CLOSED" as const, closedAt: todayISO(), nextAction: undefined, waitingFor: undefined, pendingReason: undefined, blocker: undefined } : x)) };
+      let s: AppState = { ...state, cases: state.cases.map((x) => (x.id === a.id ? { ...x, status: "CLOSED" as const, closedAt: todayISO(), closureAudit: a.audit, nextAction: undefined, waitingFor: undefined, pendingReason: undefined, blocker: undefined } : x)) };
+      if (a.audit?.length) s = log(s, { module: "CASE", action: "Closure audit passed", target: c.ref, detail: `${a.audit.length}/13 items confirmed`, caseId: a.id });
       s = log(s, { module: "CASE", action: "Case closed", target: c.ref, detail: "Golden record archived", caseId: a.id });
       return s;
     }

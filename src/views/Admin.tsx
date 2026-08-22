@@ -13,6 +13,8 @@ const MODULES: { m: RuleModule; l: string; d: string }[] = [
   { m: "FEE", l: "Fees", d: "Loan / property / flat basis" },
   { m: "SETTLE", l: "Settlement", d: "Early settlement charge" },
   { m: "STRESS", l: "Qualifying stress", d: "Added to rate for DBR" },
+  { m: "STMT", l: "Statement period", d: "Months by bank (Batch 3)" },
+  { m: "TAT", l: "TAT windows", d: "Stage timing expectations (Batch 4–5)" },
 ];
 
 function scopeChips(r: Rule) {

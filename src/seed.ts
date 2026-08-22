@@ -1,4 +1,4 @@
-import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
+import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, EmailTemplate, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
 export const SEED_VERSION = 11;
@@ -100,6 +100,28 @@ const bankMatrix: AppState["bankMatrix"] = [
   { bankId: "b-nbf", route: "DIRECT", statementMonths: 6, routing: "Direct to NBF RM", verified: true },
   { bankId: "b-bob", route: "DIRECT", statementMonths: 6, routing: "Direct to BOB RM", verified: true },
   { bankId: "b-adcb", route: "HUSPY", statementMonths: 6, routing: "Submit through Huspy portal", verified: false },
+];
+
+/* ---- Batch 8 §127: Email Template Library ---- */
+const templates: EmailTemplate[] = [
+  { id: "tp1", name: "Direct Bank Submission", purpose: "Send the complete Pre-Approval file to the bank RM.", tags: ["Submission", "Direct bank"], source: "Batch 8 §127.1",
+    subject: "Pre-Approval Submission – [Client Name] – [Bank]",
+    body: "Dear [Bank RM],\n\nPlease find attached the complete documents and required bank forms for the Pre-Approval of [Client Name]. Kindly confirm receipt and proceed with the review.\n\nPlease let us know if any additional documents or clarification are required.\n\nRegards,\n[Name]\nHFMC" },
+  { id: "tp2", name: "Receipt Follow-Up", purpose: "Chase the bank when no receipt confirmation or update has arrived.", tags: ["Follow-up", "Pre-Approval"], source: "Batch 8 §127.2",
+    subject: "Follow-Up – Pre-Approval – [Client Name] – [Bank]",
+    body: "Dear [Bank RM],\n\nKindly confirm the status of the above Pre-Approval submission and advise if any further documents or clarification are required.\n\nWe would appreciate your update on the expected approval timeline.\n\nRegards,\n[Name]" },
+  { id: "tp3", name: "Huspy Submission to Areeb", purpose: "Confirm a Huspy portal submission with the screenshot attached.", tags: ["Huspy", "Submission"], source: "Batch 8 §127.3",
+    subject: "Huspy Submission – [Client Name] – [Bank]",
+    body: "Dear Areeb,\n\nWe have submitted the file for [Client Name] on the Huspy portal for [Bank]. Please review the submission and proceed with submission to the bank.\n\nAttached is the screenshot of the final submission step for reference.\n\nKindly confirm receipt.\n\nRegards,\n[Name]\nHFMC" },
+  { id: "tp4", name: "Bank Query Response", purpose: "Answer a bank query with the supporting document attached.", tags: ["Query", "Response"], source: "Batch 8 §127.4",
+    subject: "Re: Bank Query – [Client Name] – [Reference]",
+    body: "Dear [Bank RM],\n\nPlease find attached the requested document/clarification regarding the above case.\n\nQuery: [Brief query]\nResponse: [Clear explanation]\nSupporting document: [Document name]\n\nKindly confirm if the query is now resolved and proceed with the review.\n\nRegards,\n[Name]" },
+  { id: "tp5", name: "Client FOL Confirmation", purpose: "Ask the client to confirm FOL terms in writing before requesting the FOL.", tags: ["Client", "FOL"], source: "Batch 5 §60",
+    subject: "Confirmation of Finance Terms – [Client Name]",
+    body: "Dear [Client Name],\n\nPlease confirm the following finance terms so we may request your Final Offer Letter from [Bank]:\n\nFinance amount: [Amount]\nTenor: [Tenor]\nRate of interest: [ROI]\nExpected EMI: [EMI]\nLife insurance: [Details]\nProperty insurance: [Details]\n\nKindly reply to confirm these details.\n\nRegards,\n[Name]\nHFMC" },
+  { id: "tp6", name: "Title Deed QC Email", purpose: "Send the received title deed to the respective department for quality check.", tags: ["Closure", "QC"], source: "Batch 6 §92",
+    subject: "Title Deed Quality Check – [Client Name] – [Ref]",
+    body: "Dear Team,\n\nPlease find attached the title deed for [Client Name] following completion of the final transfer on [Date].\n\nKindly carry out the quality check and confirm the record is correct.\n\nClient / owner name: [Name]\nProperty: [Property details]\nTransfer date: [Date]\n\nRegards,\n[Name]\nHFMC" },
 ];
 
 /* ---- Batch 2/3: file-level QC checklist templates ---- */
@@ -703,7 +725,7 @@ export function buildSeed(): AppState {
       { id: "hfmm-17", empId: "hfmm-17", name: "Omkar", email: "", mobile: "", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-30), note: "New joiner — designation to be confirmed" },
       { id: "hfmm-18", empId: "hfmm-18", name: "Extra 2", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
     ],
-    persons, leads, banks, products, stages, bankMatrix,
+    persons, leads, banks, products, stages, bankMatrix, templates,
     docTypes: [
       { id: "PASSPORT", name: "Passport" }, { id: "EID", name: "Emirates ID" }, { id: "VISA", name: "Residence Visa" },
       { id: "GOLDENVISA", name: "Golden Visa — Labour Card / Contract" }, { id: "SELFATT", name: "Self-Attested KYC (ADIB)" },

@@ -10,6 +10,7 @@ import CalculatorsView from "./views/Calculators";
 import TrackerView from "./views/Tracker";
 import TatView from "./views/Tat";
 import GuideView from "./views/Guide";
+import TemplatesView from "./views/Templates";
 import { AuditView, RuleCentre, UsersView } from "./views/Admin";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
@@ -30,6 +31,7 @@ const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
   { g: "Govern", items: [
     { v: "rules", l: "Rule Centre", icon: "sliders" },
     { v: "users", l: "Users & Roles", icon: "shield" },
+    { v: "templates", l: "Desk Tools", icon: "copy" },
     { v: "guide", l: "Ops Guide Book", icon: "book" },
     { v: "audit", l: "Audit Trail", icon: "clock" },
   ]},
@@ -142,7 +144,7 @@ function Shell() {
   const titles: Record<View, string> = {
     dashboard: "Control Tower", tracker: "Daily Tracker", tat: "TAT & Escalation", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
     tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries", calculators: "Calculator Centre",
-    rules: "Rule Centre", users: "Users & Roles", guide: "Operations Guide Book", audit: "Audit Trail",
+    templates: "Desk Tools", rules: "Rule Centre", users: "Users & Roles", guide: "Operations Guide Book", audit: "Audit Trail",
   };
 
   return (

@@ -153,11 +153,16 @@ export interface AuditEntry {
   target: string; detail?: string; caseId?: string;
 }
 
+export interface EmailTemplate {
+  id: string; name: string; purpose: string; tags: string[];
+  subject: string; body: string; source: string;
+}
+
 export interface AppState {
   version: number; session: string | null;
   users: User[]; persons: Person[]; leads: Lead[];
   banks: Bank[]; products: Product[]; stages: StageDef[]; docTypes: DocType[];
-  bankMatrix: BankMatrixRule[];
+  bankMatrix: BankMatrixRule[]; templates: EmailTemplate[];
   taskTypes: string[]; waitingTypes: string[]; pendingReasons: string[]; leadSources: string[];
   cases: Case[]; tasks: Task[]; queries: BankQuery[];
   rules: Rule[]; eibor: EiborRow[]; calcs: CalcRecord[]; audit: AuditEntry[];
@@ -166,7 +171,7 @@ export interface AppState {
 
 export type View =
   | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
-  | "queries" | "calculators" | "rules" | "users" | "audit" | "guide";
+  | "queries" | "calculators" | "templates" | "rules" | "users" | "audit" | "guide";
 
 export interface NavState {
   view: View; caseId: string | null; params: Record<string, unknown>;

@@ -7,12 +7,12 @@ const KEY = "hfmc-mos-state";
 
 /* ---------- role → module access (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
-  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "guide", "audit"],
-  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "rules", "users", "guide", "audit"],
-  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "guide", "audit"],
-  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "calculators", "guide"],
-  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "calculators", "guide"],
-  PA: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "guide"],
+  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "templates", "rules", "users", "guide", "audit"],
+  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "templates", "rules", "users", "guide", "audit"],
+  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "calculators", "templates", "guide", "audit"],
+  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "calculators", "templates", "guide"],
+  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "calculators", "templates", "guide"],
+  PA: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "templates", "guide"],
   TBD: ["dashboard"],
 };
 export const ROLE_LABEL: Record<string, string> = {
@@ -40,6 +40,7 @@ export type Action =
   | { t: "ADD_CASE_NOTE"; caseId: string; text: string }
   | { t: "TOGGLE_QC"; caseId: string; list: "preappQc" | "submitQc" | "huspyQc"; id: string }
   | { t: "SET_DECISION"; caseId: string; decision: import("./types").PreappDecision }
+  | { t: "SAVE_TEMPLATE"; template: import("./types").EmailTemplate; isNew?: boolean }
   | { t: "UPSERT_RULE"; rule: Rule; isNew?: boolean }
   | { t: "ADD_EIBOR"; row: AppState["eibor"][number] }
   | { t: "ADD_USER"; user: User } | { t: "UPDATE_USER"; id: string; patch: Partial<User> };
@@ -195,6 +196,10 @@ function reducer(state: AppState, a: Action): AppState {
       const next = items.map((it) => (it.id === a.id ? { ...it, done: !it.done } : it));
       const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, [a.list]: next } : c)) };
       return item && !item.done ? log(s, { module: "QC", action: "QC check cleared", target: caze.ref, detail: item.label, caseId: a.caseId }) : s;
+    }
+    case "SAVE_TEMPLATE": {
+      if (a.isNew) return log({ ...state, templates: [...state.templates, a.template] }, { module: "TEMPLATE", action: "Template created", target: a.template.name });
+      return log({ ...state, templates: state.templates.map((t) => (t.id === a.template.id ? a.template : t)) }, { module: "TEMPLATE", action: "Template updated", target: a.template.name });
     }
     case "SET_DECISION": {
       const caze = state.cases.find((c) => c.id === a.caseId);

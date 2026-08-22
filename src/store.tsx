@@ -38,6 +38,8 @@ export type Action =
   | { t: "SET_TRIGGER"; caseId: string; stageId: string; date: string }
   | { t: "TOGGLE_CONDITION"; caseId: string; key: string; label: string }
   | { t: "ADD_CASE_NOTE"; caseId: string; text: string }
+  | { t: "TOGGLE_QC"; caseId: string; list: "preappQc" | "submitQc" | "huspyQc"; id: string }
+  | { t: "SET_DECISION"; caseId: string; decision: import("./types").PreappDecision }
   | { t: "UPSERT_RULE"; rule: Rule; isNew?: boolean }
   | { t: "ADD_EIBOR"; row: AppState["eibor"][number] }
   | { t: "ADD_USER"; user: User } | { t: "UPDATE_USER"; id: string; patch: Partial<User> };
@@ -183,6 +185,21 @@ function reducer(state: AppState, a: Action): AppState {
       const note = { id: "cn" + uid(), at: nowISO(), by: state.session ?? "system", text: a.text.trim() };
       const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, caseNotes: [...(c.caseNotes ?? []), note] } : c)) };
       return log(s, { module: "TAT", action: "Case note saved", target: caze.ref, detail: a.text.trim().slice(0, 90), caseId: a.caseId });
+    }
+    case "TOGGLE_QC": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze) return state;
+      const items = caze[a.list] ?? [];
+      const item = items.find((it) => it.id === a.id);
+      const next = items.map((it) => (it.id === a.id ? { ...it, done: !it.done } : it));
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, [a.list]: next } : c)) };
+      return item && !item.done ? log(s, { module: "QC", action: "QC check cleared", target: caze.ref, detail: item.label, caseId: a.caseId }) : s;
+    }
+    case "SET_DECISION": {
+      const caze = state.cases.find((c) => c.id === a.caseId);
+      if (!caze) return state;
+      const s = { ...state, cases: state.cases.map((c) => (c.id === a.caseId ? { ...c, preappDecision: a.decision } : c)) };
+      return log(s, { module: "QC", action: "Pre-submission decision", target: caze.ref, detail: a.decision.replace(/_/g, " "), caseId: a.caseId });
     }
     case "UPSERT_RULE": {
       if (a.isNew) return log({ ...state, rules: [...state.rules, a.rule] }, { module: "RULE", action: "Rule created", target: `${a.rule.code} = ${a.rule.value}` });

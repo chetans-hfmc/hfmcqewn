@@ -1,7 +1,7 @@
-import type { AppState, BankQuery, Case, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
+import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 9;
+export const SEED_VERSION = 10;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
@@ -24,11 +24,11 @@ export const TRACKER_DATES = ["2026-08-13", "2026-08-14", "2026-08-17", "2026-08
 
 const stages: AppState["stages"] = [
   { id: "HANDOVER", name: "Handover", short: "HO", sla: 2, docs: [], tasks: ["Sales→Ops handover briefing", "Validate lead file & calculator snapshot"], conditions: ["Lead file & calculator snapshot received", "Transaction type identified before building the file"] },
-  { id: "INTAKE", name: "File Intake / KYC", short: "KYC", sla: 3, docs: ["PASSPORT", "EID", "VISA"], tasks: ["Collect KYC documents", "Run affordability calculator"], conditions: ["Client profile fully completed", "All personal docs received (EID, Passport, Visa)", "Salary slips & bank statements collected", "Client file saved in correct folder"] },
-  { id: "FILEQC", name: "File QC", short: "QC", sla: 2, docs: ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], tasks: ["Complete file QC checklist", "QC review by Team Leader"], gate: "QC", conditions: ["KYC verified against application & bank forms", "Transaction info verified against property documents", "Discrepancies recorded & resolved"] },
-  { id: "SUBMIT", name: "Bank Submission", short: "SUB", sla: 2, docs: ["APPFORM"], tasks: ["Submit file to bank", "Log submission reference"], conditions: ["Client profile fully completed", "All personal docs received (EID, Passport, Visa)", "Salary slips & bank statements collected", "Form F / SPA received", "Client file saved in correct folder"], tatNote: "Enter the trigger date when the file is first registered at the bank." },
-  { id: "PREAPP", name: "Pre-Approval", short: "PA", sla: 5, docs: [], tasks: ["Follow up with bank", "Capture pre-approval terms"], conditions: ["Application submitted to bank", "DBR calculated & within bank limit", "Credit score confirmed", "NSTL rate offer used if salary not transferring to bank", "Pre-approval letter received from bank", "Shared with client & client confirmed"], tatNote: "Pre-approval normally takes 3–5 working days. Check NSTL vs STL pricing." },
-  { id: "QUERY", name: "Bank Query", short: "QRY", sla: 3, docs: [], tasks: ["Respond to bank query"], conditions: ["Query logged with action points & owner", "Response prepared & QC'd", "Evidence shared with bank same day"] },
+  { id: "INTAKE", name: "File Intake / KYC", short: "KYC", sla: 3, docs: ["PASSPORT", "EID", "VISA"], tasks: ["Collect KYC documents", "Run affordability calculator"], conditions: ["Transaction type identified before finalizing document checklist", "Documents organized into folders 01 KYC · 02 Income · 03 Statements · 04 Bank Forms · 05 Transaction · 06 Buyout · 07 Internal", "Obvious completeness & legibility checked", "Handover package states what is received, missing and to be verified", "Golden Visa labour card / contract collected where applicable"], tatNote: "The VRM handover is not complete merely because an email was sent." },
+  { id: "FILEQC", name: "File QC", short: "QC", sla: 2, docs: ["SALCERT", "BANKSTMT", "LIABILITY", "CARDSTMT"], tasks: ["Complete file QC checklist", "QC review by Team Leader"], gate: "QC", conditions: ["KYC verified (EID, passport, visa, Golden Visa, self-attestation)", "Salary certificate verified (name, salary, signatory, stamp, PO Box)", "Bank statement period correct for bank; salary credits checked", "Salary variance supported by payslip where applicable", "Cash / unusual transactions clarified", "Pre-submission decision recorded (READY / PENDING / RETURN TO VRM)"], tatNote: "DO NOT SUBMIT if a required document is missing, expired, inconsistent, unsigned or unclear." },
+  { id: "SUBMIT", name: "Bank Submission", short: "SUB", sla: 2, docs: ["APPFORM"], tasks: ["Submit file to bank", "Log submission reference"], conditions: ["Pre-Approval checklist completed and file marked READY", "Correct bank and submission route (Direct / Huspy) confirmed", "Current bank forms completed and signed", "KYC, income, statement, property/transaction documents attached", "Bank-specific requirements met (self-attested KYC, working sheet, routing)", "Submission email QC'd — correct client, attachments, CCs", "Submission evidence retained; receipt confirmation requested", "Follow-up ownership recorded in tracker"], tatNote: "Submission is complete only when transmitted, receipt confirmed and follow-up owned. Enter the trigger date when the file is registered at the bank." },
+  { id: "PREAPP", name: "Pre-Approval", short: "PA", sla: 5, docs: [], tasks: ["Follow up with bank", "Capture pre-approval terms"], conditions: ["Application submitted to bank", "DBR calculated & within bank limit", "Credit score confirmed", "NSTL rate offer used if salary not transferring to bank", "Daily follow-up until pre-approval or formal query", "Pre-approval letter received from bank", "Shared with client & client confirmed"], tatNote: "Pre-approval normally takes 3–5 working days (operational expectation, not a bank SLA). Check NSTL vs STL pricing." },
+  { id: "QUERY", name: "Bank Query", short: "QRY", sla: 3, docs: [], tasks: ["Respond to bank query"], conditions: ["Query read carefully — every requested item identified", "Query logged with date, bank, request, deadline & owner", "Escalated to the relevant Virtual RM", "Response QC'd — every part of the query answered", "Evidence shared with bank same day", "Tracked until bank confirms resolution — no partial closure"] },
   { id: "VALUATION", name: "Valuation", short: "VAL", sla: 4, docs: ["VALREP"], tasks: ["Order property valuation", "Review valuation report"], conditions: ["Client advised to pay valuation fee (same day as pre-approval)", "Property documents sent to bank for evaluation", "Valuation appointment confirmed", "Valuation report received", "LTV confirmed within bank policy", "Pre-approval conditions satisfied during this stage", "Bank account opened (if required by bank)", "Downpayment confirmed ready (unless personal loan for DP)"], tatNote: "Push bank evaluation in parallel with pre-approval. Target: completed D+3 to D+4 after client pays fees." },
   { id: "FOL", name: "FOL", short: "FOL", sla: 3, docs: ["FOL"], tasks: ["Review Final Offer Letter", "Clarify FOL conditions"], conditions: ["FOL submitted same day valuation report received", "Security cheque ready (min 6–10 cheque leaves)", "Valid passport / visa / EID confirmed", "Salary certificate addressed to specific bank", "Insurance completed (medical disclosure or full medical per bank policy)", "Seller/client liability letter requested — address matches title deed & valuation", "FOL / Loan Agreement received", "FOL shared with client & signed"], tatNote: "FOL must be received within 3–5 working days. If a query is raised by bank — respond same day." },
   { id: "DDA", name: "DDA / Signing", short: "DDA", sla: 3, docs: ["DDA"], tasks: ["Sign DDA with client", "Collect security cheques"], conditions: ["FOL signed (digital + manual)", "DDA activated by client", "Funding / security cheques confirmed"] },
@@ -72,7 +72,57 @@ const rules: Rule[] = [
   R({ id: "r-f7", code: "FEE-AGENCY", module: "FEE", name: "Agency fee", kind: "pct", value: 2, scope: { txType: "PURCHASE" }, fee: { basis: "property" }, version: 1, effectiveFrom: "2026-01-01" }),
   R({ id: "r-s1", code: "SETTLE-1", module: "SETTLE", name: "Early settlement charge", kind: "pct", value: 1, scope: {}, fee: { basis: "loan", cap: 10000 }, version: 1, effectiveFrom: "2026-01-01", note: "1% of outstanding, capped AED 10,000" }),
   R({ id: "r-q1", code: "STRESS-QUAL", module: "STRESS", name: "Qualifying rate stress", kind: "pct", value: 2, scope: {}, version: 1, effectiveFrom: "2026-01-01" }),
+  /* ---- Batch 3: statement & TAT controls (Admin-configurable) ---- */
+  R({ id: "r-st1", code: "STMT-DEFAULT", module: "STMT", name: "Bank statement period · default", kind: "months", value: 6, scope: {}, version: 1, effectiveFrom: "2026-01-01", note: "General Pre-Approval requirement" }),
+  R({ id: "r-st2", code: "STMT-ADIB", module: "STMT", name: "Bank statement period · ADIB", kind: "months", value: 3, scope: { bankId: "b-adib" }, version: 1, effectiveFrom: "2026-01-01", note: "Per VRM process — TO VERIFY against current bank instruction" }),
+  R({ id: "r-t1", code: "PREAPP-WINDOW", module: "TAT", name: "Pre-approval receipt window", kind: "number", value: 5, scope: {}, version: 1, effectiveFrom: "2026-01-01", note: "4–5 working days — operational expectation, not a bank SLA" }),
+  R({ id: "r-t2", code: "QUERY-RESPOND", module: "TAT", name: "Bank query response", kind: "number", value: 0, scope: {}, version: 1, effectiveFrom: "2026-01-01", note: "Same-day response when a query is raised (0 = same day)" }),
 ];
+
+/* ---- Batch 3: bank submission matrix (route / statement / KYC / routing) ---- */
+const bankMatrix: AppState["bankMatrix"] = [
+  { bankId: "b-adib", route: "DIRECT", statementMonths: 3, selfAttestedKyc: true, workingSheet: true, routing: "Direct to ADIB RM", note: "KYC self-attested; attach working Excel sheet.", verified: false },
+  { bankId: "b-dib", route: "DIRECT", statementMonths: 6, selfAttestedKyc: false, workingSheet: false, routing: "Direct to DIB RM", verified: true },
+  { bankId: "b-enbd", route: "DIRECT", statementMonths: 6, routing: "Direct to ENBD RM", verified: true },
+  { bankId: "b-hsbc", route: "BOTH", statementMonths: 6, routing: "Direct or via Huspy", verified: false },
+  { bankId: "b-mashreq", route: "HUSPY", statementMonths: 6, routing: "Submit through Huspy portal", verified: false },
+  { bankId: "b-cbd", route: "DIRECT", statementMonths: 6, routing: "Direct to CBD RM", verified: true },
+  { bankId: "b-fab", route: "HUSPY", statementMonths: 6, routing: "Submit through Huspy portal", verified: false },
+  { bankId: "b-rak", route: "DIRECT", statementMonths: 6, routing: "To mortgagereferrals, CC Burhan", note: "Use current approved mailbox from the team contact list.", verified: false },
+  { bankId: "b-scb", route: "DIRECT", statementMonths: 6, routing: "Direct to SCB RM", verified: true },
+  { bankId: "b-arab", route: "DIRECT", statementMonths: 6, routing: "Direct to Arab Bank RM", verified: true },
+  { bankId: "b-nbf", route: "DIRECT", statementMonths: 6, routing: "Direct to NBF RM", verified: true },
+  { bankId: "b-bob", route: "DIRECT", statementMonths: 6, routing: "Direct to BOB RM", verified: true },
+  { bankId: "b-adcb", route: "HUSPY", statementMonths: 6, routing: "Submit through Huspy portal", verified: false },
+];
+
+/* ---- Batch 2/3: file-level QC checklist templates ---- */
+type QcDef = { g: string; items: [string, boolean][] }; // [label, required]
+const PREAPP_QC: QcDef[] = [
+  { g: "Setup", items: [["Transaction type confirmed", true]] },
+  { g: "KYC", items: [["Client KYC complete", true], ["EID validity checked", true], ["Passport validity checked", true], ["Visa validity checked", true], ["Golden Visa supporting document checked (if applicable)", false], ["Self-attestation / attestation requirement checked", true]] },
+  { g: "Income", items: [["Salary Certificate received and valid", true], ["Salary Certificate name checked", true], ["Salary Certificate salary checked", true], ["Joining date checked", false], ["Authorized signatory checked", true], ["Stamp checked", true], ["PO Box / company address checked", false], ["Designation / employer checked", true]] },
+  { g: "Bank Statement", items: [["Correct bank statement period received", true], ["Salary account confirmed", true], ["Salary credits checked", true], ["Salary matches Salary Certificate", true], ["Payslip obtained if variance", false], ["Cash / unusual transactions reviewed", true], ["Clarifications obtained where required", false]] },
+  { g: "Employment", items: [["Service Letter obtained if new company / probation", false]] },
+  { g: "Bank Forms", items: [["Bank application form correct", true], ["All form fields complete", true], ["Signatures / e-signatures complete", true], ["Client details match KYC on forms", true]] },
+  { g: "Eligibility & Property", items: [["Eligibility / liabilities reviewed", true], ["Transaction property documents complete", true], ["Buyout previous FOL / applicable document checked", false]] },
+  { g: "Submission", items: [["Submission route confirmed", true], ["Bank-specific requirements checked", true], ["All issues resolved", true], ["File marked READY for submission", true]] },
+];
+const SUBMIT_QC: QcDef[] = [
+  { g: "Readiness", items: [["Pre-Approval checklist completed", true], ["Correct bank selected", true], ["Correct submission route confirmed", true]] },
+  { g: "Documents", items: [["KYC complete", true], ["Income documents complete", true], ["Bank statement period correct for selected bank", true], ["Salary credits checked", true], ["Salary variance supported", false], ["Property / transaction documents complete", true], ["Buyout previous-bank documents checked (if applicable)", false]] },
+  { g: "Forms & Evidence", items: [["Bank forms correct", true], ["Bank forms fully completed and signed", true], ["Bank-specific working sheet attached (if required)", false], ["Email format / portal route correct", true], ["Attachments checked for correct client", true]] },
+  { g: "Transmission & Follow-up", items: [["Submission sent / completed", true], ["Submission evidence retained", true], ["Receipt confirmation requested / received", true], ["Follow-up tracker updated", true], ["Bank query owner assigned (if query received)", false], ["Query response submitted (if applicable)", false], ["Case tracked until Pre-Approval", true]] },
+];
+const HUSPY_QC: QcDef[] = [
+  { g: "Step 1 · File Preparation", items: [["KYC (EID, Passport, Visa) checked — validity, name, signature, nationality", true], ["Salary Certificate checked — validity, PO Box, address, salary, designation, stamp", true], ["Salary-account statement (6 months) — salary credited, matches certificate", true], ["Payslip attached if variance", false], ["Title Deed / previous FOL attached for buyout", false], ["Bank forms + Huspy form complete and signed", true]] },
+  { g: "Step 2 · Portal", items: [["Client created in Client Hub (no real client email/phone)", true], ["Complete Profile fields cross-checked vs source documents", true], ["Start Collection — bank & checklist selected", true], ["Case password created & shared via approved channel", true], ["Re-login sequence completed; client status confirmed", true]] },
+  { g: "Review & Submit", items: [["Bank ROI entered manually and verified", true], ["Bank forms + Huspy form uploaded", true], ["Applicant documents uploaded per checklist", true], ["Case summary reviewed (client, bank, loan, purchase, tenor, ROI, property)", true], ["Additional Information + bank RM noted", true], ["Submitted to Huspy", true]] },
+  { g: "Post-Submission", items: [["Screenshot of submission confirmation taken", true], ["Email to Areeb with screenshot; CC referrals + internal DLs", true], ["Email date/time recorded; screenshot retained in case file", true]] },
+];
+let qcN = 0;
+const mkQc = (tpl: QcDef[]): ChecklistItem[] =>
+  tpl.flatMap((grp) => grp.items.map(([label, required]) => ({ id: "qc" + ++qcN, label, group: grp.g, required, done: false })));
 
 const banks: AppState["banks"] = [
   { id: "b-adib", name: "Abu Dhabi Islamic Bank", short: "ADIB" },
@@ -269,6 +319,11 @@ const cases: Case[] = ROWS.map((r, i) => {
     docs: mkDocs(stages.findIndex((s) => s.id === stage), {
       folReceived: r.client === "Karolina & Angie Abbas Issa",
       dda: (r.client === "Parvez Ahmed" && r.bank === "b-adib") || r.client === "Mohamed Hengazy I. Aboukhalil" ? "VERIFIED" : undefined,
+    }),
+    ...(closed ? {} : {
+      preappQc: mkQc(PREAPP_QC),
+      submitQc: mkQc(SUBMIT_QC),
+      ...(r.ch === "Huspy" ? { huspyQc: mkQc(HUSPY_QC) } : {}),
     }),
     ...(closed
       ? { closedAt: d(-1) }
@@ -588,6 +643,11 @@ Object.assign(dina, {
     DD("FLOORPLAN", "RECEIVED"), DD("TRADELIC", "NA"), DD("AUDITREP", "NA"), DD("LOANSTMT", "RECEIVED"), DD("POA", "NA"),
     { id: "dd" + ++dn, typeId: "FOL", stageId: "FOL", status: "RECEIVED", updatedAt: ts(-1), updatedBy: "hfmm-06" },
   ];
+  /* Dina is past Pre-Approval (in FOL): pre-app + submission checklists nearly done, decision READY */
+  const markDone = (items: ChecklistItem[], except: string[]) => items.map((it) => ({ ...it, done: !except.some((e) => it.label.includes(e)) }));
+  dinaCase.preappQc = markDone(mkQc(PREAPP_QC), ["Payslip obtained", "File marked READY"]);
+  dinaCase.submitQc = markDone(mkQc(SUBMIT_QC), ["Case tracked until Pre-Approval"]);
+  dinaCase.preappDecision = "READY";
   cases.push(dinaCase);
   const dl = leads.find((l) => l.personId === dina.id);
   if (dl) { dl.status = "CONVERTED"; dl.bankId = "b-dib"; dl.notes = `Converted to ${dinaCase.ref}`; }
@@ -634,10 +694,12 @@ export function buildSeed(): AppState {
       { id: "hfmm-17", empId: "hfmm-17", name: "Omkar", email: "", mobile: "", role: "VRM", team: "Sales Team (VRM)", leaderId: "hfmm-12", active: true, createdAt: d(-30), note: "New joiner — designation to be confirmed" },
       { id: "hfmm-18", empId: "hfmm-18", name: "Extra 2", email: "", mobile: "", role: "TBD", team: "—", active: false, createdAt: d(-1), note: "Designation to be provided — new designation may follow" },
     ],
-    persons, leads, banks, products, stages,
+    persons, leads, banks, products, stages, bankMatrix,
     docTypes: [
       { id: "PASSPORT", name: "Passport" }, { id: "EID", name: "Emirates ID" }, { id: "VISA", name: "Residence Visa" },
-      { id: "SALCERT", name: "Salary Certificate" }, { id: "BANKSTMT", name: "Bank Statements (3M)" },
+      { id: "GOLDENVISA", name: "Golden Visa — Labour Card / Contract" }, { id: "SELFATT", name: "Self-Attested KYC (ADIB)" },
+      { id: "SALCERT", name: "Salary Certificate" }, { id: "BANKSTMT", name: "Bank Statements (salary account)" },
+      { id: "SERVICELETTER", name: "Service Letter (new company / probation)" }, { id: "WORKSHEET", name: "Working Sheet (bank-specific)" },
       { id: "LIABILITY", name: "Liability Letter" }, { id: "CARDSTMT", name: "Card Statements" },
       { id: "APPFORM", name: "Bank Application Form" }, { id: "VALREP", name: "Valuation Report" },
       { id: "FOL", name: "Final Offer Letter" }, { id: "DDA", name: "DDA & Security Cheques" },
@@ -649,6 +711,9 @@ export function buildSeed(): AppState {
       { id: "FLOORPLAN", name: "Floor Plan" }, { id: "TRADELIC", name: "Trade Licence (self-employed)" },
       { id: "AUDITREP", name: "Audit Report (self-employed)" }, { id: "LOANSTMT", name: "Existing Loan Statement" },
       { id: "POA", name: "Power of Attorney" },
+      { id: "SELLERKYC", name: "Seller KYC" }, { id: "PAYMENTPROOF", name: "Payment Proof" },
+      { id: "OQOOD", name: "Oqood / Initial Title Deed (Dubai)" }, { id: "SOA", name: "Developer SOA (Primary)" },
+      { id: "BCC", name: "BCC / Handover Notice" }, { id: "HUSPYFORM", name: "Huspy Form" },
     ],
     taskTypes: ["Follow up with bank", "Collect documents from client", "Respond to bank query", "Schedule appointment", "Verify original documents", "Update client"],
     waitingTypes: ["Bank", "Client", "Sir Kiran", "VRM", "Seller", "Realtor", "Valuer", "Employer", "Developer", "Trustee Office", "Insurance", "Team Leader"],

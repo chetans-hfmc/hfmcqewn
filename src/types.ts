@@ -55,6 +55,22 @@ export interface StageDef {
 
 export interface DocType { id: string; name: string; }
 
+/* ---- Batch 2/3: file-level QC checklists & pre-submission decision ---- */
+export interface ChecklistItem { id: string; label: string; group?: string; required?: boolean; done: boolean }
+export type PreappDecision = "READY" | "READY_CONFIRM" | "PENDING_DOC" | "PENDING_CLARIFY" | "RETURN_VRM";
+
+/* ---- Batch 3: bank submission matrix (Admin-controlled) ---- */
+export interface BankMatrixRule {
+  bankId: string;
+  route: "DIRECT" | "HUSPY" | "BOTH";
+  statementMonths: number;
+  selfAttestedKyc?: boolean;
+  workingSheet?: boolean;
+  routing?: string;
+  note?: string;
+  verified: boolean;
+}
+
 export type DocStatus = "MISSING" | "RECEIVED" | "VERIFIED" | "REJECTED" | "NA";
 
 export interface DocItem {
@@ -80,6 +96,10 @@ export interface Case {
   conditionsDone?: Record<string, boolean>;
   caseNotes?: CaseNote[];
   bankApp?: BankApp;
+  preappQc?: ChecklistItem[];
+  submitQc?: ChecklistItem[];
+  huspyQc?: ChecklistItem[];
+  preappDecision?: PreappDecision;
   propertyValue: number; loanAmount: number; rate: number; tenureMonths: number;
   stage: string; status: "OPEN" | "CLOSED";
   stageHistory: { stageId: string; at: string; by: string; note?: string }[];
@@ -102,7 +122,7 @@ export interface BankQuery {
   response?: string; evidence?: string; qc?: string; status: "OPEN" | "RESPONDED" | "CLOSED";
 }
 
-export type RuleModule = "LTV" | "DBR" | "RETIRE" | "TENURE" | "CC" | "MIN_SAL" | "FEE" | "SETTLE" | "STRESS";
+export type RuleModule = "LTV" | "DBR" | "RETIRE" | "TENURE" | "CC" | "MIN_SAL" | "FEE" | "SETTLE" | "STRESS" | "STMT" | "TAT";
 
 export interface Rule {
   id: string; code: string; module: RuleModule; name: string;
@@ -136,6 +156,7 @@ export interface AppState {
   version: number; session: string | null;
   users: User[]; persons: Person[]; leads: Lead[];
   banks: Bank[]; products: Product[]; stages: StageDef[]; docTypes: DocType[];
+  bankMatrix: BankMatrixRule[];
   taskTypes: string[]; waitingTypes: string[]; pendingReasons: string[]; leadSources: string[];
   cases: Case[]; tasks: Task[]; queries: BankQuery[];
   rules: Rule[]; eibor: EiborRow[]; calcs: CalcRecord[]; audit: AuditEntry[];

@@ -90,6 +90,22 @@ export function CasesView() {
 
 /* ================= CASE 360 ================= */
 
+const CLOSURE_AUDIT = [
+  "Correct transaction type identified?",
+  "Bank-specific submission controls followed?",
+  "Bank queries logged and closed?",
+  "Pre-Approval QC completed?",
+  "Valuation QC completed?",
+  "FOL QC completed?",
+  "Signing completed?",
+  "DDA confirmed?",
+  "Seller liability/release handled where applicable?",
+  "Transfer completed?",
+  "Title deed received?",
+  "Title deed QC sent?",
+  "Open actions recorded?",
+];
+
 export function Case360({ id }: { id: string }) {
   const { state, dispatch } = useStore();
   const nav = useNav();
@@ -100,6 +116,8 @@ export function Case360({ id }: { id: string }) {
   const [editPanel, setEditPanel] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
   const [queryModal, setQueryModal] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditChecked, setAuditChecked] = useState<boolean[]>([]);
 
   const person = state.persons.find((p) => p.id === c?.personId);
   const stages = state.stages;
@@ -381,7 +399,7 @@ export function Case360({ id }: { id: string }) {
         footer={<>
           <Btn variant="ghost" onClick={() => setGateOpen(false)}>Cancel</Btn>
           {isLast
-            ? <Btn variant="dark" disabled={!gates.pass} onClick={() => { dispatch({ t: "CLOSE_CASE", id: c.id }); setGateOpen(false); }}><Ic n="check" size={14} /> Close case</Btn>
+            ? <Btn variant="dark" disabled={!gates.pass} onClick={() => { setGateOpen(false); setAuditChecked(Array(CLOSURE_AUDIT.length).fill(false)); setAuditOpen(true); }}><Ic n="check" size={14} /> Close case — run audit</Btn>
             : <Btn disabled={!gates.pass} onClick={() => { dispatch({ t: "ADVANCE_STAGE", id: c.id }); setGateOpen(false); }}><Ic n="arrowR" size={14} /> Advance to {stages.find((s) => s.id === gates.nextStage)?.short}</Btn>}
         </>}>
         <p className="text-[12px] text-ink-soft mb-3">Evidence-based progression — the file only moves when every gate is green. Next stage tasks and document requirements are generated automatically.</p>
@@ -399,6 +417,31 @@ export function Case360({ id }: { id: string }) {
           ))}
         </div>
       </Modal>
+
+      {auditOpen && (
+        <Modal open onClose={() => setAuditOpen(false)} title={`Case Closure Audit — ${c.ref}`} width={560}
+          footer={<>
+            <Btn variant="ghost" onClick={() => setAuditOpen(false)}>Cancel</Btn>
+            <Btn variant="dark" disabled={auditChecked.some((v) => !v)} onClick={() => {
+              dispatch({ t: "CLOSE_CASE", id: c.id, audit: CLOSURE_AUDIT.filter((_, i) => auditChecked[i]) });
+              setAuditOpen(false);
+            }}><Ic n="check" size={14} /> Confirm all & close case</Btn>
+          </>}>
+          <p className="text-[12px] text-ink-soft mb-3">Batch 6–7 end-of-case control. Transaction completion and administrative closure are separate — confirm every item before the golden record is archived. {auditChecked.filter(Boolean).length}/{CLOSURE_AUDIT.length} confirmed.</p>
+          <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+            {CLOSURE_AUDIT.map((item, i) => (
+              <button key={i} onClick={() => setAuditChecked((prev) => prev.map((v, j) => (j === i ? !v : v)))}
+                className={cx("focusable w-full flex items-center gap-2.5 px-3 py-2 rounded-md border text-left transition-all",
+                  auditChecked[i] ? "border-pine-200 bg-pine-50" : "border-mist bg-card hover:border-pine-400")}>
+                <span className={cx("w-[18px] h-[18px] rounded flex items-center justify-center shrink-0", auditChecked[i] ? "bg-pine-600 text-pine-50" : "border border-gr-300")}>
+                  {auditChecked[i] && <Ic n="check" size={10} />}
+                </span>
+                <span className={cx("text-[12.5px]", auditChecked[i] ? "text-pine-800 font-medium" : "text-ink")}>{item}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
 
       {editPanel && <ControlPanelDrawer c={c} onClose={() => setEditPanel(false)} />}
       {taskModal && <AddTask caseId={c.id} stageId={c.stage} onClose={() => setTaskModal(false)} />}

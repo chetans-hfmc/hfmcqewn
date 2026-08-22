@@ -100,9 +100,9 @@ export default function GuideView() {
           <div>
             <p className="text-[10.5px] font-display font-semibold uppercase tracking-[0.16em] text-pine-300">HFMC · Document Control</p>
             <h1 className="font-display font-bold text-[28px] tracking-tight mt-1.5 leading-tight">Mortgage Operations Guide Book</h1>
-            <p className="text-[13px] text-paper/70 mt-2 max-w-[560px]">8-batch operating manual. Batches 1–5 are live; every chapter also activates controls in the case engine, Rule Centre and Bank Matrix.</p>
+            <p className="text-[13px] text-paper/70 mt-2 max-w-[560px]">8-batch operating manual. Batches 1–7 are live; every chapter also activates controls in the case engine, Rule Centre and Bank Matrix.</p>
             <div className="flex flex-wrap gap-1.5 mt-3.5">
-              {["Working draft", "Foundation → Transfer", "Pre-Approval & Valuation", "FOL, signing & liability"].map((t) => (
+              {["Working draft", "Foundation → Transfer", "FOL, signing & liability", "Final transfer & Title Deed QC", "Master controls & trackers"].map((t) => (
                 <span key={t} className="text-[10px] font-display font-semibold tracking-wide uppercase border border-paper/25 rounded-full px-2.5 py-1 text-paper/80">{t}</span>
               ))}
             </div>

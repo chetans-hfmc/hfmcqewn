@@ -178,6 +178,35 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* daily worklist — Batch 7 ch 117, computed live */}
+      <div className="anim-up bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "340ms" }}>
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="font-display font-bold text-sm tracking-tight">Daily worklist</h3>
+          <p className="text-[11px] text-ink-soft">Batch 7 · priority-ordered; counts are live. Click an activity to open its board.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+          {[
+            { l: "Bank queries requiring response", n: state.queries.filter((q) => q.status === "OPEN").length, to: "queries" as const },
+            { l: "Pre-Approval follow-ups", n: open.filter((c) => c.stage === "PREAPP").length, to: "cases" as const },
+            { l: "FOL follow-ups", n: open.filter((c) => c.stage === "FOL").length, to: "cases" as const },
+            { l: "Valuation scheduling / report", n: open.filter((c) => c.stage === "VALUATION").length, to: "cases" as const },
+            { l: "Pending client documents", n: state.cases.filter((c) => c.status === "OPEN" && c.docs?.some((d) => d.status === "MISSING" || d.status === "REJECTED")).length, to: "documents" as const },
+            { l: "Pending bank confirmations", n: open.filter((c) => c.waitingFor === "Bank").length, to: "cases" as const },
+            { l: "Transfer booking / cheque checks", n: open.filter((c) => c.stage === "TRANSFER" || c.stage === "BOOKING").length, to: "cases" as const },
+            { l: "Title deed / closure QC", n: open.filter((c) => c.stage === "TITLEQC" || c.stage === "CLOSURE").length, to: "cases" as const },
+          ].map((w, i) => (
+            <button key={w.l} onClick={() => nav.go(w.to)}
+              className="focusable flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border border-mist bg-paper/40 hover:border-pine-500 hover:bg-pine-50/60 hover:-translate-y-px transition-all duration-150 text-left group">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="num text-[10px] font-bold text-ink-soft/70 shrink-0">{i + 1}</span>
+                <span className="text-[12px] font-medium truncate group-hover:text-pine-800">{w.l}</span>
+              </span>
+              <span className={cx("num text-[12px] font-semibold shrink-0 px-1.5 py-0.5 rounded", w.n > 0 ? "bg-pine-100 text-pine-800" : "bg-ink/6 text-ink-soft")}>{w.n}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

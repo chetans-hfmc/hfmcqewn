@@ -1,7 +1,7 @@
 import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, EmailTemplate, Handoff, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 12;
+export const SEED_VERSION = 13;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import type { View } from "./types";
 import { NavProvider, ROLE_LABEL, ROLE_MODULES, StoreProvider, useMe, useNav, useStore } from "./store";
 import { Avatar, Btn, Ic, Pill, cx, fmtDate, todayISO } from "./ui";
@@ -262,12 +262,44 @@ function Gate() {
   return state.session ? <Shell /> : <Login />;
 }
 
+/* Catches any runtime error so the preview never goes blank — shows a readable diagnostic instead. */
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err: Error | null }> {
+  state = { err: null as Error | null };
+  static getDerivedStateFromError(err: Error) { return { err }; }
+  render() {
+    if (!this.state.err) return this.props.children;
+    const e = this.state.err;
+    return (
+      <div className="min-h-screen ambient flex items-center justify-center p-6">
+        <div className="max-w-lg w-full bg-card border border-rust-500/40 rounded-lg shadow-xl overflow-hidden anim-pop">
+          <div className="bg-rust-600 text-white px-5 py-3.5 flex items-center gap-2.5">
+            <Ic n="alert" size={18} />
+            <p className="font-display font-bold text-[14px] tracking-tight">HFMC MOS hit a runtime error</p>
+          </div>
+          <div className="p-5">
+            <p className="text-[13px] text-ink-soft">The app caught this instead of showing a blank screen. Clearing the saved demo data almost always fixes it.</p>
+            <pre className="mt-3 bg-ink text-paper/90 rounded-md px-3.5 py-3 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap">{e.name}: {e.message}{"\n"}{(e.stack ?? "").split("\n").slice(1, 4).join("\n")}</pre>
+            <div className="flex gap-2 mt-4">
+              <Btn variant="dark" onClick={() => { try { localStorage.removeItem("hfmc-mos-state"); } catch { /* ignore */ } window.location.reload(); }}>
+                <Ic n="refresh" size={14} /> Clear data & reload
+              </Btn>
+              <Btn variant="outline" onClick={() => window.location.reload()}>Just reload</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   return (
-    <StoreProvider>
-      <NavProvider>
-        <Gate />
-      </NavProvider>
-    </StoreProvider>
+    <ErrorBoundary>
+      <StoreProvider>
+        <NavProvider>
+          <Gate />
+        </NavProvider>
+      </StoreProvider>
+    </ErrorBoundary>
   );
 }

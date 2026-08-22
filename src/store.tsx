@@ -267,6 +267,11 @@ function init(): AppState {
         parsed.version === SEED_VERSION &&
         Array.isArray(parsed.trackerDates) &&
         Array.isArray(parsed.users) &&
+        Array.isArray(parsed.cases) &&
+        Array.isArray(parsed.leads) &&
+        Array.isArray(parsed.stages) &&
+        Array.isArray(parsed.rules) &&
+        Array.isArray(parsed.templates) &&
         parsed.users.some((u) => u.empId === "hfmm-15");
       if (fresh) {
         // Self-heal: the management-assigned Super Admin slot must always exist.

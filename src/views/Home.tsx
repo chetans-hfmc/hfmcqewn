@@ -55,7 +55,8 @@ function CaseRow({ c, onHandoff, showHandoff }: { c: Case; onHandoff: (c: Case) 
   const person = state.persons.find((p) => p.id === c.personId);
   const bank = state.banks.find((b) => b.id === c.bankId);
   const st = state.stages.find((s) => s.id === c.stage);
-  const last = (c.handoffs ?? [])[c.handoffs!.length - 1];
+  const chain = c.handoffs ?? [];
+  const last = chain.length ? chain[chain.length - 1] : undefined;
   const fromName = last ? state.users.find((u) => u.id === last.fromId)?.name : null;
   return (
     <div className="group flex items-center gap-3 bg-card border border-mist rounded-md px-3 py-2.5 hover:border-pine-500 hover:shadow-sm hover:-translate-y-px transition-all duration-150">

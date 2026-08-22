@@ -19,6 +19,15 @@ export const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Super Admin", HEAD: "Head of Mortgage", TL: "Team Leader", SPO: "Sales Process Owner", VRM: "Virtual Relationship Mgr", PA: "Personal Assistant", TBD: "Role TBD",
 };
 
+/* Single-active-owner scoping: oversight roles see across; members see their own. */
+export const OVERSIGHT: string[] = ["ADMIN", "HEAD"];
+export function isOversight(role: string) { return OVERSIGHT.includes(role); }
+export function teamOf(state: AppState, me: User): Set<string> {
+  const ids = new Set<string>([me.id]);
+  state.users.forEach((u) => { if (u.leaderId === me.id || u.team === me.team) ids.add(u.id); });
+  return ids;
+}
+
 export type Action =
   | { t: "LOGIN"; userId: string } | { t: "LOGOUT" }
   | { t: "RESET" }
@@ -27,6 +36,8 @@ export type Action =
   | { t: "ADD_LEAD"; lead: Lead } | { t: "UPDATE_LEAD"; id: string; patch: Partial<Lead> }
   | { t: "CONVERT_LEAD"; leadId: string; caze: Case; tasks: Task[] }
   | { t: "PATCH_CASE"; id: string; patch: Partial<Case> }
+  | { t: "HANDOFF_CASE"; caseId: string; toId: string; reason: string; kind: import("./types").HandoffKind }
+  | { t: "HANDOFF_LEAD"; leadId: string; toId: string; reason: string }
   | { t: "ADVANCE_STAGE"; id: string; note?: string }
   | { t: "CLOSE_CASE"; id: string; audit?: string[] }
   | { t: "ADD_TASK"; task: Task } | { t: "UPDATE_TASK"; id: string; patch: Partial<Task> }
@@ -122,6 +133,22 @@ function reducer(state: AppState, a: Action): AppState {
       if (a.audit?.length) s = log(s, { module: "CASE", action: "Closure audit passed", target: c.ref, detail: `${a.audit.length}/13 items confirmed`, caseId: a.id });
       s = log(s, { module: "CASE", action: "Case closed", target: c.ref, detail: "Golden record archived", caseId: a.id });
       return s;
+    }
+    case "HANDOFF_CASE": {
+      const c = state.cases.find((x) => x.id === a.caseId);
+      if (!c || c.ownerId === a.toId) return state;
+      const from = state.users.find((u) => u.id === c.ownerId)?.name ?? c.ownerId;
+      const to = state.users.find((u) => u.id === a.toId)?.name ?? a.toId;
+      const h: import("./types").Handoff = { at: nowISO(), fromId: c.ownerId, toId: a.toId, reason: a.reason, kind: a.kind };
+      const s = { ...state, cases: state.cases.map((x) => (x.id === a.caseId ? { ...x, ownerId: a.toId, handoffs: [...(x.handoffs ?? []), h] } : x)) };
+      return log(s, { module: "CASE", action: "Handoff", target: c.ref, detail: `${from} → ${to} · ${a.kind} · ${a.reason}`, caseId: a.caseId });
+    }
+    case "HANDOFF_LEAD": {
+      const l = state.leads.find((x) => x.id === a.leadId);
+      if (!l || l.owner === a.toId) return state;
+      const to = state.users.find((u) => u.id === a.toId)?.name ?? a.toId;
+      const s = { ...state, leads: state.leads.map((x) => (x.id === a.leadId ? { ...x, owner: a.toId } : x)) };
+      return log(s, { module: "LEAD", action: "Lead handed off", target: `${l.ref} → ${to}`, detail: a.reason });
     }
     case "ADD_TASK": return log({ ...state, tasks: [a.task, ...state.tasks] }, { module: "TASK", action: "Task created", target: a.task.title, caseId: a.task.caseId });
     case "UPDATE_TASK": {

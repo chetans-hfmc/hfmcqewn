@@ -3,6 +3,7 @@ import type { Case, DocStatus, Person, Task } from "../types";
 import { useMe, useNav, useStore } from "../store";
 import { ESC_LEVELS, emi, escalationEmail, fmtDur, stageGates, tatFor } from "../calc";
 import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextArea, TextInput, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtPct, fmtTime, nowISO, todayISO, uid } from "../ui";
+import HandoffModal from "./Handoff";
 
 const DOC_STATUSES: { v: DocStatus; l: string; cls: string; on: string }[] = [
   { v: "MISSING", l: "Missing", cls: "text-ink-soft", on: "bg-gr-700 text-paper border-gr-700" },
@@ -15,10 +16,13 @@ const DOC_STATUSES: { v: DocStatus; l: string; cls: string; on: string }[] = [
 export function CasesView() {
   const { state } = useStore();
   const nav = useNav();
+  const me = useMe();
+  const scoped = !!me && ["VRM", "SPO"].includes(me.role);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   const [stageF, setStageF] = useState("ALL");
-  const [ownerF, setOwnerF] = useState("ALL");
+  const [ownerF, setOwnerF] = useState(scoped && me ? me.id : "ALL");
+  const [handoff, setHandoff] = useState<Case | null>(null);
 
   const list = state.cases.filter((c) =>
     (status === "ALL" || c.status === status) &&
@@ -60,7 +64,7 @@ export function CasesView() {
               const openQ = state.queries.some((qq) => qq.caseId === c.id && qq.status === "OPEN");
               return (
                 <tr key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
-                  className="border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${i * 25}ms` }}>
+                  className="group border-b border-mist/60 last:border-0 hover:bg-pine-50/50 cursor-pointer transition-colors anim-up" style={{ animationDelay: `${i * 25}ms` }}>
                   <td className="px-4 py-3"><p className="num font-semibold text-pine-700">{c.ref}</p><p className="text-[10.5px] text-ink-soft">opened {fmtDate(c.createdAt)}</p></td>
                   <td className="px-3 py-3"><div className="flex items-center gap-2"><Avatar name={personName(c.personId)} size={26} /><div><p className="font-semibold leading-tight">{personName(c.personId)}</p>{c.deal && <p className="text-[10.5px] text-amber-700 font-medium">{c.deal}</p>}</div></div></td>
                   <td className="px-3 py-3"><p className="font-medium">{state.banks.find((b) => b.id === c.bankId)?.short} <span className="text-[10px] text-ink-soft font-normal">· {c.channel}</span></p><p className="text-[10.5px] text-ink-soft max-w-[170px] truncate">RM {c.bankRm ?? "—"}</p></td>
@@ -75,7 +79,19 @@ export function CasesView() {
                     <div className="flex gap-0.5 mt-1.5">{state.stages.map((s, j) => <span key={s.id} className={cx("h-[3px] w-3 rounded-full", j < idx ? "bg-pine-500" : j === idx ? "bg-ink" : "bg-ink/12")} />)}</div>
                   </td>
                   <td className="px-3 py-3"><p className="text-[12px] font-medium max-w-[180px] truncate">{c.nextAction ?? <span className="text-ink-soft/60">{c.status === "CLOSED" ? "—" : "not set"}</span>}</p>{c.status === "OPEN" && c.nextActionDue && <DueChip iso={c.nextActionDue} />}</td>
-                  <td className="px-3 py-3"><div className="flex items-center gap-1.5"><Avatar name={userName(c.ownerId)} size={22} /><span className="text-[12px]">{userName(c.ownerId).split(" ")[0]}</span></div></td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <Avatar name={userName(c.ownerId)} size={22} />
+                      <span className="text-[12px]">{userName(c.ownerId).split(" ")[0]}</span>
+                      {(c.handoffs ?? []).length > 0 && <span className="num text-[9.5px] text-ink-soft bg-mist/60 rounded px-1 py-[1px]" title="Custody chain">{(c.handoffs ?? []).length}↔</span>}
+                      {c.status === "OPEN" && (
+                        <button onClick={(e) => { e.stopPropagation(); setHandoff(c); }} title="Hand off this file"
+                          className="focusable ml-0.5 w-6 h-6 rounded border border-mist flex items-center justify-center text-ink-soft hover:border-pine-600 hover:text-pine-700 hover:bg-pine-50 transition-all opacity-0 group-hover:opacity-100">
+                          <Ic n="arrowR" size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-3"><Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill></td>
                 </tr>
               );
@@ -84,6 +100,7 @@ export function CasesView() {
         </table>
         {list.length === 0 && <EmptyState icon="briefcase" title="No cases match" sub="Adjust filters or convert a lead to open a case." />}
       </div>
+      {handoff && <HandoffModal caze={handoff} onClose={() => setHandoff(null)} />}
     </div>
   );
 }

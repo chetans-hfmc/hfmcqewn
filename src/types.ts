@@ -80,6 +80,9 @@ export interface DocItem {
 
 export interface TrackerEntry { date: string; note: string; }
 
+export type HandoffKind = "progression" | "absence" | "rebalance" | "return";
+export interface Handoff { at: string; fromId: string; toId: string; reason: string; kind: HandoffKind }
+
 export interface CaseNote { id: string; at: string; by: string; text: string }
 
 export interface BankApp {
@@ -100,6 +103,7 @@ export interface Case {
   submitQc?: ChecklistItem[];
   huspyQc?: ChecklistItem[];
   preappDecision?: PreappDecision;
+  handoffs?: Handoff[];
   closureAudit?: string[];
   propertyValue: number; loanAmount: number; rate: number; tenureMonths: number;
   stage: string; status: "OPEN" | "CLOSED";

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import type { View } from "./types";
 import { NavProvider, ROLE_LABEL, ROLE_MODULES, StoreProvider, useMe, useNav, useStore } from "./store";
 import { Avatar, Btn, Ic, Pill, cx, fmtDate, todayISO } from "./ui";
-import Dashboard from "./views/Dashboard";
+import Home from "./views/Home";
 import { LeadsView, PeopleView } from "./views/PeopleLeads";
 import { Case360, CasesView } from "./views/Cases";
 import { DocumentsView, QueriesView, TasksView } from "./views/Ops";
@@ -15,7 +15,7 @@ import { AuditView, RuleCentre, UsersView } from "./views/Admin";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
   { g: "Operate", items: [
-    { v: "dashboard", l: "Control Tower", icon: "grid" },
+    { v: "dashboard", l: "Home", icon: "home" },
     { v: "people", l: "People", icon: "users" },
     { v: "leads", l: "Leads", icon: "funnel" },
     { v: "cases", l: "Cases", icon: "briefcase" },
@@ -141,8 +141,9 @@ function Shell() {
   const openTasks = state.tasks.filter((t) => t.status === "OPEN").length;
   const openQueries = state.queries.filter((q) => q.status === "OPEN").length;
 
+  const HOME_TITLE: Record<string, string> = { VRM: "My Desk", SPO: "My Files", TL: "My Team", HEAD: "Control Tower", ADMIN: "Control Tower", PA: "Coordination Desk", TBD: "Welcome" };
   const titles: Record<View, string> = {
-    dashboard: "Control Tower", tracker: "Daily Tracker", tat: "TAT & Escalation", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
+    dashboard: HOME_TITLE[me.role] ?? "Home", tracker: "Daily Tracker", tat: "TAT & Escalation", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
     tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries", calculators: "Calculator Centre",
     templates: "Desk Tools", rules: "Rule Centre", users: "Users & Roles", guide: "Operations Guide Book", audit: "Audit Trail",
   };
@@ -230,7 +231,7 @@ function Shell() {
 
         <main className="flex-1 px-4 lg:px-6 py-5 max-w-[1500px] w-full mx-auto">
           <div key={view + (nav.caseId ?? "")}>
-            {view === "dashboard" && <Dashboard />}
+            {view === "dashboard" && <Home />}
             {view === "people" && <PeopleView />}
             {view === "leads" && <LeadsView />}
             {view === "cases" && (nav.caseId ? <Case360 id={nav.caseId} /> : <CasesView />)}
@@ -261,12 +262,44 @@ function Gate() {
   return state.session ? <Shell /> : <Login />;
 }
 
+/* Catches any runtime error so the preview never goes blank — shows a readable diagnostic instead. */
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err: Error | null }> {
+  state = { err: null as Error | null };
+  static getDerivedStateFromError(err: Error) { return { err }; }
+  render() {
+    if (!this.state.err) return this.props.children;
+    const e = this.state.err;
+    return (
+      <div className="min-h-screen ambient flex items-center justify-center p-6">
+        <div className="max-w-lg w-full bg-card border border-rust-500/40 rounded-lg shadow-xl overflow-hidden anim-pop">
+          <div className="bg-rust-600 text-white px-5 py-3.5 flex items-center gap-2.5">
+            <Ic n="alert" size={18} />
+            <p className="font-display font-bold text-[14px] tracking-tight">HFMC MOS hit a runtime error</p>
+          </div>
+          <div className="p-5">
+            <p className="text-[13px] text-ink-soft">The app caught this instead of showing a blank screen. Clearing the saved demo data almost always fixes it.</p>
+            <pre className="mt-3 bg-ink text-paper/90 rounded-md px-3.5 py-3 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap">{e.name}: {e.message}{"\n"}{(e.stack ?? "").split("\n").slice(1, 4).join("\n")}</pre>
+            <div className="flex gap-2 mt-4">
+              <Btn variant="dark" onClick={() => { try { localStorage.removeItem("hfmc-mos-state"); } catch { /* ignore */ } window.location.reload(); }}>
+                <Ic n="refresh" size={14} /> Clear data & reload
+              </Btn>
+              <Btn variant="outline" onClick={() => window.location.reload()}>Just reload</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   return (
-    <StoreProvider>
-      <NavProvider>
-        <Gate />
-      </NavProvider>
-    </StoreProvider>
+    <ErrorBoundary>
+      <StoreProvider>
+        <NavProvider>
+          <Gate />
+        </NavProvider>
+      </StoreProvider>
+    </ErrorBoundary>
   );
 }

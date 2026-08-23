@@ -65,6 +65,7 @@ export function dueTone(iso?: string): "overdue" | "risk" | "ok" | "none" {
 const P: Record<string, React.ReactNode> = {
   grid: <><rect x="3" y="3" width="7.5" height="7.5" rx="1.2" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.2" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.2" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.2" /></>,
   users: <><circle cx="9" cy="8" r="3.4" /><path d="M2.8 20c.7-3.6 3.2-5.4 6.2-5.4s5.5 1.8 6.2 5.4" /><path d="M15.5 5.2a3.4 3.4 0 0 1 0 5.9M17.8 14.9c1.9.7 3 2.2 3.4 4.4" /></>,
+  user: <><circle cx="12" cy="8" r="3.6" /><path d="M4.8 20.2c.8-3.9 3.6-5.9 7.2-5.9s6.4 2 7.2 5.9" /></>,
   funnel: <path d="M3.5 4.5h17l-6.5 8v5.6l-4 2.4v-8L3.5 4.5Z" />,
   briefcase: <><rect x="3" y="7.5" width="18" height="12.5" rx="1.6" /><path d="M8.5 7.5V5.8A1.8 1.8 0 0 1 10.3 4h3.4a1.8 1.8 0 0 1 1.8 1.8v1.7M3 12.5h18" /></>,
   clipboard: <><rect x="5" y="4.5" width="14" height="16.5" rx="1.6" /><path d="M9 4.5A1.8 1.8 0 0 1 10.8 3h2.4A1.8 1.8 0 0 1 15 4.5V6H9V4.5ZM8.5 11l2.2 2.2 4.6-4.6M8.5 16.5h7" /></>,

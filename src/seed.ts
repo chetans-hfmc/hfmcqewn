@@ -1,7 +1,7 @@
-import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, EmailTemplate, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
+import type { AppState, BankQuery, Case, ChecklistItem, DocItem, DocStatus, EmailTemplate, Handoff, Lead, LeadStatus, Person, Rule, Task, TrackerEntry, TxType } from "./types";
 import { addDays, todayISO } from "./ui";
 
-export const SEED_VERSION = 11;
+export const SEED_VERSION = 13;
 const T = todayISO();
 const d = (off: number) => addDays(T, off);
 const ts = (off: number) => new Date(Date.now() + off * 86400000).toISOString();
@@ -200,7 +200,10 @@ const persons: Person[] = CLIENTS.map((name, i) => ({
   dob: "", mobile: "", email: "", employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1,
   cards: [], liabilities: [], kyc: { passport: false, eid: false, visa: false, address: false }, createdAt: d(-30),
 }));
-const pid = (name: string) => persons.find((p) => p.name === name)!.id;
+const pid = (name: string) => {
+  const p = persons.find((x) => x.name === name) ?? persons.find((x) => x.name.toLowerCase().includes(name.toLowerCase()));
+  return p ? p.id : NP(name).id;
+};
 
 /* ---------- daily tracker rows (as received from operations) ---------- */
 const rep = (n: string): (string | null)[] => [n, n, n, n, n, n];
@@ -699,6 +702,22 @@ Object.assign(dina, {
   const t = tasks.find((x) => x.title.includes(frag));
   if (t) t.estimateMinutes = min;
 });
+
+/* ---- handoff custody examples (single active owner) ---- */
+const ho = (client: string, bank: string, deal: string | undefined, fromId: string, kind: Handoff["kind"], reason: string, daysAgo: number) => {
+  const c = byRef(client, bank, deal);
+  if (!c) return;
+  (c.handoffs ??= []).push({ at: ts(-daysAgo), fromId, toId: c.ownerId, reason, kind });
+};
+/* VRM → SPO progression handoffs (custody chain) */
+ho("Parvez Ahmed", "b-dib", undefined, "hfmm-09", "progression", "Advancing to FOL — SPO takes over bank follow-up", 6);
+ho("Karolina & Angie Abbas Issa", "b-dib", undefined, "hfmm-07", "progression", "Valuation positive — handed to SPO for FOL conversion", 4);
+ho("Spencer Domingos Guiao", "b-dib", undefined, "hfmm-08", "progression", "Pre-approval received — SPO to request FOL", 5);
+/* recent handoff into Mayur's inbox (absence cover) */
+{
+  const c = cases.find((x) => x.status === "OPEN" && x.ownerId === "hfmm-06" && !x.handoffs?.length);
+  if (c) { c.handoffs = [{ at: ts(-1), fromId: "hfmm-03", toId: "hfmm-06", reason: "Vijay on leave — please cover this file", kind: "absence" }]; }
+}
 
 export function buildSeed(): AppState {
   return {

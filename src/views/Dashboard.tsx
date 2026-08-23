@@ -1,211 +1,236 @@
-import { useMemo } from "react";
-import type { Case } from "../types";
-import { useMe, useNav, useStore } from "../store";
-import { caseBucket } from "../calc";
-import { Avatar, DueChip, Ic, Pill, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtTime, todayISO, useCountUp } from "../ui";
+import { useMemo, useState } from "react";
+import { ESC_LEVELS, tatFor } from "../calc";
+import { useNav, useStore } from "../store";
+import { Btn, Ic, cx, fmtAED, fmtDate, fmtN, fmtTime, todayISO, useCountUp } from "../ui";
 
-const BUCKETS: { id: ReturnType<typeof caseBucket>; label: string; desc: string; bar: string; dot: string; text: string }[] = [
-  { id: "overdue", label: "Overdue", desc: "Next action past due", bar: "bg-rust-500", dot: "bg-rust-500", text: "text-rust-700" },
-  { id: "risk", label: "At risk", desc: "Due within 48 hours", bar: "bg-amber-500", dot: "bg-amber-500", text: "text-amber-700" },
-  { id: "waiting", label: "Waiting", desc: "Blocked on a third party", bar: "bg-[#d8b64c]", dot: "bg-[#d8b64c]", text: "text-[#7a5c10]" },
-  { id: "query", label: "Bank query", desc: "Open query on file", bar: "bg-steel-500", dot: "bg-steel-500", text: "text-steel-700" },
-  { id: "ready", label: "Ready to advance", desc: "All stage gates passed", bar: "bg-pine-500", dot: "bg-pine-500", text: "text-pine-700" },
-  { id: "noaction", label: "No next action", desc: "Needs an owner decision", bar: "bg-gr-700", dot: "bg-gr-700", text: "text-gr-700" },
-];
-
-function Stat({ label, value, format, sub, tone, delay }: { label: string; value: number; format: (n: number) => string; sub?: string; tone?: string; delay: number }) {
-  const v = useCountUp(value);
-  return (
-    <div className="anim-up bg-card border border-mist rounded-lg p-4 hover:shadow-md hover:-translate-y-px transition-all duration-200" style={{ animationDelay: `${delay}ms` }}>
-      <p className="text-[11px] font-display font-semibold uppercase tracking-[0.09em] text-ink-soft">{label}</p>
-      <p className={cx("num text-[26px] font-semibold leading-tight mt-1", tone ?? "text-ink")}>{format(v)}</p>
-      {sub && <p className="text-[11px] text-ink-soft mt-1">{sub}</p>}
-    </div>
-  );
+function Count({ v, format, className }: { v: number; format: (n: number) => string; className?: string }) {
+  const n = useCountUp(v);
+  return <span className={cx("num", className)}>{format(n)}</span>;
 }
+
+const LADDER = [
+  { id: "l3", level: 3, tag: "LEVEL 3", who: "Dept Head copies Kiran", on: "bg-rust-600 border-rust-600 text-white", off: "bg-card border-rust-200 hover:border-rust-500", num: "text-rust-600" },
+  { id: "l2", level: 2, tag: "LEVEL 2", who: "TL escalates to Dept Head", on: "bg-amber-600 border-amber-600 text-white", off: "bg-card border-amber-500/40 hover:border-amber-500", num: "text-amber-600" },
+  { id: "l1", level: 1, tag: "LEVEL 1", who: "Flagged to Team Leader", on: "bg-steel-600 border-steel-600 text-white", off: "bg-card border-steel-500/40 hover:border-steel-500", num: "text-steel-600" },
+  { id: "ok", level: 0, tag: "ON TRACK", who: "Normal follow-up", on: "bg-pine-700 border-pine-700 text-white", off: "bg-card border-mist hover:border-pine-500", num: "text-pine-700" },
+];
 
 export default function Dashboard() {
   const { state } = useStore();
-  const me = useMe();
   const nav = useNav();
+  const today = todayISO();
 
   const open = useMemo(() => state.cases.filter((c) => c.status === "OPEN"), [state.cases]);
-  const bucketed = useMemo(() => {
-    const m: Record<string, Case[]> = { overdue: [], risk: [], waiting: [], query: [], ready: [], noaction: [] };
-    for (const c of open) { const b = caseBucket(state, c); if (b) m[b].push(c); }
-    return m;
-  }, [state, open]);
+  const withT = useMemo(() => open.map((c) => ({ c, t: tatFor(c, c.stage, state.stages, today) })), [open, state.stages, today]);
+  const byLevel = (lv: number) => withT.filter((x) => x.t.level === lv).sort((a, b) => b.t.daysOver - a.t.daysOver);
+  const L3 = byLevel(3);
+  const L2 = byLevel(2);
+  const L1 = byLevel(1);
+  const OK = byLevel(0);
+
+  /* files parked on Sir's instruction — his queue, made visible */
+  const holds = useMemo(() => open.filter((c) => {
+    const wt = (c.waitingFor ?? "").toLowerCase();
+    const pr = (c.pendingReason ?? "").toLowerCase();
+    const taskHold = state.tasks.some((t) => t.caseId === c.id && t.status === "OPEN" &&
+      (((t.waitingFor ?? "").toLowerCase().includes("kiran")) || (t.pendingReason ?? "").toLowerCase().includes("instruction") || t.title.toLowerCase().startsWith("hold")));
+    return wt.includes("kiran") || pr.includes("hold") || taskHold;
+  }), [open, state.tasks]);
+
+  const decisions = L3.length + L2.length + holds.length;
+  const [expanded, setExpanded] = useState<string>(() => (L3.length ? "l3" : L2.length ? "l2" : L1.length ? "l1" : "ok"));
+  const expandedList = expanded === "l3" ? L3 : expanded === "l2" ? L2 : expanded === "l1" ? L1 : OK;
+  const [showActivity, setShowActivity] = useState(false);
 
   const pipeline = open.reduce((s, c) => s + c.loanAmount, 0);
-  const openTasks = state.tasks.filter((t) => t.status === "OPEN");
-  const attention = bucketed.overdue.length + bucketed.risk.length + bucketed.noaction.length;
-  const eibor = state.eibor[state.eibor.length - 1];
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-
-  const stageCounts = state.stages.map((s) => ({ s, n: open.filter((c) => c.stage === s.id).length })).filter((x) => x.n > 0);
-  const maxN = Math.max(1, ...stageCounts.map((x) => x.n));
-
-  const personName = (id: string) => state.persons.find((p) => p.id === id)?.name ?? "—";
-  const userName = (id: string) => state.users.find((u) => u.id === id)?.name ?? "—";
+  const revenue = open.reduce((s, c) => s + c.expectedRevenue, 0);
+  const openQueries = state.queries.filter((q) => q.status === "OPEN").length;
+  const activity = state.audit.slice(0, 8);
+  const stageCounts = state.stages.map((s) => ({ s, n: open.filter((c) => c.stage === s.id).length }));
+  const maxStage = Math.max(1, ...stageCounts.map((x) => x.n));
+  const uName = (id: string) => state.users.find((u) => u.id === id)?.name ?? id;
 
   return (
-    <div className="space-y-5">
-      {/* header strip */}
-      <div className="anim-up flex flex-wrap items-end justify-between gap-4">
+    <div className="max-w-[1180px] mx-auto">
+      {/* header */}
+      <div className="anim-up flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-display font-semibold uppercase tracking-[0.14em] text-pine-700">Control Tower · {fmtDate(todayISO())}</p>
-          <h1 className="font-display font-bold text-[26px] tracking-tight text-ink mt-1">
-            {greeting}, {me?.name.split(" ")[0]} — <span className={attention > 0 ? "text-rust-600" : "text-pine-700"}>{attention > 0 ? `${attention} case${attention > 1 ? "s" : ""} need attention` : "all clear"}</span>
-          </h1>
+          <p className="text-[10.5px] font-display font-semibold uppercase tracking-[0.16em] text-pine-700">Business control · {fmtDate(today)}</p>
+          <h1 className="font-display font-bold text-[27px] tracking-tight text-ink mt-0.5">Control Tower</h1>
+          <p className="text-[12.5px] text-ink-soft mt-1">What needs your decision first — everything else waits behind a click.</p>
         </div>
-        <div className="flex items-center gap-2">
-          {eibor && (
-            <Pill tone="steel" className="num">
-              <Ic n="pulse" size={12} /> EIBOR 3M {fmtN(eibor.m3, 3)}% · {fmtDate(eibor.date)}
-            </Pill>
-          )}
-          <Pill tone="pine" className="num"><Ic n="briefcase" size={12} /> {open.length} open cases</Pill>
+        <div className="flex flex-wrap gap-2">
+          <Btn variant="outline" onClick={() => nav.go("tat")}><Ic n="timer" size={13} /> TAT & Escalation</Btn>
+          <Btn variant="outline" onClick={() => nav.go("tracker")}><Ic n="calendar" size={13} /> Daily tracker</Btn>
+          <Btn variant="outline" onClick={() => nav.go("queries")}><Ic n="help" size={13} /> Bank queries · {openQueries}</Btn>
         </div>
       </div>
 
-      {/* stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Stat label="Open cases" value={open.length} format={(n) => fmtN(n)} sub={`${stageCounts.length} active stages`} delay={0} />
-        <Stat label="Pipeline finance" value={pipeline} format={(n) => (n ? fmtAED(n) : "—")} sub="Tracked loan amounts" delay={60} />
-        <Stat label="Tracker coverage" value={open.filter((c) => c.tracker?.some((e) => e.date === state.trackerDates[state.trackerDates.length - 1])).length}
-          format={(n) => fmtN(n)} sub={`files logged · ${fmtDate(state.trackerDates[state.trackerDates.length - 1] ?? todayISO())}`} delay={120} tone="text-pine-700" />
-        <Stat label="Open tasks" value={openTasks.length} format={(n) => fmtN(n)} sub={`${openTasks.filter((t) => (daysUntil(t.due) ?? 1) < 0).length} overdue`} delay={180} />
-        <Stat label="Open bank queries" value={state.queries.filter((q) => q.status === "OPEN").length} format={(n) => fmtN(n)} sub="Awaiting response" delay={240} tone="text-steel-700" />
-      </div>
-
-      {/* control tower buckets */}
-      <div>
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-display font-bold text-lg tracking-tight">Case control tower</h2>
-          <p className="text-xs text-ink-soft">Every open file answers: what is pending, who owns it, who are we waiting for. Click any card to open Case 360.</p>
+      {/* intervention strip — the one thing that matters */}
+      <button onClick={() => nav.go("tat")}
+        className={cx("anim-up group w-full text-left mt-4 relative overflow-hidden rounded-lg px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-2 transition-all hover:-translate-y-px hover:shadow-lg sidebar-texture focusable",
+          decisions > 0 ? "bg-ink text-paper" : "bg-pine-700 text-paper")}
+        style={{ animationDelay: "50ms" }}>
+        <span className={cx("w-2.5 h-2.5 rounded-full shrink-0", decisions > 0 ? "bg-rust-500 pulse-dot" : "bg-pine-300")} />
+        <div className="min-w-0">
+          <p className="font-display font-bold text-[21px] tracking-tight leading-tight">
+            <Count v={decisions} format={(n) => fmtN(n)} /> file{decisions === 1 ? "" : "s"} need{decisions === 1 ? "s" : ""} your decision
+          </p>
+          <p className="text-[11.5px] text-paper/60 mt-0.5">
+            {decisions > 0 ? "Level 2–3 escalations and files parked on your instruction — open the monitor" : "Tower is green — no intervention required right now"}
+          </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
-          {BUCKETS.map((b, bi) => {
-            const list = bucketed[b.id ?? ""] ?? [];
-            return (
-              <div key={b.label} className="anim-up bg-card/70 border border-mist rounded-lg overflow-hidden flex flex-col" style={{ animationDelay: `${bi * 50}ms` }}>
-                <div className={cx("h-1", b.bar)} />
-                <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-                  <div>
-                    <p className={cx("font-display font-bold text-[13px] tracking-tight", b.text)}>{b.label}</p>
-                    <p className="text-[10.5px] text-ink-soft">{b.desc}</p>
-                  </div>
-                  <span className={cx("num text-lg font-semibold", b.text)}>{list.length}</span>
-                </div>
-                <div className="px-2 pb-2 space-y-1.5 flex-1 min-h-[70px]">
-                  {list.length === 0 && <p className="text-[11px] text-ink-soft/60 px-1.5 py-2">— clear —</p>}
-                  {list.map((c) => (
-                    <button key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
-                      className={cx("w-full text-left bg-card border border-mist rounded-md px-2.5 py-2 hover:border-ink/30 hover:shadow-sm hover:-translate-y-px transition-all duration-150 focusable group")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="num text-[11px] font-semibold text-pine-700 group-hover:text-pine-800">{c.ref}</span>
-                        <span className={cx("w-1.5 h-1.5 rounded-full shrink-0", b.dot, b.id === "overdue" && "pulse-dot")} />
-                      </div>
-                      <p className="text-[12px] font-semibold truncate mt-0.5">{personName(c.personId)}</p>
-                      <p className="text-[10.5px] text-ink-soft truncate">{state.stages.find((s) => s.id === c.stage)?.name}{c.waitingFor ? ` · waiting: ${c.waitingFor}` : ""}</p>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <Avatar name={userName(c.ownerId)} size={18} />
-                        {c.nextActionDue && <span className="text-[10px] num text-ink-soft">{c.nextActionDue === todayISO() ? "due today" : (daysUntil(c.nextActionDue)! < 0 ? `${-daysUntil(c.nextActionDue)!}d late` : fmtDate(c.nextActionDue))}</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="num text-[10.5px] font-bold px-2 py-1 rounded bg-rust-500/25 text-rust-100 border border-rust-500/40">{L3.length} at L3</span>
+          <span className="num text-[10.5px] font-bold px-2 py-1 rounded bg-amber-500/25 text-amber-100 border border-amber-500/40">{L2.length} at L2</span>
+          <span className="num text-[10.5px] font-bold px-2 py-1 rounded bg-paper/10 border border-paper/25">{holds.length} on hold</span>
+          <Ic n="arrowR" size={18} className="text-paper/70 group-hover:translate-x-1 transition-transform" />
+        </div>
+      </button>
+
+      {/* escalation ladder — click a level, see only its files */}
+      <div className="anim-up grid grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4" style={{ animationDelay: "110ms" }}>
+        {LADDER.map((l) => {
+          const n = l.level === 3 ? L3.length : l.level === 2 ? L2.length : l.level === 1 ? L1.length : OK.length;
+          const active = expanded === l.id;
+          return (
+            <button key={l.id} onClick={() => setExpanded(l.id)}
+              className={cx("focusable text-left rounded-lg border px-4 py-3.5 transition-all duration-200",
+                active ? cx(l.on, "shadow-md -translate-y-px") : cx(l.off, "hover:-translate-y-px hover:shadow-sm"))}>
+              <div className="flex items-baseline justify-between gap-2">
+                <Count v={n} format={(x) => fmtN(x)} className={cx("text-[26px] font-semibold leading-none", active ? "text-inherit" : l.num)} />
+                <span className={cx("text-[9px] font-display font-bold tracking-[0.12em]", active ? "text-inherit opacity-80" : "text-ink-soft")}>{l.tag}</span>
               </div>
-            );
-          })}
-        </div>
+              <p className={cx("text-[11px] mt-1.5", active ? "text-inherit opacity-85" : "text-ink-soft")}>{l.who}</p>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* stage distribution */}
-        <div className="anim-up bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "150ms" }}>
-          <h3 className="font-display font-bold text-sm tracking-tight mb-3">Pipeline by stage</h3>
-          <div className="flex items-end gap-1.5 h-36">
-            {state.stages.map((s, i) => {
-              const n = open.filter((c) => c.stage === s.id).length;
-              return (
-                <div key={s.id} className="flex-1 flex flex-col items-center gap-1 group relative">
-                  <div className="w-full flex items-end h-28">
-                    <div className={cx("w-full rounded-t bar-grow transition-colors", n > 0 ? "bg-pine-600 group-hover:bg-pine-500" : "bg-ink/8")}
-                      style={{ height: `${(n / maxN) * 100}%`, minHeight: n > 0 ? 6 : 3, animationDelay: `${i * 40}ms` }} />
-                  </div>
-                  <span className="text-[9px] num text-ink-soft">{s.short}</span>
-                  {n > 0 && <span className="absolute -top-1 num text-[10px] font-semibold text-pine-700">{n}</span>}
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-ink-soft mt-2">14-stage mortgage workflow · HO → CL</p>
-        </div>
+      {/* expanded list for the selected level */}
+      <div key={expanded} className="anim-pop mt-2.5 bg-card border border-mist rounded-lg overflow-hidden">
+        {expandedList.length === 0 ? (
+          <p className="px-4 py-3.5 text-[12.5px] text-ink-soft italic">No files at this level.</p>
+        ) : (
+          <>
+            <div className="divide-y divide-mist/60">
+              {expandedList.slice(0, 7).map(({ c, t }) => {
+                const person = state.persons.find((p) => p.id === c.personId);
+                const st = state.stages.find((s) => s.id === c.stage);
+                return (
+                  <button key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
+                    className="focusable w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-pine-50/50 transition-colors group">
+                    <span className="num text-[11px] font-bold text-pine-700 w-16 shrink-0">{c.ref}</span>
+                    <span className="text-[13px] font-semibold truncate flex-1">{person?.name}</span>
+                    <span className="hidden sm:block text-[10px] font-display font-bold uppercase tracking-wide bg-pine-100 text-pine-800 rounded px-1.5 py-0.5 shrink-0">{st?.short}</span>
+                    <span className={cx("num text-[11px] font-semibold shrink-0", t.daysOver > 0 ? "text-rust-600" : "text-ink-soft")}>
+                      {t.daysOver > 0 ? `${t.daysOver}d over` : t.target ? `due ${fmtDate(t.target)}` : "—"}
+                    </span>
+                    <span className="hidden md:block text-[11px] text-ink-soft w-24 text-right shrink-0">{uName(c.ownerId).split(" ")[0]}</span>
+                    <Ic n="chevR" size={14} className="text-ink-soft group-hover:text-pine-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+            {expandedList.length > 7 && (
+              <button onClick={() => nav.go("tat")} className="focusable w-full px-4 py-2 text-[11.5px] font-display font-bold text-pine-700 hover:bg-pine-50 transition-colors border-t border-mist text-left">
+                {expandedList.length - 7} more in the TAT monitor →
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
-        {/* next actions */}
-        <div className="anim-up bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "220ms" }}>
-          <h3 className="font-display font-bold text-sm tracking-tight mb-3">Next action queue</h3>
-          <div className="space-y-1">
-            {open.filter((c) => c.nextAction).sort((a, b) => (a.nextActionDue ?? "9999").localeCompare(b.nextActionDue ?? "9999")).slice(0, 7).map((c) => (
-              <button key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
-                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-ink/5 transition-colors text-left focusable">
-                <div className="min-w-0">
-                  <p className="text-[12px] font-semibold truncate">{c.nextAction}</p>
-                  <p className="text-[10.5px] text-ink-soft num">{c.ref} · {personName(c.personId)} · {userName(c.ownerId).split(" ")[0]}</p>
-                </div>
-                <DueChip iso={c.nextActionDue} />
+      {/* pipeline + holds */}
+      <div className="grid lg:grid-cols-5 gap-4 mt-4">
+        {/* pipeline snapshot */}
+        <div className="anim-up lg:col-span-3 bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "170ms" }}>
+          <div className="flex items-baseline justify-between gap-2 mb-3">
+            <h2 className="font-display font-bold text-[15px] tracking-tight">Pipeline snapshot</h2>
+            <span className="text-[10.5px] text-ink-soft">click a stage → filtered Cases</span>
+          </div>
+          <div className="flex overflow-x-auto pb-1 -mx-1 px-1">
+            {stageCounts.map(({ s, n }, j) => (
+              <button key={s.id} onClick={() => nav.go("cases", { params: { stage: s.id } })}
+                title={`${s.name} — ${n} open file${n === 1 ? "" : "s"}`}
+                className="focusable relative shrink-0 h-[56px] pl-5 pr-6 text-left transition-all hover:brightness-110 hover:-translate-y-px"
+                style={{
+                  clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%)",
+                  background: n ? `rgba(15, 85, 62, ${0.4 + (n / maxStage) * 0.6})` : "#dfe3d8",
+                  marginLeft: j ? -7 : 0,
+                }}>
+                <span className={cx("block num text-[15px] font-semibold leading-none pt-2", n ? "text-paper" : "text-ink-soft")}>{n}</span>
+                <span className={cx("block text-[8.5px] font-display font-bold uppercase tracking-[0.08em] mt-0.5", n ? "text-paper/75" : "text-ink-soft/80")}>{s.short}</span>
               </button>
             ))}
           </div>
-        </div>
-
-        {/* activity */}
-        <div className="anim-up bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "290ms" }}>
-          <h3 className="font-display font-bold text-sm tracking-tight mb-3">Live activity</h3>
-          <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-            {state.audit.slice(0, 9).map((a) => (
-              <div key={a.id} className="flex gap-2.5 anim-tick">
-                <Avatar name={userName(a.by)} size={22} />
-                <div className="min-w-0">
-                  <p className="text-[12px] leading-snug"><span className="font-semibold">{userName(a.by).split(" ")[0]}</span> · {a.action} — <span className="font-medium">{a.target}</span></p>
-                  <p className="text-[10.5px] text-ink-soft num">{fmtTime(a.at)}</p>
-                </div>
+          <div className="flex flex-wrap items-center divide-x divide-mist mt-3.5 border-t border-mist pt-3.5">
+            {[
+              { l: "Financed pipeline", v: pipeline ? fmtAED(pipeline) : "—", cls: "text-ink" },
+              { l: "Expected revenue", v: revenue ? fmtAED(revenue) : "—", cls: "text-pine-700" },
+              { l: "Open files", v: fmtN(open.length), cls: "text-ink" },
+            ].map((x, i) => (
+              <div key={x.l} className={cx("pr-5", i > 0 && "pl-5")}>
+                <p className="text-[9.5px] uppercase tracking-[0.1em] font-display font-semibold text-ink-soft">{x.l}</p>
+                <p className={cx("num text-[16px] font-semibold mt-0.5", x.cls)}>{x.v}</p>
               </div>
             ))}
           </div>
         </div>
+
+        {/* on hold by your instruction */}
+        <div className="anim-up lg:col-span-2 bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "220ms" }}>
+          <div className="flex items-baseline justify-between gap-2 mb-3">
+            <h2 className="font-display font-bold text-[15px] tracking-tight">On hold by your instruction</h2>
+            <span className="num text-[10.5px] font-bold px-1.5 py-0.5 rounded bg-ink text-paper">{holds.length}</span>
+          </div>
+          {holds.length === 0 ? (
+            <p className="text-[12px] text-ink-soft italic py-3">No files parked on your instruction.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {holds.slice(0, 6).map((c) => {
+                const person = state.persons.find((p) => p.id === c.personId);
+                const holdTask = state.tasks.find((t) => t.caseId === c.id && t.status === "OPEN" && t.title.toLowerCase().startsWith("hold"));
+                return (
+                  <button key={c.id} onClick={() => nav.go("cases", { caseId: c.id })}
+                    className="focusable w-full flex items-center gap-2.5 border border-mist rounded-md px-3 py-2 text-left hover:border-ink/40 hover:shadow-sm transition-all group">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ink shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-semibold truncate">{person?.name} <span className="num text-ink-soft font-normal">· {c.ref}</span></span>
+                      <span className="block text-[10.5px] text-ink-soft truncate">{holdTask?.title.replace(/^HOLD — /, "") ?? c.pendingReason ?? "No follow-up until released"}</span>
+                    </span>
+                    <Ic n="chevR" size={13} className="text-ink-soft group-hover:text-pine-700 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10.5px] text-ink-soft mt-3">Release a hold from the file's Control Panel or TAT tab.</p>
+        </div>
       </div>
 
-      {/* daily worklist — Batch 7 ch 117, computed live */}
-      <div className="anim-up bg-card border border-mist rounded-lg p-4" style={{ animationDelay: "340ms" }}>
-        <div className="flex items-baseline justify-between mb-3">
-          <h3 className="font-display font-bold text-sm tracking-tight">Daily worklist</h3>
-          <p className="text-[11px] text-ink-soft">Batch 7 · priority-ordered; counts are live. Click an activity to open its board.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-          {[
-            { l: "Bank queries requiring response", n: state.queries.filter((q) => q.status === "OPEN").length, to: "queries" as const },
-            { l: "Pre-Approval follow-ups", n: open.filter((c) => c.stage === "PREAPP").length, to: "cases" as const },
-            { l: "FOL follow-ups", n: open.filter((c) => c.stage === "FOL").length, to: "cases" as const },
-            { l: "Valuation scheduling / report", n: open.filter((c) => c.stage === "VALUATION").length, to: "cases" as const },
-            { l: "Pending client documents", n: state.cases.filter((c) => c.status === "OPEN" && c.docs?.some((d) => d.status === "MISSING" || d.status === "REJECTED")).length, to: "documents" as const },
-            { l: "Pending bank confirmations", n: open.filter((c) => c.waitingFor === "Bank").length, to: "cases" as const },
-            { l: "Transfer booking / cheque checks", n: open.filter((c) => c.stage === "TRANSFER" || c.stage === "BOOKING").length, to: "cases" as const },
-            { l: "Title deed / closure QC", n: open.filter((c) => c.stage === "TITLEQC" || c.stage === "CLOSURE").length, to: "cases" as const },
-          ].map((w, i) => (
-            <button key={w.l} onClick={() => nav.go(w.to)}
-              className="focusable flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border border-mist bg-paper/40 hover:border-pine-500 hover:bg-pine-50/60 hover:-translate-y-px transition-all duration-150 text-left group">
-              <span className="flex items-center gap-2 min-w-0">
-                <span className="num text-[10px] font-bold text-ink-soft/70 shrink-0">{i + 1}</span>
-                <span className="text-[12px] font-medium truncate group-hover:text-pine-800">{w.l}</span>
-              </span>
-              <span className={cx("num text-[12px] font-semibold shrink-0 px-1.5 py-0.5 rounded", w.n > 0 ? "bg-pine-100 text-pine-800" : "bg-ink/6 text-ink-soft")}>{w.n}</span>
+      {/* today's movement — collapsed by default */}
+      <div className="anim-up mt-4 bg-card border border-mist rounded-lg overflow-hidden" style={{ animationDelay: "270ms" }}>
+        <button onClick={() => setShowActivity(!showActivity)}
+          className="focusable w-full flex items-center justify-between px-4 py-3 hover:bg-paper/60 transition-colors">
+          <span className="font-display font-bold text-[13.5px] tracking-tight">Today's movement <span className="num text-ink-soft font-normal text-[11.5px]">· {state.audit.length} logged events</span></span>
+          <Ic n="chevD" size={15} className={cx("text-ink-soft transition-transform duration-200", showActivity && "rotate-180")} />
+        </button>
+        {showActivity && (
+          <div className="border-t border-mist divide-y divide-mist/60 anim-pop">
+            {activity.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 px-4 py-2 text-[12px]">
+                <span className="num text-[10.5px] text-ink-soft w-14 shrink-0">{fmtTime(a.at)}</span>
+                <span className="text-[9px] font-display font-bold uppercase tracking-[0.09em] bg-ink/8 text-ink-soft rounded px-1.5 py-0.5 shrink-0">{a.module}</span>
+                <span className="truncate flex-1"><strong className="font-semibold">{a.action}</strong> · {a.target}{a.detail ? <span className="text-ink-soft"> — {a.detail}</span> : null}</span>
+                <span className="hidden sm:block text-[10.5px] text-ink-soft shrink-0">{uName(a.by).split(" ")[0]}</span>
+              </div>
+            ))}
+            <button onClick={() => nav.go("audit")} className="focusable w-full px-4 py-2 text-[11.5px] font-display font-bold text-pine-700 hover:bg-pine-50 transition-colors text-left">
+              Full audit trail →
             </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

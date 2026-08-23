@@ -188,6 +188,7 @@ function Shell() {
           <div className="flex items-center gap-2 text-[10px] text-pine-300/80">
             <Ic n="lock" size={11} /> <span>Permission matrix TO VERIFY</span>
           </div>
+          <p className="mt-1.5 num text-[9px] tracking-wide text-pine-300/50">MOS build 2.4 · chevron pipeline · overview drawer</p>
           <button onClick={() => { if (resetArm) { dispatch({ t: "RESET" }); setResetArm(false); } else { setResetArm(true); setTimeout(() => setResetArm(false), 2500); } }}
             className={cx("mt-2 w-full flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] font-display font-semibold transition-all focusable",
               resetArm ? "border-rust-500 bg-rust-500 text-white" : "border-paper/15 text-pine-200 hover:bg-paper/6")}>

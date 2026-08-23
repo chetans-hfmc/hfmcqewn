@@ -30,8 +30,10 @@ export default function TrackerView() {
   const [edit, setEdit] = useState<{ caze: Case; date: string } | null>(null);
   const [note, setNote] = useState("");
   const [confirmDay, setConfirmDay] = useState<string | null>(null);
+  const [span, setSpan] = useState(3);
 
   const dates = state.trackerDates;
+  const shown = span <= 0 ? dates : dates.slice(-span);
   const today = todayISO();
 
   const rows = useMemo(() => {
@@ -82,6 +84,8 @@ export default function TrackerView() {
         >
           Open files only
         </button>
+        <Select value={String(span)} onChange={(v) => setSpan(Number(v))} className="w-[140px]"
+          options={[{ v: "3", l: "Last 3 days" }, { v: "6", l: "Last 6 days" }, { v: "0", l: "All days" }]} />
         <div className="ml-auto flex items-center gap-2">
           <Btn variant="outline" onClick={() => {
             const head = ["Ref", "Client", "Deal", "Stage", "Bank", "Bank RM", "Channel", "Owner", "Status", "Latest position", ...dates.map((dt) => fmtDate(dt))];
@@ -119,12 +123,12 @@ export default function TrackerView() {
       {/* grid */}
       <div className="bg-card border border-mist rounded-lg overflow-hidden anim-up">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[12.5px]" style={{ minWidth: 440 + dates.length * 250 }}>
+          <table className="w-full border-collapse text-[12.5px]" style={{ minWidth: 440 + shown.length * 250 }}>
             <thead>
               <tr className="text-left text-[10.5px] uppercase tracking-[0.09em] font-display text-ink-soft border-b border-mist bg-paper/70">
                 <th className="px-3.5 py-2.5 font-semibold w-[300px] sticky left-0 bg-[#f2f4ec] z-10 border-r border-mist">File</th>
                 <th className="px-3 py-2.5 font-semibold w-[140px]">Latest position</th>
-                {dates.map((dt) => (
+                {shown.map((dt) => (
                   <th key={dt} className={cx("px-3 py-2.5 font-semibold whitespace-nowrap", dt === today && "text-pine-700")}>
                     {fmtDate(dt)}
                     {dt === today && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-pine-600 align-middle" />}
@@ -162,7 +166,7 @@ export default function TrackerView() {
                         ? <p className="text-[11.5px] leading-snug text-ink line-clamp-3" title={latest}>{latest}</p>
                         : <span className="text-[11px] text-ink-soft/60 italic">No log yet</span>}
                     </td>
-                    {dates.map((dt) => {
+                    {shown.map((dt) => {
                       const val = cellOf(c, dt);
                       return (
                         <td key={dt} className={cx("px-1.5 py-1.5 align-top", dt === today && "bg-pine-50/50")}>
@@ -183,7 +187,7 @@ export default function TrackerView() {
                 );
               })}
               {!rows.length && (
-                <tr><td colSpan={dates.length + 2} className="px-4 py-12 text-center text-ink-soft text-[13px]">
+                <tr><td colSpan={shown.length + 2} className="px-4 py-12 text-center text-ink-soft text-[13px]">
                   No files match the current filters.
                 </td></tr>
               )}

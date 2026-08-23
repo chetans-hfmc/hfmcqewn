@@ -188,7 +188,6 @@ function Shell() {
           <div className="flex items-center gap-2 text-[10px] text-pine-300/80">
             <Ic n="lock" size={11} /> <span>Permission matrix TO VERIFY</span>
           </div>
-          <p className="mt-1.5 num text-[9px] tracking-wide text-pine-300/50">MOS build 2.4 · chevron pipeline · overview drawer</p>
           <button onClick={() => { if (resetArm) { dispatch({ t: "RESET" }); setResetArm(false); } else { setResetArm(true); setTimeout(() => setResetArm(false), 2500); } }}
             className={cx("mt-2 w-full flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] font-display font-semibold transition-all focusable",
               resetArm ? "border-rust-500 bg-rust-500 text-white" : "border-paper/15 text-pine-200 hover:bg-paper/6")}>
@@ -293,23 +292,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
 }
 
-/* Fixed marker — proves which build the frame is actually running. */
-function BuildChip() {
-  return (
-    <div className="fixed bottom-3 right-3 z-[70] flex items-center gap-2 bg-ink text-paper/90 rounded-full pl-3 pr-3.5 py-1.5 shadow-xl border border-paper/10 pointer-events-none select-none">
-      <span className="w-1.5 h-1.5 rounded-full bg-pine-400 pulse-dot" />
-      <span className="num text-[10px] tracking-[0.06em]">MOS 2.4 · pipeline · pagination · overview</span>
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <ErrorBoundary>
       <StoreProvider>
         <NavProvider>
           <Gate />
-          <BuildChip />
         </NavProvider>
       </StoreProvider>
     </ErrorBoundary>

@@ -129,7 +129,7 @@ export function CasesView() {
   const scoped = !!me && ["VRM", "SPO"].includes(me.role);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"ALL" | "OPEN" | "CLOSED">("OPEN");
-  const [stageF, setStageF] = useState("ALL");
+  const [stageF, setStageF] = useState(() => (typeof nav.params.stage === "string" && nav.params.stage ? (nav.params.stage as string) : "ALL"));
   const [ownerF, setOwnerF] = useState(scoped && me ? me.id : "ALL");
   const [sort, setSort] = useState("urgency");
   const [page, setPage] = useState(1);

@@ -19,20 +19,37 @@ export function TasksView() {
   const nav = useNav();
   const me = useMe();
   const n = useNames();
-  const [status, setStatus] = useState<"OPEN" | "DONE" | "ALL">("OPEN");
+  const [tab, setTab] = useState<"TODAY" | "OVERDUE" | "OPEN" | "DONE">("TODAY");
   const [owner, setOwner] = useState("ALL");
   const [add, setAdd] = useState(false);
 
+  const today = todayISO();
+  const inTab = (t: Task, v: "TODAY" | "OVERDUE" | "OPEN" | "DONE") =>
+    v === "TODAY" ? t.status === "OPEN" && (!t.due || t.due <= today) :
+    v === "OVERDUE" ? t.status === "OPEN" && !!t.due && t.due < today :
+    v === "OPEN" ? t.status === "OPEN" : t.status === "DONE";
+
   const list = state.tasks
-    .filter((t) => (status === "ALL" || t.status === status) && (owner === "ALL" || t.ownerId === owner))
+    .filter((t) => (owner === "ALL" || t.ownerId === owner) && inTab(t, tab))
     .sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
-  const overdue = state.tasks.filter((t) => t.status === "OPEN" && t.due && t.due < todayISO()).length;
+  const overdue = state.tasks.filter((t) => t.status === "OPEN" && t.due && t.due < today).length;
 
   return (
     <div>
       <SectionHead title="Task engine" sub={`${state.tasks.filter((t) => t.status === "OPEN").length} open · ${overdue} overdue — every action in the operation is a task with an owner and a due date.`}
-        right={<div className="flex gap-2">
-          <Segmented value={status} onChange={setStatus} options={[{ v: "OPEN", l: "Open" }, { v: "DONE", l: "Done" }, { v: "ALL", l: "All" }]} />
+        right={<div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {([["TODAY", "Today"], ["OVERDUE", "Overdue"], ["OPEN", "All open"], ["DONE", "Done"]] as const).map(([v, l]) => {
+              const cnt = state.tasks.filter((t) => (owner === "ALL" || t.ownerId === owner) && inTab(t, v)).length;
+              return (
+                <button key={v} onClick={() => setTab(v)}
+                  className={cx("px-3 py-1.5 rounded-full text-[12px] font-display font-semibold border transition-all focusable",
+                    tab === v ? (v === "OVERDUE" ? "bg-rust-600 text-white border-rust-600 shadow-sm" : "bg-ink text-paper border-ink shadow-sm") : "bg-card border-mist text-ink-soft hover:border-ink/40")}>
+                  {l}<span className="num text-[10px] opacity-70 ml-1">{cnt}</span>
+                </button>
+              );
+            })}
+          </div>
           <Select className="w-40" value={owner} onChange={setOwner} options={[{ v: "ALL", l: "All owners" }, ...state.users.map((u) => ({ v: u.id, l: u.name }))]} />
           <Btn onClick={() => setAdd(true)}><Ic n="plus" size={14} /> Task</Btn>
         </div>} />
@@ -93,7 +110,7 @@ export function DocumentsView() {
   const { state, dispatch } = useStore();
   const nav = useNav();
   const n = useNames();
-  const [status, setStatus] = useState<"ALL" | DocStatus>("ALL");
+  const [status, setStatus] = useState<"ALL" | DocStatus>("RECEIVED");
   const [q, setQ] = useState("");
 
   const rows = useMemo(() =>
@@ -148,7 +165,7 @@ export function QueriesView() {
   const nav = useNav();
   const me = useMe();
   const n = useNames();
-  const [status, setStatus] = useState<"ALL" | "OPEN" | "RESPONDED" | "CLOSED">("ALL");
+  const [status, setStatus] = useState<"ALL" | "OPEN" | "RESPONDED" | "CLOSED">("OPEN");
   const [add, setAdd] = useState(false);
 
   const list = state.queries.filter((qq) => status === "ALL" || qq.status === status)

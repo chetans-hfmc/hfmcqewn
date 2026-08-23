@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Case, DocStatus, Person, Task } from "../types";
+import type { BankQuery, Case, DocStatus, Person, Task } from "../types";
 import { useMe, useNav, useStore } from "../store";
 import { ESC_LEVELS, caseBucket, emi, escalationEmail, fmtDur, stageGates, tatFor } from "../calc";
 import { Avatar, Btn, DateInput, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextArea, TextInput, cx, daysUntil, fmtAED, fmtDate, fmtN, fmtPct, fmtTime, nowISO, todayISO, uid } from "../ui";
@@ -333,6 +333,124 @@ export function CasesView() {
   );
 }
 
+/* ---------- layered revelation: accordion + overview tab ---------- */
+function Acc({ title, badge, open, onToggle, children, delay = 0 }: {
+  title: string; badge?: React.ReactNode; open: boolean; onToggle: () => void; children: React.ReactNode; delay?: number;
+}) {
+  return (
+    <div className="border border-mist rounded-lg overflow-hidden anim-up bg-card" style={{ animationDelay: `${delay}ms` }}>
+      <button onClick={onToggle} className="focusable w-full flex items-center gap-2.5 px-4 py-3 hover:bg-paper/60 transition-colors text-left">
+        <Ic n="chevR" size={13} className={cx("text-ink-soft transition-transform duration-200 shrink-0", open && "rotate-90 text-pine-700")} />
+        <span className="font-display font-bold text-[13px] tracking-tight flex-1">{title}</span>
+        {badge}
+      </button>
+      {open && <div className="px-4 py-3.5 border-t border-mist anim-tick">{children}</div>}
+    </div>
+  );
+}
+
+function OverviewTab({ c, person, stages, idx, def, gates, tasks, queries, setTab }: {
+  c: Case; person: Person; stages: { id: string; name: string; short: string; sla: number }[]; idx: number;
+  def: { name: string; sla: number; tatNote?: string };
+  gates: { pass: boolean; checks: { label: string; detail: string; pass: boolean }[] };
+  tasks: Task[]; queries: BankQuery[]; setTab: (t: string) => void;
+}) {
+  const { state } = useStore();
+  const [open, setOpen] = useState<string>("where");
+  const tog = (k: string) => setOpen((o) => (o === k ? "" : k));
+  const t = tatFor(c, c.stage, stages as never, todayISO());
+  const lv = ESC_LEVELS[t.level];
+  const openTasks = tasks.filter((x) => x.status === "OPEN");
+  const openQ = queries.filter((x) => x.status === "OPEN");
+  const last = c.tracker?.length ? c.tracker[c.tracker.length - 1] : undefined;
+  const chain = c.handoffs ?? [];
+  const uName = (id: string) => state.users.find((u) => u.id === id)?.name ?? id;
+  const gatesGreen = gates.checks.filter((g) => g.pass).length;
+  const monthly = c.loanAmount ? emi(c.loanAmount, c.rate, c.tenureMonths) : 0;
+
+  return (
+    <div className="space-y-2.5">
+      <Acc title="Where we are" open={open === "where"} onToggle={() => tog("where")}
+        badge={<span className={cx("inline-flex items-center gap-1.5 rounded px-2 py-[3px] text-[9.5px] font-display font-bold tracking-[0.08em]", lv.chip)}><span className={cx("w-1.5 h-1.5 rounded-full", lv.dot)} />{lv.tag}</span>}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="font-display font-bold text-[19px] tracking-tight">{def.name}</p>
+          <p className="num text-[11px] text-ink-soft">stage {idx + 1} of {stages.length} · SLA {def.sla}d{t.target ? ` · target ${fmtDate(t.target)}` : ""}{t.daysOver > 0 ? ` · ${t.daysOver}d over` : ""}</p>
+        </div>
+        <div className="flex gap-[3px] mt-2.5">{stages.map((s, j) => <span key={s.id} title={s.name} className={cx("h-[5px] flex-1 rounded-full transition-colors", j < idx ? "bg-pine-500" : j === idx ? "bg-ink" : "bg-ink/12")} />)}</div>
+        {def.tatNote && <p className="mt-3 text-[11.5px] leading-snug border-l-2 border-amber-500 bg-amber-100/50 rounded-r px-3 py-2 text-amber-700 font-medium">{def.tatNote}</p>}
+        {last && (
+          <div className="mt-3 border-l-2 border-pine-500 bg-paper/70 rounded-r px-3 py-2">
+            <p className="num text-[10px] text-ink-soft font-semibold uppercase tracking-[0.08em]">Latest position · {fmtDate(last.date)}</p>
+            <p className="text-[12.5px] leading-snug mt-1">{last.note}</p>
+          </div>
+        )}
+      </Acc>
+
+      <Acc title="What's next" open={open === "next"} onToggle={() => tog("next")} delay={50}
+        badge={c.nextActionDue ? <DueChip iso={c.nextActionDue} /> : <span className="text-[10.5px] font-semibold text-rust-600">no due date</span>}>
+        <p className="text-[13px] font-semibold">{c.nextAction ?? <span className="text-rust-600">No next action set — this file will stall. Set one from the control panel.</span>}</p>
+        {openTasks.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {openTasks.slice(0, 3).map((tk) => (
+              <div key={tk.id} className="flex items-center justify-between gap-3 border border-mist rounded-md px-3 py-2 text-[12px] bg-paper/40">
+                <span className="truncate">{tk.title}</span>
+                <DueChip iso={tk.due} />
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={() => setTab("tasks")} className="focusable mt-3 text-[11.5px] font-display font-bold text-pine-700 hover:underline inline-flex items-center gap-1">All {openTasks.length} open tasks <Ic n="chevR" size={11} /></button>
+      </Acc>
+
+      <Acc title="Holding us up" open={open === "hold"} onToggle={() => tog("hold")} delay={100}
+        badge={c.waitingFor || c.blocker || openQ.length ? <Pill tone={c.blocker ? "rust" : "amber"}>{c.blocker ? "blocked" : c.waitingFor ? `waiting · ${c.waitingFor}` : `${openQ.length} query`}</Pill> : <Pill tone="pine">clear</Pill>}>
+        {c.waitingFor || c.pendingReason || c.blocker || openQ.length ? (
+          <div className="space-y-1.5 text-[12.5px]">
+            {c.waitingFor && <p><span className="text-ink-soft">Waiting for:</span> <strong>{c.waitingFor}</strong></p>}
+            {c.pendingReason && <p><span className="text-ink-soft">Why pending:</span> {c.pendingReason}</p>}
+            {c.blocker && <p className="text-rust-600 font-semibold"><span className="text-ink-soft font-normal">Blocker:</span> {c.blocker}</p>}
+            {openQ.length > 0 && (
+              <p><span className="text-ink-soft">Bank queries:</span> <button onClick={() => setTab("queries")} className="focusable font-bold text-steel-600 hover:underline">{openQ.length} open — view</button></p>
+            )}
+          </div>
+        ) : (
+          <p className="text-[12.5px] text-ink-soft">Nothing is blocking this file.</p>
+        )}
+        <div className={cx("mt-3 flex items-center gap-2 rounded-md px-3 py-2 text-[11.5px] font-semibold", gates.pass ? "bg-pine-50 text-pine-800 border border-pine-200" : "bg-paper/60 border border-mist text-ink-soft")}>
+          <Ic n={gates.pass ? "check" : "layers"} size={13} />
+          Stage gates: {gatesGreen}/{gates.checks.length} green{gates.pass ? " — ready to advance" : " — clear docs, tasks & queries to advance"}
+        </div>
+      </Acc>
+
+      <Acc title="Money" open={open === "money"} onToggle={() => tog("money")} delay={150}
+        badge={<span className="num text-[11px] font-semibold text-pine-700">{c.loanAmount ? fmtAED(c.loanAmount) : "—"}</span>}>
+        <p className="num text-[12.5px]">
+          {c.loanAmount ? <>loan <strong>{fmtAED(c.loanAmount)}</strong>{c.propertyValue ? <> · LTV <strong>{fmtPct((c.loanAmount / c.propertyValue) * 100, 1)}</strong></> : null} · EMI <strong>{fmtAED(monthly)}</strong>/mo · revenue <strong className="text-pine-700">{fmtAED(c.expectedRevenue)}</strong></> : "No finance recorded on the tracker for this file."}
+        </p>
+        <button onClick={() => setTab("money")} className="focusable mt-2.5 text-[11.5px] font-display font-bold text-pine-700 hover:underline inline-flex items-center gap-1">Full money tab <Ic n="chevR" size={11} /></button>
+      </Acc>
+
+      {chain.length > 0 && (
+        <Acc title="Custody chain" open={open === "chain"} onToggle={() => tog("chain")} delay={200}
+          badge={<span className="num text-[10px] px-1.5 py-0.5 rounded-full bg-ink/8 text-ink-soft">{chain.length}</span>}>
+          <div className="space-y-1.5">
+            {[...chain].reverse().map((h, i) => (
+              <div key={i} className="flex items-center gap-2 text-[12px]">
+                <Avatar name={uName(h.fromId)} size={18} />
+                <span className="font-semibold">{uName(h.fromId)}</span>
+                <Ic n="arrowR" size={11} className="text-pine-600" />
+                <span className="font-semibold">{uName(h.toId)}</span>
+                <span className="text-[10.5px] text-ink-soft num">· {h.kind} · {fmtDate(h.at.slice(0, 10))}</span>
+              </div>
+            ))}
+            <p className="text-[10.5px] text-ink-soft pt-1">Single active owner — the file lives with one person at a time. {person.name} is the client constant across every handoff.</p>
+          </div>
+        </Acc>
+      )}
+    </div>
+  );
+}
+
 /* ================= CASE 360 ================= */
 
 const CLOSURE_AUDIT = [
@@ -356,16 +474,19 @@ export function Case360({ id }: { id: string }) {
   const nav = useNav();
   const me = useMe();
   const c = state.cases.find((x) => x.id === id);
-  const [tab, setTab] = useState(() => (typeof nav.params.tab === "string" ? nav.params.tab : "docs"));
+  const [tab, setTab] = useState(() => {
+    const p = typeof nav.params.tab === "string" ? nav.params.tab : "";
+    if (p === "calcs") return "money";
+    return p || "overview";
+  });
   const [gateOpen, setGateOpen] = useState(false);
   const [editPanel, setEditPanel] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
   const [queryModal, setQueryModal] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditChecked, setAuditChecked] = useState<boolean[]>([]);
-  const [showMore, setShowMore] = useState(false);
-  const [railOpen, setRailOpen] = useState(false);
-  const [finOpen, setFinOpen] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [handoff, setHandoff] = useState<Case | null>(null);
 
   const person = state.persons.find((p) => p.id === c?.personId);
   const stages = state.stages;
@@ -388,158 +509,128 @@ export function Case360({ id }: { id: string }) {
 
   const docDone = c.docs.filter((d) => d.status === "VERIFIED" || d.status === "NA").length;
 
-  const tiles: { k: string; v: React.ReactNode; sub?: React.ReactNode; tone?: string }[] = [
-    { k: "Current stage", v: <span className="font-display font-bold text-[15px]">{def.name}</span>, sub: <span className="num text-[11px]">stage {idx + 1} of {stages.length} · SLA {def.sla}d</span> },
-    { k: "Owner", v: <span className="flex items-center gap-2"><Avatar name={userName(c.ownerId)} size={22} /><span className="font-semibold text-[14px]">{userName(c.ownerId)}</span></span>, sub: state.users.find((u) => u.id === c.ownerId)?.team },
-    { k: "Next action", v: <span className="font-semibold text-[13px]">{c.nextAction ?? <span className="text-rust-600">not set</span>}</span>, sub: c.nextActionDue ? <DueChip iso={c.nextActionDue} /> : <span className="text-[11px] text-rust-600 font-semibold">no due date</span> },
-    { k: "Waiting for", v: <span className={cx("font-semibold text-[14px]", c.waitingFor ? "text-amber-700" : "text-ink-soft/60")}>{c.waitingFor ?? "—"}</span>, sub: c.pendingReason ? `reason: ${c.pendingReason}` : undefined },
-    { k: "Blocker", v: <span className={cx("font-semibold text-[13px]", c.blocker ? "text-rust-600" : "text-ink-soft/60")}>{c.blocker ?? "none"}</span> },
-    { k: "Ageing", v: <span className={cx("num text-[17px] font-semibold", ageDays > 45 ? "text-amber-700" : "")}>{ageDays}d</span>, sub: `opened ${fmtDate(c.createdAt)}` },
-    { k: "Expected completion", v: <span className="num text-[14px] font-semibold">{c.expectedCompletion ? fmtDate(c.expectedCompletion) : "—"}</span> },
-    { k: "Expected revenue", v: <span className="num text-[17px] font-semibold text-pine-700">{fmtAED(c.expectedRevenue)}</span>, sub: "fees on this file" },
-  ];
+  const tat = tatFor(c, c.stage, stages, todayISO());
 
   return (
-    <div className="space-y-4">
-      {/* header */}
-      <div className="anim-up">
-        <button onClick={() => nav.go("cases")} className="inline-flex items-center gap-1 text-[12px] font-display font-semibold text-ink-soft hover:text-ink mb-2 focusable"><Ic n="chevL" size={14} /> All cases</button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="font-display font-bold text-[26px] tracking-tight num">{c.ref}</h1>
-              <Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill>
-              <Pill tone="ink">{c.txType.replace("_", " + ")}</Pill>
-            </div>
-            <p className="text-[13px] text-ink-soft mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <Avatar name={person.name} size={20} /> <span className="font-semibold text-ink">{person.name}</span>
-              {c.deal && <Pill tone="amber">{c.deal}</Pill>}
-              <span>· {state.banks.find((b) => b.id === c.bankId)?.name}</span>
-              <span>· Bank RM: <strong className="text-ink">{c.bankRm ?? "—"}</strong></span>
-              {c.channel && <span>· {c.channel}</span>}
-              {c.outcome && <Pill tone={c.outcome === "WON" ? "green" : "gray"}>{c.outcome === "WON" ? "Won" : "Closed / lost"}</Pill>}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {c.status === "OPEN" && <>
-              <Btn variant="outline" onClick={() => setEditPanel(true)}><Ic n="pen" size={14} /> Control panel</Btn>
-              {isLast
-                ? <Btn variant="dark" onClick={() => setGateOpen(true)}><Ic n="check" size={14} /> Close file</Btn>
-                : <Btn disabled={!gates.pass} title={gates.pass ? "All gates passed" : "Stage gates not passed — review checklist"} onClick={() => setGateOpen(true)}><Ic n="arrowR" size={14} /> Advance stage</Btn>}
-            </>}
-          </div>
+    <div>
+      {/* compact identity header */}
+      <div className="anim-up flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+        <button onClick={() => nav.back()} title="Back one layer (Alt+←)"
+          className="focusable flex items-center gap-1 text-[12px] font-display font-semibold text-ink-soft border border-mist bg-card rounded-md px-2.5 py-1.5 hover:border-pine-500 hover:text-ink hover:-translate-x-px transition-all">
+          <Ic n="chevL" size={13} /> Back
+        </button>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <h1 className="font-display font-bold text-[22px] tracking-tight num leading-none">{c.ref}</h1>
+          <Pill tone={c.status === "CLOSED" ? "gr" : "pine"} dot>{c.status}</Pill>
+          <Pill tone="ink">{c.txType.replace("_", " + ")}</Pill>
+          {c.outcome && <Pill tone={c.outcome === "WON" ? "green" : "gray"}>{c.outcome === "WON" ? "Won" : "Closed / lost"}</Pill>}
+        </div>
+        <span className="text-[12.5px] text-ink-soft flex items-center gap-1.5 min-w-0">
+          <Avatar name={person.name} size={18} /><span className="font-semibold text-ink truncate">{person.name}</span>
+          {c.deal && <span className="text-amber-700 font-medium truncate">· {c.deal}</span>}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {c.status === "OPEN" && <>
+            <Btn variant="outline" size="sm" onClick={() => setTaskModal(true)}><Ic n="plus" size={13} /> Task</Btn>
+            <Btn variant="outline" size="sm" onClick={() => setQueryModal(true)}><Ic n="plus" size={13} /> Query</Btn>
+          </>}
+          <button onClick={() => setFocus(!focus)} title={focus ? "Exit focus mode" : "Focus mode — widen the workspace"}
+            className={cx("focusable w-8 h-8 rounded-md border flex items-center justify-center transition-all", focus ? "border-pine-600 bg-pine-50 text-pine-700" : "border-mist bg-card text-ink-soft hover:border-pine-500 hover:text-pine-700")}>
+            <Ic n="layers" size={14} />
+          </button>
         </div>
       </div>
 
-      {/* finance strip — collapsible */}
-      <div className="anim-up bg-ink text-paper rounded-lg overflow-hidden" style={{ animationDelay: "60ms" }}>
-        <button onClick={() => setFinOpen(!finOpen)} className="focusable w-full flex items-center gap-3 px-4 py-3 hover:bg-paper/5 transition-colors text-left">
-          <Ic n="calc" size={16} className="text-pine-300" />
-          <span className="font-display font-bold text-[13px] tracking-tight">Finance</span>
-          <span className="num text-[12px] text-paper/70">
-            {c.loanAmount ? <>loan {fmtAED(c.loanAmount)}{c.propertyValue ? <> · LTV {fmtPct(ltv, 0)}</> : null}</> : "no finance on tracker"}
-            {c.loanAmount ? <> · EMI {fmtAED(monthly)}/mo</> : null}
-          </span>
-          <Ic n="chevD" size={14} className={cx("ml-auto text-paper/60 transition-transform", finOpen && "rotate-180")} />
-        </button>
-        {finOpen && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 border-t border-paper/10">
-            {[
-              { k: "Property value", v: c.propertyValue ? fmtAED(c.propertyValue) : "—" },
-              { k: "Loan amount", v: c.loanAmount ? fmtAED(c.loanAmount) : "—" },
-              { k: "Applied LTV", v: c.loanAmount && c.propertyValue ? fmtPct(ltv, 1) : "—" },
-              { k: "Rate", v: `${fmtN(c.rate, 2)}%` },
-              { k: "Tenure", v: `${c.tenureMonths} mo` },
-              { k: "Monthly EMI", v: c.loanAmount ? fmtAED(monthly) : "—" },
-            ].map((x, i) => (
-              <div key={x.k} className={cx("px-4 py-3", i > 0 && "border-l border-paper/10")}>
-                <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-paper/60">{x.k}</p>
-                <p className="num text-[16px] font-semibold mt-0.5">{x.v}</p>
+      <div className={focus ? "" : "lg:grid lg:grid-cols-[238px_1fr] lg:gap-4 lg:items-start"}>
+        {/* spine — identity, progress, vitals, primary actions */}
+        {!focus && (
+          <aside className="anim-up lg:sticky lg:top-[86px] space-y-3 mb-4 lg:mb-0">
+            <div className="bg-ink text-paper rounded-lg overflow-hidden sidebar-texture">
+              <div className="px-4 pt-4 pb-3.5">
+                <div className="flex items-center gap-2">
+                  <span className={cx("w-2 h-2 rounded-full shrink-0", c.status === "OPEN" ? "bg-pine-400 pulse-dot" : "bg-gr-500")} />
+                  <p className="font-display font-bold text-[15px] tracking-tight leading-tight">{def.name}</p>
+                </div>
+                <p className="num text-[10.5px] text-paper/60 mt-1.5">
+                  stage {idx + 1} of {stages.length} · {state.banks.find((b) => b.id === c.bankId)?.short}{c.channel ? ` · ${c.channel}` : ""}{c.bankRm ? ` · RM ${c.bankRm}` : ""}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* control panel — progressive disclosure */}
-      <div className="anim-up" style={{ animationDelay: "120ms" }}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {(showMore ? tiles : tiles.slice(0, 4)).map((t, i) => (
-            <div key={i} className="bg-card border border-mist rounded-lg px-3.5 py-3 hover:shadow-sm transition-shadow">
-              <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-ink-soft mb-1">{t.k}</p>
-              <div className={t.tone}>{t.v}</div>
-              {t.sub && <div className="text-[11px] text-ink-soft mt-0.5">{t.sub}</div>}
+              <div className="px-4 pb-4">
+                <div className="relative ml-[5px] pl-3.5 border-l border-paper/15 space-y-[6px] py-0.5">
+                  {stages.map((s, j) => (
+                    <div key={s.id} className="flex items-center relative">
+                      <span className={cx("absolute -left-[19px] w-[9px] h-[9px] rounded-full border-2 transition-all",
+                        j < idx ? "bg-pine-400 border-pine-400" : j === idx ? "bg-paper border-paper shadow-[0_0_0_3px_rgba(238,240,233,0.18)]" : "bg-transparent border-paper/25")} />
+                      <span className={cx("text-[10.5px] font-display font-bold tracking-tight leading-none py-[3px]",
+                        j === idx ? "text-paper" : j < idx ? "text-pine-300/90" : "text-paper/35")}>
+                        {s.short}{j === idx && <span className="ml-1.5 text-[8px] uppercase tracking-[0.14em] text-paper/50">now</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-        <button onClick={() => setShowMore(!showMore)}
-          className="focusable mt-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-display font-semibold text-pine-700 hover:underline">
-          <Ic n={showMore ? "chevD" : "chevR"} size={12} className={cx("transition-transform", showMore && "rotate-90")} />
-          {showMore ? "Show fewer details" : `Show ${tiles.length - 4} more details (blocker, ageing, completion, revenue)`}
-        </button>
-      </div>
 
-      {/* stage rail — collapsible */}
-      <div className="anim-up bg-card border border-mist rounded-lg overflow-hidden" style={{ animationDelay: "160ms" }}>
-        <button onClick={() => setRailOpen(!railOpen)} className="focusable w-full flex items-center gap-3 px-4 py-3 hover:bg-paper/50 transition-colors text-left">
-          <span className="w-8 h-8 rounded-md bg-pine-700 text-paper flex items-center justify-center font-display font-bold text-[11px] shrink-0">{def.short}</span>
-          <div className="min-w-0 flex-1">
-            <p className="font-display font-bold text-[13px] tracking-tight truncate">{def.name} <span className="num text-[11px] text-ink-soft font-body font-normal">· stage {idx + 1} of {stages.length}</span></p>
-            <div className="flex gap-[3px] mt-1.5">
-              {stages.map((s, j) => <span key={s.id} title={s.name} className={cx("h-[4px] flex-1 rounded-full", j < idx ? "bg-pine-500" : j === idx ? "bg-ink" : "bg-ink/12")} />)}
-            </div>
-          </div>
-          <Ic n="chevD" size={14} className={cx("text-ink-soft transition-transform shrink-0", railOpen && "rotate-180")} />
-        </button>
-        {railOpen && (
-          <div className="p-4 pt-2 border-t border-mist overflow-x-auto">
-            <div className="flex items-center gap-1 min-w-max">
-              {stages.map((s, j) => (
-                <div key={s.id} className="flex items-center">
-                  <div title={s.name}
-                    className={cx("flex flex-col items-center gap-1 px-2 py-1.5 rounded-md border transition-all",
-                      j < idx ? "border-pine-200 bg-pine-50" : j === idx ? "border-ink bg-ink text-paper shadow-md" : "border-mist bg-card opacity-70")}>
-                    <span className={cx("num text-[9px] font-semibold", j === idx ? "text-paper/60" : "text-ink-soft")}>{String(j + 1).padStart(2, "0")}</span>
-                    <span className={cx("font-display font-bold text-[11px] tracking-tight", j < idx && "text-pine-700")}>{s.short}</span>
-                  </div>
-                  {j < stages.length - 1 && <div className={cx("w-3 h-[2px]", j < idx ? "bg-pine-400" : "bg-ink/12")} />}
+            <div className="bg-card border border-mist rounded-lg px-4 py-3">
+              {[
+                { k: "Owner", v: <span className="flex items-center gap-1.5"><Avatar name={userName(c.ownerId)} size={16} /><span className="text-[11.5px] font-semibold">{userName(c.ownerId)}</span></span> },
+                { k: "Escalation", v: <span className={cx("text-[9.5px] font-display font-bold tracking-wide px-1.5 py-0.5 rounded", ESC_LEVELS[tat.level].chip)}>{ESC_LEVELS[tat.level].tag}</span> },
+                { k: "Docs cleared", v: <span className={cx("num text-[11.5px] font-semibold", docDone === c.docs.length ? "text-pine-700" : "")}>{docDone}/{c.docs.length}</span> },
+                { k: "Ageing", v: <span className={cx("num text-[11.5px] font-semibold", ageDays > 45 ? "text-amber-700" : "")}>{ageDays}d</span> },
+                { k: "Next due", v: c.nextActionDue ? <DueChip iso={c.nextActionDue} /> : <span className="text-[10.5px] text-rust-600 font-semibold">not set</span> },
+              ].map((r) => (
+                <div key={r.k} className="flex items-center justify-between py-[5px] border-b border-mist/50 last:border-0">
+                  <span className="text-[10px] uppercase tracking-[0.09em] font-display font-semibold text-ink-soft">{r.k}</span>
+                  {r.v}
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 mt-2.5 text-[11px] text-ink-soft">
-              <Ic n="layers" size={13} />
-              <span>Stage history:</span>
-              {c.stageHistory.slice(-5).map((h, i) => (
-                <span key={i} className="num">{stages.find((s) => s.id === h.stageId)?.short} <span className="opacity-60">{fmtDate(h.at.slice(0, 10))}</span>{i < Math.min(c.stageHistory.length, 5) - 1 ? " →" : ""}</span>
+
+            {c.status === "OPEN" && (
+              <div className="space-y-2">
+                {isLast
+                  ? <Btn variant="dark" className="w-full justify-center" onClick={() => setGateOpen(true)}><Ic n="check" size={14} /> Close file</Btn>
+                  : <Btn className="w-full justify-center" disabled={!gates.pass} title={gates.pass ? "All gates passed" : "Gates not green — see the gate checklist"} onClick={() => setGateOpen(true)}><Ic n="arrowR" size={14} /> Advance stage</Btn>}
+                <div className="grid grid-cols-2 gap-2">
+                  <Btn variant="outline" onClick={() => setEditPanel(true)}><Ic n="pen" size={13} /> Panel</Btn>
+                  <Btn variant="outline" onClick={() => setHandoff(c)}><Ic n="arrowR" size={13} /> Hand off</Btn>
+                </div>
+                {!gates.pass && !isLast && (
+                  <p className="text-[10.5px] text-ink-soft leading-snug">Gates {gates.checks.filter((g) => g.pass).length}/{gates.checks.length} green — clear docs, tasks & queries to advance.</p>
+                )}
+              </div>
+            )}
+          </aside>
+        )}
+
+        <section className="bg-card border border-mist rounded-lg overflow-hidden anim-up min-w-0" style={{ animationDelay: "70ms" }}>
+
+          {/* tab bar */}
+          <div className="px-3 pt-1 border-b border-mist bg-paper/40">
+            <div className="flex gap-0.5 overflow-x-auto">
+              {[
+                { id: "overview", l: "Overview", count: null as number | null },
+                { id: "docs", l: "Documents", count: c.docs.length },
+                { id: "tasks", l: "Tasks", count: tasks.filter((t) => t.status === "OPEN").length },
+                { id: "queries", l: "Queries", count: queries.filter((qq) => qq.status === "OPEN").length },
+                { id: "tat", l: "TAT", count: (c.conditionsDone ? Object.keys(c.conditionsDone).length : 0) },
+                { id: "money", l: "Money", count: calcs.length },
+                { id: "log", l: "Log", count: c.tracker?.length ?? 0 },
+                { id: "activity", l: "Audit", count: activity.length },
+              ].map((t) => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={cx("relative px-3 py-2.5 text-[12.5px] font-display font-semibold whitespace-nowrap focusable transition-colors",
+                    tab === t.id ? "text-pine-800" : "text-ink-soft hover:text-ink")}>
+                  {t.l}{t.count != null && <span className={cx("ml-1.5 text-[9.5px] num px-1.5 py-0.5 rounded-full", tab === t.id ? "bg-pine-100 text-pine-800" : "bg-ink/8 text-ink-soft")}>{t.count}</span>}
+                  {tab === t.id && <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-pine-600 anim-tick" />}
+                </button>
               ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* tabs */}
-      <div className="anim-up bg-card border border-mist rounded-lg" style={{ animationDelay: "200ms" }}>
-        <div className="px-4 pt-1">
-          <div className="flex gap-1 border-b border-mist overflow-x-auto">
-            {[
-              { id: "tat", l: "TAT & Escalation", count: (c.conditionsDone ? Object.keys(c.conditionsDone).length : 0) },
-              { id: "docs", l: "Documents & QC", count: c.docs.length },
-              { id: "tasks", l: "Tasks", count: tasks.filter((t) => t.status === "OPEN").length },
-              { id: "queries", l: "Bank queries", count: queries.filter((qq) => qq.status === "OPEN").length },
-              { id: "log", l: "Daily log", count: c.tracker?.length ?? 0 },
-              { id: "calcs", l: "Calculations", count: calcs.length },
-              { id: "activity", l: "Activity", count: activity.length },
-            ].map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={cx("px-3.5 py-2.5 text-[13px] font-display font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap focusable",
-                  tab === t.id ? "border-pine-600 text-pine-700" : "border-transparent text-ink-soft hover:text-ink")}>
-                {t.l}<span className={cx("ml-1.5 text-[10px] num px-1.5 py-0.5 rounded-full", tab === t.id ? "bg-pine-100 text-pine-800" : "bg-ink/8 text-ink-soft")}>{t.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+          <div className="p-4">
+          {tab === "overview" && <OverviewTab c={c} person={person} stages={stages} idx={idx} def={def} gates={gates} tasks={tasks} queries={queries} setTab={setTab} />}
 
-        <div className="p-4">
           {tab === "tat" && <TatTab c={c} person={person} />}
 
           {tab === "docs" && (
@@ -632,7 +723,31 @@ export function Case360({ id }: { id: string }) {
             </div>
           )}
 
-          {tab === "calcs" && (
+          {tab === "money" && (
+            <div className="mb-4 bg-ink text-paper rounded-lg overflow-hidden anim-tick">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+                {[
+                  { k: "Property value", v: c.propertyValue ? fmtAED(c.propertyValue) : "—" },
+                  { k: "Loan amount", v: c.loanAmount ? fmtAED(c.loanAmount) : "—" },
+                  { k: "Applied LTV", v: c.loanAmount && c.propertyValue ? fmtPct(ltv, 1) : "—" },
+                  { k: "Rate", v: `${fmtN(c.rate, 2)}%` },
+                  { k: "Tenure", v: `${c.tenureMonths} mo` },
+                  { k: "Monthly EMI", v: c.loanAmount ? fmtAED(monthly) : "—" },
+                ].map((x, i) => (
+                  <div key={x.k} className={cx("px-4 py-3", i > 0 && "border-l border-paper/10")}>
+                    <p className="text-[10px] uppercase tracking-[0.1em] font-display font-semibold text-paper/60">{x.k}</p>
+                    <p className="num text-[15px] font-semibold mt-0.5">{x.v}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-t border-paper/10 bg-paper/5">
+                <p className="num text-[11px] text-paper/70">expected revenue <strong className="text-pine-300">{fmtAED(c.expectedRevenue)}</strong> · completion {c.expectedCompletion ? fmtDate(c.expectedCompletion) : "—"}</p>
+                <span className="text-[9.5px] font-display font-bold uppercase tracking-[0.12em] text-paper/40">saved calculations · rule-versioned</span>
+              </div>
+            </div>
+          )}
+
+          {tab === "money" && (
             <div className="space-y-2">
               {calcs.map((cc) => (
                 <div key={cc.id} className="border border-mist rounded-md px-3.5 py-3 bg-paper/50">
@@ -672,7 +787,8 @@ export function Case360({ id }: { id: string }) {
               {activity.length === 0 && <EmptyState icon="clock" title="No recorded activity" />}
             </div>
           )}
-        </div>
+          </div>
+        </section>
       </div>
 
       {/* gate modal */}
@@ -728,6 +844,7 @@ export function Case360({ id }: { id: string }) {
       {editPanel && <ControlPanelDrawer c={c} onClose={() => setEditPanel(false)} />}
       {taskModal && <AddTask caseId={c.id} stageId={c.stage} onClose={() => setTaskModal(false)} />}
       {queryModal && <AddQuery caze={c} onClose={() => setQueryModal(false)} />}
+      {handoff && <HandoffModal caze={handoff} onClose={() => setHandoff(null)} />}
     </div>
   );
 }

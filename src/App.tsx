@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { View } from "./types";
 import { NavProvider, ROLE_LABEL, ROLE_MODULES, StoreProvider, useMe, useNav, useStore } from "./store";
 import { Avatar, Btn, Ic, Pill, cx, fmtDate, todayISO } from "./ui";
@@ -141,6 +141,13 @@ function Shell() {
   const openTasks = state.tasks.filter((t) => t.status === "OPEN").length;
   const openQueries = state.queries.filter((q) => q.status === "OPEN").length;
 
+  /* smart back — Alt+← anywhere */
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); nav.back(); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [nav]);
+
   const HOME_TITLE: Record<string, string> = { VRM: "My Desk", SPO: "My Files", TL: "My Team", HEAD: "Control Tower", ADMIN: "Control Tower", PA: "Coordination Desk", TBD: "Welcome" };
   const titles: Record<View, string> = {
     dashboard: HOME_TITLE[me.role] ?? "Home", tracker: "Daily Tracker", tat: "TAT & Escalation", people: "People", leads: "Leads", cases: nav.caseId ? "Case 360" : "Cases",
@@ -217,6 +224,24 @@ function Shell() {
               <button onClick={() => dispatch({ t: "LOGOUT" })} title="Sign out" className="p-2 rounded-md hover:bg-ink/6 text-ink-soft hover:text-ink transition-colors focusable"><Ic n="logout" size={16} /></button>
             </div>
           </div>
+          {/* context bar — back one layer, breadcrumb trail (Alt+← works too) */}
+          {nav.crumbs.length > 0 && (
+            <div className="hidden lg:flex items-center gap-1.5 px-6 pb-2">
+              <button onClick={nav.back} title="Back one layer (Alt+←)"
+                className="focusable flex items-center gap-1 text-[10.5px] font-display font-bold text-ink-soft border border-mist bg-card rounded-md px-2 py-[5px] hover:border-pine-600 hover:text-pine-700 hover:-translate-x-px transition-all">
+                <Ic n="chevL" size={11} /> Back
+              </button>
+              {nav.crumbs.map((cr, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  <Ic n="chevR" size={9} className="text-ink-soft/40" />
+                  <button onClick={() => nav.go(cr.view, { caseId: cr.caseId, params: cr.params })}
+                    className="focusable text-[11px] font-medium text-ink-soft hover:text-pine-700 transition-colors">{cr.label}</button>
+                </span>
+              ))}
+              <Ic n="chevR" size={9} className="text-ink-soft/40" />
+              <span className="text-[11px] font-display font-bold text-ink">{titles[view]}</span>
+            </div>
+          )}
           {/* mobile nav */}
           <div className="lg:hidden flex gap-1 px-3 pb-2 overflow-x-auto">
             {NAV.flatMap((g) => g.items).filter((i) => allowed.includes(i.v)).map((i) => (

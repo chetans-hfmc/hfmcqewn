@@ -177,7 +177,11 @@ export type View =
   | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
   | "queries" | "calculators" | "templates" | "rules" | "users" | "audit" | "guide";
 
+export interface Crumb { view: View; caseId: string | null; params: Record<string, unknown>; label: string }
+
 export interface NavState {
   view: View; caseId: string | null; params: Record<string, unknown>;
+  crumbs: Crumb[];
   go: (view: View, opts?: { caseId?: string | null; params?: Record<string, unknown> }) => void;
+  back: () => void;
 }

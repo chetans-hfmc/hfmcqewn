@@ -293,12 +293,23 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
 }
 
+/* Fixed marker — proves which build the frame is actually running. */
+function BuildChip() {
+  return (
+    <div className="fixed bottom-3 right-3 z-[70] flex items-center gap-2 bg-ink text-paper/90 rounded-full pl-3 pr-3.5 py-1.5 shadow-xl border border-paper/10 pointer-events-none select-none">
+      <span className="w-1.5 h-1.5 rounded-full bg-pine-400 pulse-dot" />
+      <span className="num text-[10px] tracking-[0.06em]">MOS 2.4 · pipeline · pagination · overview</span>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <StoreProvider>
         <NavProvider>
           <Gate />
+          <BuildChip />
         </NavProvider>
       </StoreProvider>
     </ErrorBoundary>

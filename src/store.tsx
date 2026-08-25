@@ -19,7 +19,7 @@ export type Action =
   | { t: "HANDOFF_LEAD"; leadId: string; toId: string; reason: string }
   | { t: "PATCH_CASE"; id: string; patch: Partial<Case> }
   | { t: "ADVANCE_STAGE"; id: string }
-  | { t: "CLOSE_CASE"; id: string }
+  | { t: "CLOSE_CASE"; id: string; audit?: string[] }
   | { t: "DELETE_CASE"; id: string; reason: string }
   | { t: "HANDOFF_CASE"; id: string; toId: string; reason: string; kind: HandoffKind }
   | { t: "SET_TRIGGER"; caseId: string; stageId: string; date: string }
@@ -175,8 +175,10 @@ function reducer(state: AppState, a: Action): AppState {
     case "CLOSE_CASE": {
       const c = state.cases.find((x) => x.id === a.id);
       if (!c) return state;
-      return log({ ...state, cases: state.cases.map((x) => (x.id === a.id ? { ...x, status: "CLOSED", closedAt: todayISO(), nextAction: undefined, waitingFor: undefined, pendingReason: undefined, blocker: undefined } : x)) },
-        { module: "CASE", action: "Case closed", target: c.ref, caseId: a.id });
+      let s = log({ ...state, cases: state.cases.map((x) => (x.id === a.id ? { ...x, status: "CLOSED", closedAt: todayISO(), nextAction: undefined, waitingFor: undefined, pendingReason: undefined, blocker: undefined } : x)) },
+        { module: "CASE", action: "Case closed", target: c.ref, detail: a.audit?.length ? `closure audit confirmed (${a.audit.length} items)` : undefined, caseId: a.id });
+      if (a.audit?.length) s = log(s, { module: "CASE", action: "Closure audit passed", target: c.ref, detail: a.audit.join(" · "), caseId: a.id });
+      return s;
     }
     case "DELETE_CASE": {
       const c = state.cases.find((x) => x.id === a.id);

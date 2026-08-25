@@ -68,3 +68,25 @@ body {
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .font-display { font-family: var(--font-display); }
 .focusable:focus-visible { outline: 2px solid var(--color-pine-500); outline-offset: 2px; }
+
+/* hover reveal — full name/label for icon-only controls */
+.tip { position: relative; }
+.tip::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 7px); transform: translateX(-50%) translateY(3px);
+  background: var(--color-ink); color: var(--color-paper);
+  font: 600 10.5px/1 var(--font-display); letter-spacing: 0.02em;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 60; box-shadow: 0 4px 14px rgba(10, 20, 14, 0.28);
+}
+.tip:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+.tip-b::after { bottom: auto; top: calc(100% + 7px); transform: translateX(-50%) translateY(-3px); }
+.tip-b:hover::after { transform: translateX(-50%) translateY(0); }
+
+/* kanban column hover glow */
+.kcol-over { box-shadow: inset 0 0 0 2px var(--color-pine-500), 0 8px 24px rgba(15, 85, 62, 0.12); }
+
+@keyframes pulseDot { 0%,100% { box-shadow: 0 0 0 0 rgba(20, 107, 78, 0.45); } 55% { box-shadow: 0 0 0 7px rgba(20, 107, 78, 0); } }
+@keyframes pulseDotRust { 0%,100% { box-shadow: 0 0 0 0 rgba(192, 73, 47, 0.5); } 55% { box-shadow: 0 0 0 7px rgba(192, 73, 47, 0); } }
+.pulse-rust { animation: pulseDotRust 1.6s ease-out infinite; }

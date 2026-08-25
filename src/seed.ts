@@ -3,11 +3,11 @@
    golden cases, and the tracker-derived pipeline.
    ============================================================ */
 import type {
-  AppState, AxisDef, Bank, BankQuery, Case, EiborRow, EmailTemplate, GoldenCase, Lead, Person,
+  AppState, AxisDef, Bank, BankQuery, Case, EiborRow, EligGate, EmailTemplate, GoldenCase, Lead, Person,
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 15;
+export const SEED_VERSION = 16;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -71,6 +71,40 @@ const pv = (over: Partial<ProductVersion> & { version: number; status: ProductVe
   fees: {}, affordability: {}, documents: [], tat: {},
   ...over,
 });
+
+/* ---------- Mashreq Interim Policy Proposed (circular) ----------
+   Encoded as v2 SCHEDULED versions — v1 (current policy) stays ACTIVE.
+   On activation it applies to fresh logins & WIP; pre-approved / final-approved
+   cases keep v1 via their decision snapshots, per the circular's note. */
+const MASHREQ_HIGH_RISK_SECTORS = [
+  "Jewelry", "Aviation / Airlines / Airport", "Real Estate / Developers (incl. top listed)",
+  "Construction / Contracting / Interior Design", "Collectors / Collection Agency Owners",
+  "Hospitality / Hotels / Resorts", "Furnished Apartments / Holiday Homes", "Restaurants / Cafe",
+  "Taxi / Rent A Car", "Manpower Supply", "Investment Companies", "Event Management",
+  "Travel & Tourism", "Shipping / Logistics / Transportation", "Oil & Gas", "Trading (Self-Employed)",
+];
+const mashreqInterimGates = (forBuyout: boolean): EligGate[] => [
+  { id: "i1", kind: "FLAG", label: "Max 2 properties — strict, no deviations (was 4)", hardStop: true },
+  { id: "i2", kind: "FLAG", label: "Salaried minimum income AED 25K (was 15K) — no deviation allowed", when: "SALARIED", hardStop: true },
+  { id: "i3", kind: "FLAG", label: "Self-employed minimum income AED 40K (was 20K) — no deviation allowed", when: "SELF_EMPLOYED", hardStop: true },
+  { id: "i4", kind: "FLAG", label: "Variable income must not exceed fixed income — no deviation allowed", hardStop: true },
+  { id: "i5", kind: "FLAG", label: "SE full-doc: LOB ≥ 3y & LOS ≥ 18m; LOB ≥ 2y & LOS ≥ 12m → Level 3 approval; below → not allowed", when: "SELF_EMPLOYED", hardStop: false },
+  { id: "i6", kind: "FLAG", label: "SE low-doc: LOB ≥ 3y, LOS ≥ 18m (DOJ basis); LOB/LOS ≥ 1y → Level 3 approval; < 1y → not allowed", when: "SELF_EMPLOYED", hardStop: false },
+  { id: "i7", kind: "FLAG", label: "High-risk nationalities (Iranian & Israeli): LTV capped at 60% — no deviations", hardStop: false },
+  { id: "i8", kind: "FLAG", label: "High-risk sectors (16 categories): LTV capped at 60% — no deviations", hardStop: false },
+  { id: "i9", kind: "FLAG", label: "Self-employed: completed residential only — commercial no longer eligible, no deviations", when: "SELF_EMPLOYED", hardStop: true },
+  ...(forBuyout ? [
+    { id: "i10", kind: "FLAG" as const, label: "Non-resident buyout: NOT ALLOWED (interim) — no deviations", when: "NON_RESIDENT", hardStop: true },
+    { id: "i11", kind: "FLAG" as const, label: "Seller buyout: Dubai only as per PPG criteria (was Dubai & Abu Dhabi)", hardStop: true },
+  ] : []),
+];
+const MASHREQ_INTERIM_NOTES = [
+  "NR LTV bands (interim): First/owner-occupied — ≤ AED 5Mn: 65% · > AED 5Mn: 55% | Second/investment — ≤ AED 5Mn: 60% · > AED 5Mn: 55%",
+  "Max loan AED 15Mn (unchanged); amounts > AED 10Mn require business recommendation",
+  "Underwriting: high-risk segments — employment validation within 30 days (salary credits / salary certificate / call verification, each within last 30 days)",
+  "Underwriting: prevailing stress-rate methodology applies — no affordability relaxations",
+  "Applies to all fresh logins & WIP cases immediately on activation; pre-approved & final-approved cases continue under existing policy (v1)",
+];
 
 const PRODUCT_DEFS: ProductDef[] = [
   {
@@ -168,22 +202,94 @@ const PRODUCT_DEFS: ProductDef[] = [
     id: "pd-mash-buyout", bankId: "b-mashreq", name: "Buyout — Salaried & SE", loanType: "CONVENTIONAL",
     classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["BUYOUT"], axes: ["employment", "ftvBand"],
     tags: ["Buyout", "FTV-banded"], createdAt: ts(-60), createdBy: "hfmm-15",
-    versions: [pv({
-      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Mashreq pricing card",
-      eligibility: {
-        minSalary: 15000,
-        ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70 },
-        gates: [{ id: "g1", kind: "NATIONALITY_ALLOW", label: "Saudi Nationals only (buyout)", values: ["Saudi"], hardStop: true }],
-      },
-      grid: { cells: [
-        { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
-        { id: "c2", key: { employment: "SALARIED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 2.5, index: "EIBOR_3M" },
-        { id: "c3", key: { employment: "SELF_EMPLOYED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.75, index: "EIBOR_3M" },
-        { id: "c4", key: { employment: "SELF_EMPLOYED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 3.75, index: "EIBOR_3M" },
-      ]},
-      fees: { valuation: 2500, preApproval: 1575, processingPct: 1, note: "1% of loan amount for all transaction types" },
-      affordability: { maxDBR: 50, ccPct: 5 },
-    })],
+    versions: [
+      pv({
+        version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Mashreq current policy",
+        eligibility: {
+          minSalary: 15000, maxLoan: 15000000,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 50 },
+          gates: [
+            { id: "g1", kind: "FLAG", label: "Current: max 4 properties", hardStop: false },
+            { id: "g2", kind: "FLAG", label: "Current: high-risk (Iranian nationals, jewelry, real estate, construction, collections) — LTV capped 65%", hardStop: false },
+            { id: "g3", kind: "FLAG", label: "Current: seller buyout allowed in Dubai & Abu Dhabi", hardStop: false },
+            { id: "g4", kind: "FLAG", label: "Current: NR buyout allowed", when: "NON_RESIDENT", hardStop: false },
+          ],
+          notes: ["Current policy — see v2 (SCHEDULED) for the Interim Policy Proposed"],
+        },
+        grid: { cells: [
+          { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
+          { id: "c2", key: { employment: "SALARIED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 2.5, index: "EIBOR_3M" },
+          { id: "c3", key: { employment: "SELF_EMPLOYED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.75, index: "EIBOR_3M" },
+          { id: "c4", key: { employment: "SELF_EMPLOYED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 3.75, index: "EIBOR_3M" },
+        ]},
+        fees: { valuation: 2500, preApproval: 1575, processingPct: 1, note: "1% of loan amount for all transaction types" },
+        affordability: { maxDBR: 50, ccPct: 5 },
+      }),
+      pv({
+        version: 2, status: "SCHEDULED", source: "Mashreq Interim Policy Circular — proposed",
+        eligibility: {
+          minSalary: 25000, maxLoan: 15000000,
+          restrictedSectors: MASHREQ_HIGH_RISK_SECTORS,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 55 },
+          gates: mashreqInterimGates(true),
+          notes: MASHREQ_INTERIM_NOTES,
+        },
+        grid: { cells: [
+          { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
+          { id: "c2", key: { employment: "SALARIED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 2.5, index: "EIBOR_3M" },
+          { id: "c3", key: { employment: "SELF_EMPLOYED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.75, index: "EIBOR_3M" },
+          { id: "c4", key: { employment: "SELF_EMPLOYED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 3.75, index: "EIBOR_3M" },
+        ]},
+        fees: { valuation: 2500, preApproval: 1575, processingPct: 1, note: "1% of loan amount for all transaction types" },
+        affordability: { maxDBR: 50, ccPct: 5 },
+      }),
+    ],
+  },
+  {
+    id: "pd-mash-res", bankId: "b-mashreq", name: "Home Finance — Residential", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT", "BUYOUT_EQUITY"], axes: ["employment", "residency"],
+    tags: ["Residential", "Interim policy scheduled"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [
+      pv({
+        version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Mashreq current policy",
+        eligibility: {
+          minSalary: 15000, maxLoan: 15000000,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 50 },
+          gates: [
+            { id: "c1", kind: "FLAG", label: "Current: max 4 properties", hardStop: false },
+            { id: "c2", kind: "FLAG", label: "Current: high-risk — LTV capped 65%", hardStop: false },
+            { id: "c3", kind: "FLAG", label: "Current: SE eligible for completed residential & commercial", when: "SELF_EMPLOYED", hardStop: false },
+          ],
+          notes: ["Current policy — see v2 (SCHEDULED) for the Interim Policy Proposed"],
+        },
+        tenure: { maxMonths: 300 },
+        grid: { cells: [
+          { id: "r1", key: { employment: "SALARIED", residency: "RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.1, index: "EIBOR_3M" },
+          { id: "r2", key: { employment: "SELF_EMPLOYED", residency: "RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.6, index: "EIBOR_3M" },
+          { id: "r3", key: { residency: "NON_RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.9, index: "EIBOR_3M" },
+        ]},
+        fees: { processingPct: 1, valuation: 2500, preApproval: 1575, note: "1% of loan amount for all transaction types" },
+        affordability: { maxDBR: 50, ccPct: 5 },
+      }),
+      pv({
+        version: 2, status: "SCHEDULED", source: "Mashreq Interim Policy Circular — proposed",
+        eligibility: {
+          minSalary: 25000, maxLoan: 15000000,
+          restrictedSectors: MASHREQ_HIGH_RISK_SECTORS,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 55 },
+          gates: mashreqInterimGates(false),
+          notes: MASHREQ_INTERIM_NOTES,
+        },
+        tenure: { maxMonths: 300 },
+        grid: { cells: [
+          { id: "r1", key: { employment: "SALARIED", residency: "RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.1, index: "EIBOR_3M" },
+          { id: "r2", key: { employment: "SELF_EMPLOYED", residency: "RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.6, index: "EIBOR_3M" },
+          { id: "r3", key: { residency: "NON_RESIDENT" }, structure: "MARGIN_INDEX", margin: 2.9, index: "EIBOR_3M" },
+        ]},
+        fees: { processingPct: 1, valuation: 2500, preApproval: 1575, note: "1% of loan amount for all transaction types" },
+        affordability: { maxDBR: 50, ccPct: 5 },
+      }),
+    ],
   },
   {
     id: "pd-adib-nr", bankId: "b-adib", name: "NR Home Finance — Islamic", loanType: "ISLAMIC",
@@ -196,7 +302,7 @@ const PRODUCT_DEFS: ProductDef[] = [
         maxAgeSalaried: 55, maxAgeSelfEmp: 60, ltvMatrix: { "NON_RESIDENT": 50 },
         gates: [
           { id: "g1", kind: "NATIONALITY_ALLOW", label: "GCC residents only (Bahrain, Kuwait, Oman, Saudi)", values: ["Bahrain", "Kuwait", "Oman", "Saudi"], hardStop: true },
-          { id: "g2", kind: "FLAG", label: "NR holding a resident visa is not eligible as non-resident", hardStop: false },
+          { id: "g2", kind: "FLAG", label: "NR holding a resident visa is not eligible as non-resident", when: "NON_RESIDENT", hardStop: false },
         ],
         notes: ["Docs to be translated; credit bureau from home country + UAE (valid 1 month)."],
       },

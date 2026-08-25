@@ -164,7 +164,9 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       hit = (g.values ?? []).includes(c.employment);
       detail = `blocked employment: ${g.values?.join(", ")}`;
     } else if (g.kind === "FLAG") {
-      hit = g.when === "NON_RESIDENT" ? c.residency === "NON_RESIDENT" : false;
+      /* A FLAG with no `when` applies to everyone; with `when`, it scopes to a
+         residency / employment / customer-type segment (e.g. "SELF_EMPLOYED"). */
+      hit = !g.when ? true : (g.when === c.residency || g.when === c.employment || g.when === c.customerType);
     }
     if (hit) {
       if (g.hardStop) {

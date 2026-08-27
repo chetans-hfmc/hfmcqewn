@@ -70,6 +70,8 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "employment": return c.employment;
     case "residency": return c.residency;
     case "customerType": return c.customerType;
+    case "segment": return c.segment ?? null;
+    case "tenure": return c.preferredFixedYears != null ? String(c.preferredFixedYears) : null;
     case "ftvBand": {
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
@@ -205,15 +207,20 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     push({ code: "CLASS", severity: "BLOCK", category: "eligibility", message: `Product is for ${pd.classes.map((x) => x.toLowerCase()).join(" / ")} only`, explanation: `client is ${c.employment.toLowerCase()}`, source: pd.bankId });
   }
 
-  /* ---- income floor ---- */
-  if (pv.eligibility.minSalary != null && c.monthlyIncome < pv.eligibility.minSalary) {
+  /* ---- income floor (per-customer-type matrix wins over the flat minimum) ---- */
+  const effMinSalary = pv.eligibility.minSalaryMatrix?.[c.customerType] ?? pv.eligibility.minSalary;
+  if (effMinSalary != null && c.monthlyIncome < effMinSalary) {
     blocked = true;
+    const viaMatrix = pv.eligibility.minSalaryMatrix?.[c.customerType] != null;
     push({
       code: "MIN-INCOME", severity: "BLOCK", category: "eligibility",
-      message: `Income below minimum`, previousValue: fmtMoney(c.monthlyIncome) + "/mo",
-      resultingValue: "≥ " + fmtMoney(pv.eligibility.minSalary) + "/mo", source: pd.bankId,
+      message: `Income below minimum${viaMatrix ? ` for ${c.customerType.replace(/_/g, " ").toLowerCase()}` : ""}`,
+      previousValue: fmtMoney(c.monthlyIncome) + "/mo",
+      resultingValue: "≥ " + fmtMoney(effMinSalary) + "/mo", source: pd.bankId,
     });
-    remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(pv.eligibility.minSalary) + "/mo", delta: fmtMoney(pv.eligibility.minSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
+    remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(effMinSalary) + "/mo", delta: fmtMoney(effMinSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
+  } else if (effMinSalary != null) {
+    push({ code: "MIN-INCOME-OK", severity: "APPLIED", category: "eligibility", message: `Minimum income satisfied (${c.customerType.replace(/_/g, " ").toLowerCase()} ≥ ${fmtMoney(effMinSalary)}/mo)`, resultingValue: fmtMoney(effMinSalary) + "/mo", source: pd.bankId });
   }
 
   /* ---- credit group: bureau score floor ---- */
@@ -331,6 +338,13 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     }
   }
 
+  /* ---- construction / off-plan finance LTV cap ---- */
+  const isConstruction = c.propertyStatus === "UNDER_CONSTRUCTION" || c.propertyStatus === "OFF_PLAN";
+  if (pv.eligibility.constructionLtv != null && isConstruction && ltvPct > pv.eligibility.constructionLtv) {
+    push({ code: "LTV-CONSTR", severity: "APPLIED", category: "financing", message: `Construction/off-plan finance LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.constructionLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.constructionLtv;
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
@@ -436,6 +450,18 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       for (const p of promos) {
         push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
       }
+    }
+  }
+
+  /* ---- employer-based rate discount (e.g. ADCB −0.25% for approved companies) ---- */
+  const discounts = pv.fees.employerDiscounts ?? [];
+  if (ratePct != null && discounts.length && c.employer) {
+    const emp = c.employer.toLowerCase();
+    const hit = discounts.find((dd) => dd.employers.some((e) => emp.includes(e.toLowerCase())));
+    if (hit) {
+      const before = ratePct;
+      ratePct = Math.max(0, ratePct - hit.bps / 100);
+      push({ code: "EMPLOYER-DISC", severity: "APPLIED", category: "pricing", message: `Employer discount −${(hit.bps / 100).toFixed(2)}% (${hit.label})`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId, explanation: `Employer "${c.employer}" is on the approved list.` });
     }
   }
 

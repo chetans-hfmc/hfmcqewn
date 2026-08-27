@@ -148,8 +148,12 @@ export interface ProductVersion {
   effectiveFrom?: string; source?: string; createdAt: string;
   eligibility: {
     minSalary?: number; minLoan?: number; maxLoan?: number;
+    minSalaryMatrix?: Record<string, number>;  /* per customer type: e.g. NATIONAL 8K / EXPAT 15K */
     maxAgeSalaried?: number; maxAgeSelfEmp?: number; maxLoanByNationality?: Record<string, number>;
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
+    constructionLtv?: number;                  /* LTV cap for under-construction / off-plan finance */
+    coApplicantRule?: string;                  /* e.g. "1 blood relation (no siblings)" */
+    employerRequirements?: { minYearsEstablished?: number; minEmployees?: number; profileForm?: boolean; note?: string };
 
     /* Credit-group rules */
     minAecb?: number;                          /* minimum bureau score */
@@ -181,10 +185,18 @@ export interface ProductVersion {
     earlySettlement?: string; note?: string;
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
+    processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
+    txOverrides?: { txType: TxType; processingPct?: number; valuationWaived?: boolean; note?: string }[];
+    feeFinancing?: { allowed: boolean; pct?: number; basis?: string };  /* e.g. 6% DLD & broker fee */
+    employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
   };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
-  documents: { name: string; required: boolean }[];
-  tat: { paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number; paValidityDays?: number };
+  documents: { name: string; required: boolean; note?: string }[];
+  tat: {
+    paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number;
+    paValidityDays?: number; folValidityDays?: number; valuationValidityDays?: number;
+    accountOpeningDays?: number; disbursalDays?: number; transferDays?: number;
+  };
 }
 export interface ProductDef {
   id: string; bankId: string; name: string; loanType: "ISLAMIC" | "CONVENTIONAL" | "BOTH";
@@ -233,6 +245,9 @@ export interface ClientProfile {
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
   propertiesOwned?: number; developer?: string;
+  segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
+  employer?: string;                 /* drives employer-based rate discounts */
+  preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;

@@ -98,6 +98,14 @@ const mashreqInterimGates = (forBuyout: boolean): EligGate[] => [
     { id: "i11", kind: "FLAG" as const, label: "Seller buyout: Dubai only as per PPG criteria (was Dubai & Abu Dhabi)", hardStop: true },
   ] : []),
 ];
+/* ---------- ADCB Salaried — approved-companies rate discount ---------- */
+const ADCB_DISCOUNT_EMPLOYERS = [
+  "Mubadala", "Abu Dhabi Police", "ADP", "General Command of the Civil Defence", "Civil Defence",
+  "ADNOC", "Abu Dhabi National Oil Company", "ADIA", "Abu Dhabi Investment Authority",
+  "Department of Culture & Tourism", "Culture & Tourism", "Etihad", "Air Arabia", "Emirates",
+  "Fly Dubai", "Aldar Properties", "Aldar", "Roads & Transport Authority", "RTA",
+];
+
 const MASHREQ_INTERIM_NOTES = [
   "NR LTV bands (interim): First/owner-occupied — ≤ AED 5Mn: 65% · > AED 5Mn: 55% | Second/investment — ≤ AED 5Mn: 60% · > AED 5Mn: 55%",
   "Max loan AED 15Mn (unchanged); amounts > AED 10Mn require business recommendation",

@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 16;
+export const SEED_VERSION = 17;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -186,6 +186,7 @@ const PRODUCT_DEFS: ProductDef[] = [
       eligibility: {
         minSalary: 15000, minLoan: 250000, maxAgeSalaried: 65, maxAgeSelfEmp: 70,
         ltvMatrix: { "BUYOUT": 65 },
+        minAecb: 651, negativeBureauBlock: true,
         gates: [{ id: "g1", kind: "FLAG", label: "Not offered to Non-Residents", when: "NON_RESIDENT", hardStop: true }],
       },
       tenure: { maxMonths: 300 },
@@ -208,6 +209,8 @@ const PRODUCT_DEFS: ProductDef[] = [
         eligibility: {
           minSalary: 15000, maxLoan: 15000000,
           ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 50 },
+          minLobYears: 2, minLosMonths: 12,
+          investmentLtv: 65, secondPropertyLtv: 65,
           gates: [
             { id: "g1", kind: "FLAG", label: "Current: max 4 properties", hardStop: false },
             { id: "g2", kind: "FLAG", label: "Current: high-risk (Iranian nationals, jewelry, real estate, construction, collections) — LTV capped 65%", hardStop: false },
@@ -231,6 +234,10 @@ const PRODUCT_DEFS: ProductDef[] = [
           minSalary: 25000, maxLoan: 15000000,
           restrictedSectors: MASHREQ_HIGH_RISK_SECTORS,
           ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 55 },
+          minLobYears: 3, minLosMonths: 18,
+          level3Threshold: { lobYears: 2, losMonths: 12 },
+          investmentLtv: 60, secondPropertyLtv: 60,
+          highAmountThreshold: 5000000, ltvAboveThreshold: 55,
           gates: mashreqInterimGates(true),
           notes: MASHREQ_INTERIM_NOTES,
         },
@@ -352,21 +359,30 @@ const EIBOR: EiborRow[] = [-9, -6, -3, -1, 0].map((o, i) => ({
 
 /* ---------- people (tracker-derived clients) ---------- */
 let pn = 0;
-const PERSON = (name: string, customerType: Person["customerType"], employment: Person["employment"], salary: number, nationality = "India", dob = "1988-04-12"): Person => ({
+const PERSON = (name: string, customerType: Person["customerType"], employment: Person["employment"], salary: number, nationality = "India", dob = "1988-04-12", over: Partial<Person> = {}): Person => ({
   id: "p" + ++pn, name, customerType, nationality, employment, dob, mobile: "+971 5" + (10000000 + pn * 137).toString().slice(0, 7),
   email: name.toLowerCase().replace(/[^a-z]+/g, ".") + "@mail.com", monthlySalary: salary, otherIncome: 0, financeCount: 1,
-  cards: [], liabilities: [], createdAt: d(-30 - pn),
+  cards: [], liabilities: [], createdAt: d(-30 - pn), ...over,
 });
 const PERSONS: Person[] = [
   PERSON("Dharpan Randhawa & Amanda", "EXPAT", "SALARIED", 45000, "India"),
   PERSON("Chandan Rajah", "EXPAT", "SALARIED", 60000, "India"),
   PERSON("Akram Chalich", "EXPAT", "SELF_EMPLOYED", 52000, "Egypt"),
-  PERSON("Dina Khalid", "NATIONAL", "SALARIED", 60679, "UAE", "1973-08-22"),
+  PERSON("Dina Khalid", "NATIONAL", "SALARIED", 60679, "UAE", "1973-08-22", {
+    preferredName: "Dina", gender: "Female", maritalStatus: "Married", dependants: 2, countryOfBirth: "UAE",
+    uaeResident: true, residencyStatus: "Citizen", eidNumber: "784-1973-0613762-7", passportNo: "AA0076779",
+    emirate: "Abu Dhabi", jobTitle: "Senior Manager", sector: "Government", yearsEmployed: 7, salaryTransfer: true,
+    basicSalary: 48000, allowances: 12679, aecbScore: 742, assignedTeam: "VRM2", assignedRm: "Adnan Mahmood", leadSource: "Referral",
+  }),
   PERSON("Zeynap Erdogan", "EXPAT", "SALARIED", 38000, "Turkey"),
   PERSON("Parvez Ahmed", "EXPAT", "SALARIED", 42000, "Pakistan"),
   PERSON("Yash Pandya", "EXPAT", "SALARIED", 35000, "India"),
   PERSON("Anna Larina", "EXPAT", "SALARIED", 40000, "Russia"),
-  PERSON("Ihab Abdulla Jawad", "EXPAT", "SELF_EMPLOYED", 70000, "Jordan"),
+  PERSON("Ihab Abdulla Jawad", "EXPAT", "SELF_EMPLOYED", 70000, "Jordan", "1985-06-20", {
+    businessName: "Jawad Trading LLC", businessActivity: "General Trading", lobYears: 5, losMonths: 48,
+    companyOwnershipPct: 100, annualTurnover: 2400000, auditedFinancials: true, lowDoc: false,
+    businessIncome: 70000, aecbScore: 690, salaryTransfer: false,
+  }),
   PERSON("Ante Svagusa", "EXPAT", "SALARIED", 48000, "Croatia"),
   PERSON("Yasir Mohhumad", "EXPAT", "SALARIED", 33000, "Sri Lanka"),
   PERSON("Jumana Hytham Zin Aldin", "NATIONAL", "SALARIED", 55000, "UAE"),
@@ -394,7 +410,11 @@ const PERSONS: Person[] = [
   PERSON("Sangeeth Chemboth", "EXPAT", "SALARIED", 49000, "India"),
   PERSON("Ricardo Laborda", "EXPAT", "SALARIED", 54000, "Spain"),
   PERSON("Karolina Abbas Issa & Angie Abbas Issa", "EXPAT", "SALARIED", 61000, "Lebanon"),
-  PERSON("Akram Shah", "EXPAT", "SELF_EMPLOYED", 68000, "Pakistan"),
+  PERSON("Akram Shah", "EXPAT", "SELF_EMPLOYED", 68000, "Pakistan", "1990-02-14", {
+    businessName: "Shah Contracting", businessActivity: "Construction / Contracting", lobYears: 1.5, losMonths: 14,
+    companyOwnershipPct: 60, annualTurnover: 1100000, auditedFinancials: false, lowDoc: true,
+    businessIncome: 68000, aecbScore: 615, sector: "Construction / Contracting", salaryTransfer: false,
+  }),
   PERSON("Sheree Anne Serilla Sumpay", "EXPAT", "SALARIED", 32000, "Philippines"),
   PERSON("Andrei Umnov", "EXPAT", "SALARIED", 59000, "Russia"),
   PERSON("Zinah Alkatabi & Ihab Jawad", "EXPAT", "SALARIED", 64000, "Jordan"),

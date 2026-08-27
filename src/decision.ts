@@ -200,6 +200,43 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(pv.eligibility.minSalary) + "/mo", delta: fmtMoney(pv.eligibility.minSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
   }
 
+  /* ---- credit group: bureau score floor ---- */
+  if (pv.eligibility.minAecb != null && (c.aecbScore ?? 0) < pv.eligibility.minAecb) {
+    blocked = true;
+    push({
+      code: "AECB", severity: "BLOCK", category: "eligibility",
+      message: `Bureau score below minimum`, previousValue: String(c.aecbScore ?? "not provided"),
+      resultingValue: "≥ " + pv.eligibility.minAecb, source: pd.bankId,
+    });
+  }
+
+  /* ---- credit group: negative bureau ---- */
+  if (pv.eligibility.negativeBureauBlock && c.negativeBureau) {
+    blocked = true;
+    push({ code: "NEG-BUREAU", severity: "BLOCK", category: "eligibility", message: `Negative bureau record — not accepted`, explanation: "product declines applicants with adverse bureau history", source: pd.bankId });
+  }
+
+  /* ---- employment group: self-employed LOB / LOS (computed) ---- */
+  if (c.employment === "SELF_EMPLOYED") {
+    const lob = c.lobYears ?? 0;
+    const los = c.losMonths ?? 0;
+    const minLob = pv.eligibility.minLobYears;
+    const minLos = pv.eligibility.minLosMonths;
+    if (minLob != null && lob < minLob) {
+      blocked = true;
+      push({ code: "LOB", severity: "BLOCK", category: "eligibility", message: `Business age below minimum`, previousValue: `${lob} yrs`, resultingValue: `≥ ${minLob} yrs`, source: pd.bankId });
+    }
+    if (minLos != null && los < minLos) {
+      blocked = true;
+      push({ code: "LOS", severity: "BLOCK", category: "eligibility", message: `Length of service below minimum`, previousValue: `${los} mo`, resultingValue: `≥ ${minLos} mo`, source: pd.bankId });
+    }
+    const lvl3 = pv.eligibility.level3Threshold;
+    if (!blocked && lvl3 && (lob < lvl3.lobYears || los < lvl3.losMonths)) {
+      refer = true;
+      push({ code: "LOB-LOS-L3", severity: "WARN", category: "eligibility", message: `LOB/LOS below standard — Level 3 approval required`, explanation: `standard: LOB ≥ ${lvl3.lobYears}y & LOS ≥ ${lvl3.losMonths}m; client: ${lob}y / ${los}m`, source: pd.bankId });
+    }
+  }
+
   /* ---- LTV (product matrix, specificity-ranked) ---- */
   const ltvRes = resolveLtv(pv.eligibility.ltvMatrix, c);
   let ltvPct = 0;
@@ -222,7 +259,24 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       });
     } else ltvPct = 80;
   }
-  const maxByLtv = ltvPct > 0 && c.propertyValue > 0 ? Math.floor((c.propertyValue * ltvPct) / 100) : 0;
+  /* ---- property group: investment / second-property / high-amount LTV caps ---- */
+  const eligibleValue = c.valuation && c.valuation > 0 ? Math.min(c.propertyValue, c.valuation) : c.propertyValue;
+  if (c.valuation && c.valuation > 0 && c.valuation < c.propertyValue) {
+    push({ code: "VALUATION", severity: "INFO", category: "financing", message: `Finance based on lower of value & valuation`, previousValue: fmtMoney(c.propertyValue), resultingValue: fmtMoney(eligibleValue), source: pd.bankId });
+  }
+  if (pv.eligibility.investmentLtv != null && c.propertyUse === "INVESTMENT" && ltvPct > pv.eligibility.investmentLtv) {
+    push({ code: "LTV-INVEST", severity: "APPLIED", category: "financing", message: `Investment property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.investmentLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.investmentLtv;
+  }
+  if (pv.eligibility.secondPropertyLtv != null && c.financeCount === 2 && ltvPct > pv.eligibility.secondPropertyLtv) {
+    push({ code: "LTV-SECOND", severity: "APPLIED", category: "financing", message: `Second/subsequent property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.secondPropertyLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.secondPropertyLtv;
+  }
+  if (pv.eligibility.highAmountThreshold != null && pv.eligibility.ltvAboveThreshold != null && c.loanRequested > pv.eligibility.highAmountThreshold && ltvPct > pv.eligibility.ltvAboveThreshold) {
+    push({ code: "LTV-HIGH-AMT", severity: "APPLIED", category: "financing", message: `High loan-amount LTV cap applied (> ${fmtMoney(pv.eligibility.highAmountThreshold)})`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.ltvAboveThreshold}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.ltvAboveThreshold;
+  }
+  const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
   let maxLoanCap = pv.eligibility.maxLoan ?? Infinity;
@@ -246,6 +300,23 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     push({ code: "AGE", severity: maxByAge < 60 ? "WARN" : "INFO", category: "tenure", message: `Tenure capped at ${tenure} months by age`, previousValue: `${capMonths} mo`, resultingValue: `${tenure} mo`, source: pd.bankId });
   }
 
+  /* ---- income group: recognition percentages + variable-income cap ---- */
+  let recognizedIncome = c.monthlyIncome + c.otherIncome;
+  const ir = pv.eligibility.incomeRecognition;
+  const ib = c.incomeBreakdown;
+  if (ir && ib) {
+    const pct = (v?: number) => v ?? 100;
+    const fixed = (ib.basic ?? 0) * (pct(ir.basicPct) / 100) + (ib.allowances ?? 0) * (pct(ir.allowancePct) / 100);
+    let variable = (ib.commission ?? 0) * (pct(ir.commissionPct) / 100) + (ib.bonus ?? 0) * (pct(ir.bonusPct) / 100)
+      + (ib.rental ?? 0) * (pct(ir.rentalPct) / 100) + (ib.business ?? 0) * (pct(ir.businessPct) / 100);
+    if (pv.eligibility.variableIncomeCapPct != null && variable > fixed) {
+      push({ code: "VAR-INCOME-CAP", severity: "WARN", category: "affordability", message: `Variable income capped — may not exceed fixed income`, previousValue: fmtMoney(variable), resultingValue: fmtMoney(fixed), source: pd.bankId });
+      variable = fixed;
+    }
+    recognizedIncome = fixed + variable;
+    push({ code: "INCOME-RECOG", severity: "INFO", category: "affordability", message: `Recognized income after recognition rules`, resultingValue: fmtMoney(recognizedIncome) + "/mo", source: pd.bankId });
+  }
+
   /* ---- affordability: DBR ceiling via resolver ---- */
   const dbrCands = ctx.rules.filter((r) => r.module === "DBR" && r.active).map(candFromRule);
   const dbrRes = resolveSlot(dbrCands);
@@ -253,7 +324,7 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   if (dbrRes) firedRules.push(dbrRes);
   const ccPct = pv.affordability.ccPct ?? 5;
   const existingOblig = c.monthlyLiabilities + c.creditCardLimits * (ccPct / 100);
-  const income = c.monthlyIncome + c.otherIncome;
+  const income = recognizedIncome;
   const availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
   const dbrNow = income > 0 ? (existingOblig / income) * 100 : 0;
   push({ code: "DBR", severity: "APPLIED", category: "affordability", message: `DBR ceiling ${dbrCap}%${dbrRes ? ` (${dbrRes.winner.refLabel})` : ""}`, resultingValue: `${dbrCap}%`, ruleId: dbrRes?.winner.refId, ruleVersion: dbrRes?.winner.version });
@@ -392,21 +463,42 @@ export function runGoldenCases(cases: GoldenCase[], productDefs: ProductDef[], c
   });
 }
 
-/* ---------- person → normalized profile ---------- */
+/* ---------- person → normalized profile (full field capture) ---------- */
 export function personToProfile(p: {
   name: string; nationality: string; customerType: ClientProfile["customerType"]; employment: ClientProfile["employment"];
   dob: string; monthlySalary: number; otherIncome: number; financeCount: 1 | 2;
   liabilities: { monthly: number }[]; cards: { limit: number }[]; sector?: string; yearsEmployed?: number;
-}, propertyValue: number, loanRequested: number, age: number): ClientProfile {
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number; dependants?: number; goldenVisa?: boolean;
+  lobYears?: number; losMonths?: number; lowDoc?: boolean; salaryTransfer?: boolean;
+  emirate?: string; uaeResident?: boolean;
+  basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
+}, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
+  propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
+  const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
   return {
     name: p.name, nationality: p.nationality, customerType: p.customerType,
-    residency: p.customerType === "NON_RESIDENT" ? "NON_RESIDENT" : "RESIDENT",
+    residency: p.customerType === "NON_RESIDENT" || p.uaeResident === false ? "NON_RESIDENT" : "RESIDENT",
     employment: p.employment, age,
     monthlyIncome: p.monthlySalary, otherIncome: p.otherIncome,
-    monthlyLiabilities: p.liabilities.reduce((s, l) => s + l.monthly, 0),
+    monthlyLiabilities: liabilities,
     creditCardLimits: p.cards.reduce((s, c) => s + c.limit, 0),
     propertyValue, loanRequested, financeCount: p.financeCount,
-    propertyType: "RESIDENTIAL", emirate: "DUBAI", sector: p.sector ?? "",
+    propertyType: "RESIDENTIAL", emirate: p.emirate ?? "DUBAI", sector: p.sector ?? "",
     yearsEmployed: p.yearsEmployed ?? 2,
+    /* credit group */
+    aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
+    homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,
+    dependants: p.dependants, goldenVisa: p.goldenVisa,
+    /* employment group */
+    lobYears: p.lobYears, losMonths: p.losMonths, lowDoc: p.lowDoc, salaryTransfer: p.salaryTransfer,
+    /* property group */
+    propertyUse, propertyStatus, valuation,
+    /* transaction group */
+    txType,
+    /* income breakdown */
+    incomeBreakdown: {
+      basic: p.basicSalary ?? p.monthlySalary, allowances: p.allowances, commission: p.commission,
+      bonus: p.bonus, rental: p.rentalIncome, business: p.businessIncome,
+    },
   };
 }

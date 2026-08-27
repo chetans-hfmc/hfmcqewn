@@ -13,6 +13,9 @@ export type Employment = "SALARIED" | "SELF_EMPLOYED";
 export type TxType = "PURCHASE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY";
 export type LeadStatus = "NEW" | "CONTACTED" | "APPOINTMENT" | "QUALIFIED" | "PROPOSAL" | "CONVERTED" | "LOST";
 
+/* Person — exhaustive client profile across the agreed field groups.
+   Legacy fields (monthlySalary/otherIncome) remain the canonical income
+   totals; the breakdown below feeds income-recognition rules. */
 export interface Person {
   id: string; name: string; customerType: CustomerType; nationality: string;
   employment: Employment; dob: string; mobile: string; email: string; employer?: string;
@@ -20,6 +23,39 @@ export interface Person {
   cards: { bank: string; limit: number }[];
   liabilities: { type: string; monthly: number }[];
   createdAt: string;
+
+  /* Customer group */
+  preferredName?: string; gender?: string; maritalStatus?: string; dependants?: number;
+  countryOfBirth?: string; goldenVisa?: boolean;
+
+  /* Contact */
+  altMobile?: string; whatsapp?: string;
+
+  /* Residency & Visa group */
+  uaeResident?: boolean; residencyStatus?: string; visaType?: string; visaExpiry?: string;
+  eidNumber?: string; eidExpiry?: string; passportNo?: string; passportExpiry?: string;
+  emirate?: string; currentAddress?: string;
+
+  /* Employment group */
+  jobTitle?: string; sector?: string; yearsEmployed?: number; workLocation?: string;
+  hrName?: string; hrPhone?: string; salaryTransfer?: boolean;          /* STL / NSTL */
+  /* Self-employed specifics */
+  businessName?: string; businessActivity?: string;
+  lobYears?: number;                  /* length of business */
+  losMonths?: number;                 /* length of service in business */
+  companyOwnershipPct?: number; annualTurnover?: number; auditedFinancials?: boolean; lowDoc?: boolean;
+
+  /* Income group (breakdown) */
+  basicSalary?: number; allowances?: number; commission?: number; bonus?: number;
+  rentalIncome?: number; businessIncome?: number;
+
+  /* Credit group */
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
+  creditScoreBand?: string;
+
+  /* Assignment & registration */
+  assignedTeam?: string; assignedRm?: string; dateRegistered?: string; leadSource?: string;
+  primaryAccountBank?: string;
 }
 
 export interface Lead {
@@ -103,6 +139,25 @@ export interface ProductVersion {
     minSalary?: number; minLoan?: number; maxLoan?: number;
     maxAgeSalaried?: number; maxAgeSelfEmp?: number; maxLoanByNationality?: Record<string, number>;
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
+
+    /* Credit-group rules */
+    minAecb?: number;                          /* minimum bureau score */
+    negativeBureauBlock?: boolean;             /* hard-stop on negative bureau */
+
+    /* Self-employed LOB / LOS rules (computed, not just notes) */
+    minLobYears?: number;                      /* minimum length of business */
+    minLosMonths?: number;                     /* minimum length of service */
+    level3Threshold?: { lobYears: number; losMonths: number };  /* at/above → Level 3 approval (REFER) */
+
+    /* Property-group rules */
+    investmentLtv?: number;                    /* LTV cap for investment property */
+    secondPropertyLtv?: number;                /* LTV cap for 2nd/subsequent property */
+    highAmountThreshold?: number;              /* loan amount above which LTV tightens */
+    ltvAboveThreshold?: number;                /* LTV applied above the threshold */
+
+    /* Income-recognition rules (% of each component counted) */
+    incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
+    variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
   };
   tenure: { maxMonths?: number; note?: string };
   grid: { cells: RateCell[] };
@@ -157,6 +212,26 @@ export interface ClientProfile {
   monthlyIncome: number; otherIncome: number; monthlyLiabilities: number; creditCardLimits: number;
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
+
+  /* Credit group */
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
+  dependants?: number; goldenVisa?: boolean;
+
+  /* Employment group (self-employed specifics) */
+  lobYears?: number;                  /* length of business */
+  losMonths?: number;                 /* length of service in business */
+  lowDoc?: boolean; salaryTransfer?: boolean;   /* STL / NSTL */
+
+  /* Property group */
+  propertyUse?: "OWNER_OCCUPIED" | "INVESTMENT";
+  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND";
+  valuation?: number;
+
+  /* Transaction / Finance group */
+  txType?: TxType;
+
+  /* Income group (breakdown, for income-recognition rules) */
+  incomeBreakdown?: { basic?: number; allowances?: number; commission?: number; bonus?: number; rental?: number; business?: number };
 }
 export interface EiborFix { date: string; m1: number; m3: number; m6: number; y1: number; }
 export interface WeightingProfile { id: string; name: string; weights: { finance: number; rate: number; ltv: number; fees: number; tat: number }; }

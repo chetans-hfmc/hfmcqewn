@@ -115,6 +115,35 @@ export default function DecisionView() {
               <Field label="Finance count"><Select value={String(profile.financeCount)} onChange={(v) => setProfile({ ...profile, financeCount: v === "2" ? 2 : 1 })} options={[{ v: "1", l: "1st" }, { v: "2", l: "2nd+" }]} /></Field>
               <Field label="Sector"><TextInput value={profile.sector} onChange={(e) => setProfile({ ...profile, sector: e.target.value })} placeholder="optional" /></Field>
             </div>
+
+            {/* credit group */}
+            <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Credit</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="AECB score"><NumInput value={profile.aecbScore ?? 0} onChange={(n) => setProfile({ ...profile, aecbScore: n || undefined })} /></Field>
+              <Field label="Dependants"><NumInput value={profile.dependants ?? 0} onChange={(n) => setProfile({ ...profile, dependants: n || undefined })} /></Field>
+              <Field label="Negative bureau?"><Select value={profile.negativeBureau ? "1" : "0"} onChange={(v) => setProfile({ ...profile, negativeBureau: v === "1" || undefined })} options={[{ v: "0", l: "No" }, { v: "1", l: "Yes" }]} /></Field>
+            </div>
+
+            {/* self-employed group (shown only when relevant) */}
+            {profile.employment === "SELF_EMPLOYED" && (
+              <div className="anim-tick">
+                <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Self-employed</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Business age (LOB)"><NumInput value={profile.lobYears ?? 0} onChange={(n) => setProfile({ ...profile, lobYears: n || undefined })} suffix="yrs" /></Field>
+                  <Field label="Service (LOS)"><NumInput value={profile.losMonths ?? 0} onChange={(n) => setProfile({ ...profile, losMonths: n || undefined })} suffix="mo" /></Field>
+                  <Field label="Low doc?"><Select value={profile.lowDoc ? "1" : "0"} onChange={(v) => setProfile({ ...profile, lowDoc: v === "1" || undefined })} options={[{ v: "0", l: "Full doc" }, { v: "1", l: "Low doc" }]} /></Field>
+                </div>
+              </div>
+            )}
+
+            {/* property & transaction group */}
+            <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Property & transaction</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Use"><Select value={profile.propertyUse ?? "OWNER_OCCUPIED"} onChange={(v) => setProfile({ ...profile, propertyUse: v as ClientProfile["propertyUse"] })} options={[{ v: "OWNER_OCCUPIED", l: "Owner-occupied" }, { v: "INVESTMENT", l: "Investment" }]} /></Field>
+              <Field label="Status"><Select value={profile.propertyStatus ?? "READY"} onChange={(v) => setProfile({ ...profile, propertyStatus: v as ClientProfile["propertyStatus"] })} options={[{ v: "READY", l: "Ready" }, { v: "OFF_PLAN", l: "Off plan" }, { v: "UNDER_CONSTRUCTION", l: "Under construction" }, { v: "LAND", l: "Land" }]} /></Field>
+              <Field label="Valuation"><NumInput value={profile.valuation ?? 0} onChange={(n) => setProfile({ ...profile, valuation: n || undefined })} suffix="AED" /></Field>
+              <Field label="Transaction"><Select value={profile.txType ?? "PURCHASE"} onChange={(v) => setProfile({ ...profile, txType: v as ClientProfile["txType"] })} options={[{ v: "PURCHASE", l: "Purchase" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + equity" }, { v: "EQUITY", l: "Equity release" }]} /></Field>
+            </div>
             <div className="mt-4 flex flex-col gap-2">
               <Btn onClick={evaluate}><Ic n="spark" size={15} /> Evaluate all banks</Btn>
               {decisions && <Btn variant="outline" onClick={saveSnapshot}><Ic n="lock" size={13} /> Save decision snapshot</Btn>}

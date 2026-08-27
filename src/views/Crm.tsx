@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import type { Case, CustomerType, Employment, Lead, LeadStatus, Person, Task, TxType } from "../types";
 import { isOversight, useMe, useNav, useStore } from "../store";
 import { Avatar, Btn, DateInput, DangerModal, Drawer, DueChip, EmptyState, Field, Ic, KV, Modal, NumInput, Pill, Select, TextInput, addDays, ageYears, cx, fmtAED, fmtDate, nowISO, todayISO, uid } from "../ui";
@@ -74,22 +75,45 @@ function PersonDrawer({ p, onClose }: { p: Person; onClose: () => void }) {
   return (
     <Drawer open onClose={onClose} title={p.name} width={460}>
       <div className="space-y-4">
-        <div className="bg-paper/60 border border-mist rounded-lg p-3.5">
+        <Section k="Customer">
           <KV k="Customer type" v={CT.find((c) => c.v === p.customerType)?.l ?? p.customerType} mono={false} />
           <KV k="Nationality" v={p.nationality} mono={false} />
           <KV k="Date of birth" v={p.dob ? `${fmtDate(p.dob)} (${ageYears(p.dob)} yrs)` : "—"} mono={false} />
+          <KV k="Gender" v={p.gender ?? "—"} mono={false} />
+          <KV k="Dependants" v={p.dependants != null ? String(p.dependants) : "—"} />
+        </Section>
+        <Section k="Contact & Residency">
           <KV k="Mobile" v={p.mobile || "—"} mono={false} />
           <KV k="Email" v={p.email || "—"} mono={false} />
-          <KV k="Employer" v={p.employer ?? "—"} mono={false} />
-          <KV k="Employment" v={p.employment === "SALARIED" ? "Salaried" : "Self Employed"} mono={false} />
-        </div>
-        <div className="bg-paper/60 border border-mist rounded-lg p-3.5">
+          <KV k="Emirates ID" v={p.eidNumber ?? "—"} mono={false} />
+          <KV k="Passport no." v={p.passportNo ?? "—"} mono={false} />
+          <KV k="Emirate" v={p.emirate ?? "—"} mono={false} />
+          <KV k="UAE resident" v={p.uaeResident === false ? "No" : "Yes"} mono={false} />
+        </Section>
+        <Section k="Employment">
+          <KV k="Type" v={p.employment === "SALARIED" ? "Salaried" : "Self Employed"} mono={false} />
+          <KV k="Sector" v={p.sector ?? "—"} mono={false} />
+          {p.employment === "SALARIED" ? (<>
+            <KV k="Employer" v={p.employer ?? "—"} mono={false} />
+            <KV k="Years employed" v={p.yearsEmployed != null ? `${p.yearsEmployed} yrs` : "—"} />
+            <KV k="Salary transfer" v={p.salaryTransfer ? "STL" : "NSTL"} mono={false} />
+          </>) : (<>
+            <KV k="Business" v={p.businessName ?? "—"} mono={false} />
+            <KV k="Business age (LOB)" v={p.lobYears != null ? `${p.lobYears} yrs` : "—"} />
+            <KV k="Service (LOS)" v={p.losMonths != null ? `${p.losMonths} mo` : "—"} />
+            <KV k="Ownership" v={p.companyOwnershipPct != null ? `${p.companyOwnershipPct}%` : "—"} />
+            <KV k="Docs" v={p.lowDoc ? "Low doc" : "Full doc"} mono={false} />
+          </>)}
+        </Section>
+        <Section k="Income & Credit">
           <KV k="Monthly salary" v={fmtAED(p.monthlySalary)} />
           <KV k="Other income" v={fmtAED(p.otherIncome)} />
           <KV k="Existing liabilities" v={`${fmtAED(p.liabilities.reduce((s, l) => s + l.monthly, 0))}/mo`} />
           <KV k="Credit card limits" v={fmtAED(p.cards.reduce((s, c) => s + c.limit, 0))} />
+          <KV k="AECB score" v={p.aecbScore != null ? String(p.aecbScore) : "—"} />
+          <KV k="Negative bureau" v={p.negativeBureau ? "Yes" : "No"} mono={false} />
           <KV k="Finance count" v={p.financeCount === 1 ? "1st property" : "2nd+"} mono={false} />
-        </div>
+        </Section>
         {cases.length > 0 && (
           <div>
             <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Cases ({cases.length})</p>
@@ -135,27 +159,78 @@ function useStoreDeletePerson(id: string, reason: string) {
   dispatch({ t: "DELETE_PERSON", id, reason });
 }
 
+function GroupTitle({ children }: { children: ReactNode }) {
+  return <p className="col-span-2 text-[10px] uppercase tracking-[0.13em] font-display font-bold text-ink-soft mt-2 first:mt-0">{children}</p>;
+}
+
+function Section({ k, children }: { k: string; children: ReactNode }) {
+  return (
+    <div className="bg-paper/60 border border-mist rounded-lg p-3.5 anim-up">
+      <p className="text-[10px] uppercase tracking-[0.13em] font-display font-bold text-pine-700 mb-1.5">{k}</p>
+      {children}
+    </div>
+  );
+}
+
 function PersonForm({ onClose }: { onClose: () => void }) {
   const { dispatch } = useStore();
-  const [f, setF] = useState({ name: "", customerType: "EXPAT" as CustomerType, nationality: "", employment: "SALARIED" as Employment, dob: "", mobile: "", email: "", employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1 as 1 | 2 });
+  const [f, setF] = useState<Partial<Person> & { name: string; customerType: CustomerType; employment: Employment }>({
+    name: "", customerType: "EXPAT", nationality: "", employment: "SALARIED", dob: "", mobile: "", email: "",
+    employer: "", monthlySalary: 0, otherIncome: 0, financeCount: 1,
+  });
+  const set = (patch: Partial<Person>) => setF((prev) => ({ ...prev, ...patch }));
+  const num = (patch: Record<string, number | undefined>) => {
+    const out: Record<string, number | undefined> = {};
+    for (const k of Object.keys(patch)) out[k] = patch[k] || undefined;
+    set(out as Partial<Person>);
+  };
+  const se = f.employment === "SELF_EMPLOYED";
   return (
-    <Modal open onClose={onClose} title="New person" width={520}
+    <Modal open onClose={onClose} title="New person — full profile" width={640}
       footer={<><Btn variant="ghost" onClick={onClose}>Cancel</Btn>
         <Btn disabled={f.name.trim().length < 2} onClick={() => {
-          dispatch({ t: "ADD_PERSON", person: { id: "p" + uid(), ...f, cards: [], liabilities: [], createdAt: todayISO() } }); onClose();
+          dispatch({ t: "ADD_PERSON", person: { ...f, id: "p" + uid(), name: f.name.trim(), nationality: f.nationality ?? "", dob: f.dob ?? "", mobile: f.mobile ?? "", email: f.email ?? "", employer: f.employer || undefined, monthlySalary: f.monthlySalary ?? 0, otherIncome: f.otherIncome ?? 0, financeCount: (f.financeCount ?? 1) as 1 | 2, cards: [], liabilities: [], createdAt: todayISO() } }); onClose();
         }}>Create person</Btn></>}>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2"><Field label="Full name" req><TextInput autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field></div>
-        <Field label="Customer type"><Select value={f.customerType} onChange={(v) => setF({ ...f, customerType: v as CustomerType })} options={CT} /></Field>
-        <Field label="Nationality"><TextInput value={f.nationality} onChange={(e) => setF({ ...f, nationality: e.target.value })} /></Field>
-        <Field label="Employment"><Select value={f.employment} onChange={(v) => setF({ ...f, employment: v as Employment })} options={EMP} /></Field>
-        <Field label="Date of birth"><DateInput value={f.dob} onChange={(e) => setF({ ...f, dob: e.target.value })} /></Field>
-        <Field label="Mobile"><TextInput value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} /></Field>
-        <Field label="Email"><TextInput value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-        <Field label="Employer"><TextInput value={f.employer} onChange={(e) => setF({ ...f, employer: e.target.value })} /></Field>
-        <Field label="Finance count"><Select value={String(f.financeCount)} onChange={(v) => setF({ ...f, financeCount: v === "2" ? 2 : 1 })} options={[{ v: "1", l: "1st property" }, { v: "2", l: "2nd or more" }]} /></Field>
-        <Field label="Monthly salary"><NumInput value={f.monthlySalary} onChange={(n) => setF({ ...f, monthlySalary: n })} suffix="AED" /></Field>
-        <Field label="Other income"><NumInput value={f.otherIncome} onChange={(n) => setF({ ...f, otherIncome: n })} suffix="AED" /></Field>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 max-h-[62vh] overflow-y-auto pr-1">
+        <GroupTitle>Customer</GroupTitle>
+        <div className="col-span-2"><Field label="Full name" req><TextInput autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} /></Field></div>
+        <Field label="Preferred name"><TextInput value={f.preferredName ?? ""} onChange={(e) => set({ preferredName: e.target.value })} /></Field>
+        <Field label="Customer type"><Select value={f.customerType} onChange={(v) => set({ customerType: v as CustomerType })} options={CT} /></Field>
+        <Field label="Nationality"><TextInput value={f.nationality ?? ""} onChange={(e) => set({ nationality: e.target.value })} /></Field>
+        <Field label="Date of birth"><DateInput value={f.dob ?? ""} onChange={(e) => set({ dob: e.target.value })} /></Field>
+        <Field label="Gender"><Select value={f.gender ?? ""} onChange={(v) => set({ gender: v || undefined })} options={[{ v: "", l: "—" }, { v: "Male", l: "Male" }, { v: "Female", l: "Female" }]} /></Field>
+        <Field label="Dependants"><NumInput value={f.dependants ?? 0} onChange={(n) => num({ dependants: n })} /></Field>
+
+        <GroupTitle>Contact & Residency</GroupTitle>
+        <Field label="Mobile"><TextInput value={f.mobile ?? ""} onChange={(e) => set({ mobile: e.target.value })} /></Field>
+        <Field label="Email"><TextInput value={f.email ?? ""} onChange={(e) => set({ email: e.target.value })} /></Field>
+        <Field label="Emirates ID"><TextInput value={f.eidNumber ?? ""} onChange={(e) => set({ eidNumber: e.target.value })} /></Field>
+        <Field label="Passport no."><TextInput value={f.passportNo ?? ""} onChange={(e) => set({ passportNo: e.target.value })} /></Field>
+        <Field label="Emirate"><TextInput value={f.emirate ?? ""} onChange={(e) => set({ emirate: e.target.value })} /></Field>
+        <Field label="UAE resident?"><Select value={f.uaeResident === false ? "0" : "1"} onChange={(v) => set({ uaeResident: v === "1" })} options={[{ v: "1", l: "Yes" }, { v: "0", l: "No" }]} /></Field>
+
+        <GroupTitle>Employment</GroupTitle>
+        <Field label="Employment type"><Select value={f.employment} onChange={(v) => set({ employment: v as Employment })} options={EMP} /></Field>
+        <Field label="Sector"><TextInput value={f.sector ?? ""} onChange={(e) => set({ sector: e.target.value })} /></Field>
+        {!se && (<>
+          <Field label="Employer"><TextInput value={f.employer ?? ""} onChange={(e) => set({ employer: e.target.value })} /></Field>
+          <Field label="Years employed"><NumInput value={f.yearsEmployed ?? 0} onChange={(n) => num({ yearsEmployed: n })} suffix="yrs" /></Field>
+          <Field label="Salary transfer (STL)?"><Select value={f.salaryTransfer ? "1" : "0"} onChange={(v) => set({ salaryTransfer: v === "1" })} options={[{ v: "1", l: "Yes" }, { v: "0", l: "No" }]} /></Field>
+        </>)}
+        {se && (<>
+          <Field label="Business name"><TextInput value={f.businessName ?? ""} onChange={(e) => set({ businessName: e.target.value })} /></Field>
+          <Field label="Business age (LOB)"><NumInput value={f.lobYears ?? 0} onChange={(n) => num({ lobYears: n })} suffix="yrs" /></Field>
+          <Field label="Service (LOS)"><NumInput value={f.losMonths ?? 0} onChange={(n) => num({ losMonths: n })} suffix="mo" /></Field>
+          <Field label="Ownership %"><NumInput value={f.companyOwnershipPct ?? 0} onChange={(n) => num({ companyOwnershipPct: n })} suffix="%" /></Field>
+          <Field label="Low doc?"><Select value={f.lowDoc ? "1" : "0"} onChange={(v) => set({ lowDoc: v === "1" })} options={[{ v: "0", l: "Full doc" }, { v: "1", l: "Low doc" }]} /></Field>
+        </>)}
+
+        <GroupTitle>Income & Credit</GroupTitle>
+        <Field label="Monthly salary / income"><NumInput value={f.monthlySalary ?? 0} onChange={(n) => num({ monthlySalary: n })} suffix="AED" /></Field>
+        <Field label="Other income"><NumInput value={f.otherIncome ?? 0} onChange={(n) => num({ otherIncome: n })} suffix="AED" /></Field>
+        <Field label="AECB score"><NumInput value={f.aecbScore ?? 0} onChange={(n) => num({ aecbScore: n })} /></Field>
+        <Field label="Finance count"><Select value={String(f.financeCount)} onChange={(v) => set({ financeCount: (v === "2" ? 2 : 1) as 1 | 2 })} options={[{ v: "1", l: "1st property" }, { v: "2", l: "2nd or more" }]} /></Field>
+        <Field label="Negative bureau?"><Select value={f.negativeBureau ? "1" : "0"} onChange={(v) => set({ negativeBureau: v === "1" || undefined })} options={[{ v: "0", l: "No" }, { v: "1", l: "Yes" }]} /></Field>
       </div>
     </Modal>
   );

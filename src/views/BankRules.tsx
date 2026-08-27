@@ -168,6 +168,7 @@ export default function BankRulesView() {
                         <th className="px-3 py-2.5 font-semibold">Structure</th>
                         <th className="px-3 py-2.5 font-semibold">Recipe</th>
                         <th className="px-3 py-2.5 font-semibold">Today's rate</th>
+                        <th className="px-3 py-2.5 font-semibold">Stress (DSR)</th>
                         <th className="px-3 py-2.5 font-semibold">Note</th>
                         {editable && <th className="px-3 py-2.5" />}
                       </tr></thead>
@@ -182,12 +183,13 @@ export default function BankRulesView() {
                               <td className="px-3 py-2.5"><Pill tone={cell.structure === "FIXED" ? "pine" : cell.structure === "MARGIN_INDEX" ? "steel" : "amber"}>{cell.structure.replace(/_/g, " ")}</Pill></td>
                               <td className="px-3 py-2.5 num text-[11px]">{cellRecipe(cell)}</td>
                               <td className="px-3 py-2.5 num font-bold text-pine-700">{rate != null ? `${rate.toFixed(2)}%` : "—"}</td>
+                              <td className="px-3 py-2.5 num text-[11px]">{cell.stressRate != null ? <span className="font-semibold text-amber-700">{cell.stressRate.toFixed(2)}%</span> : <span className="text-ink-soft">—</span>}</td>
                               <td className="px-3 py-2.5 text-[11px] text-ink-soft">{cell.note ?? ""}</td>
                               {editable && <td className="px-3 py-2.5"><button onClick={() => setPv({ grid: { cells: ver.grid.cells.filter((_, j) => j !== ci) } })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button></td>}
                             </tr>
                           );
                         })}
-                        {ver.grid.cells.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-soft text-[12px]">No rate cells yet.</td></tr>}
+                        {ver.grid.cells.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-ink-soft text-[12px]">No rate cells yet.</td></tr>}
                       </tbody>
                     </table>
                     <div className="flex items-center justify-between px-4 py-2.5 bg-paper/50 border-t border-mist">
@@ -327,7 +329,20 @@ export default function BankRulesView() {
                       <Field label="Processing max"><NumInput disabled={!editable} value={ver.fees.processingMax ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, processingMax: n || undefined } })} suffix="AED" /></Field>
                       <Field label="Valuation"><NumInput disabled={!editable} value={ver.fees.valuation ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, valuation: n || undefined } })} suffix="AED" /></Field>
                       <Field label="Pre-approval"><NumInput disabled={!editable} value={ver.fees.preApproval ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, preApproval: n || undefined } })} suffix="AED" /></Field>
+                      <Field label="Life assignment fee"><NumInput disabled={!editable} value={ver.fees.lifeAssignmentFee ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, lifeAssignmentFee: n || undefined } })} suffix="AED" /></Field>
+                      <Field label="VAT %"><NumInput disabled={!editable} value={ver.fees.vatPct ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, vatPct: n || undefined } })} suffix="%" /></Field>
                     </div>
+                    <div className="mt-3"><Field label="Valuation by emirate (EMIRATE: AED, comma-separated)"><TextInput disabled={!editable}
+                      value={Object.entries(ver.fees.valuationByEmirate ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ")}
+                      onChange={(e) => {
+                        const m: Record<string, number> = {};
+                        e.target.value.split(",").forEach((pair) => {
+                          const [k, v] = pair.split(":").map((s) => s.trim());
+                          if (k && v && !Number.isNaN(Number(v))) m[k.toUpperCase()] = Number(v);
+                        });
+                        setPv({ fees: { ...ver.fees, valuationByEmirate: Object.keys(m).length ? m : undefined } });
+                      }}
+                      placeholder="e.g. AJMAN: 3500" /></Field></div>
                     <div className="mt-3"><Field label="Early settlement"><TextInput disabled={!editable} value={ver.fees.earlySettlement ?? ""} onChange={(e) => setPv({ fees: { ...ver.fees, earlySettlement: e.target.value || undefined } })} placeholder="e.g. 1% or 10k, whichever lower" /></Field></div>
                     {/* LTV-conditional rate discounts */}
                     <div className="mt-4">

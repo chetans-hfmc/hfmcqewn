@@ -74,6 +74,7 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "tenure": return c.preferredFixedYears != null ? String(c.preferredFixedYears) : null;
     case "stl": return c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
     case "propertyStatus": return c.propertyStatus ?? null;
+    case "transaction": return c.txType ?? null;
     case "ftvBand": {
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
@@ -214,7 +215,9 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
      salary-transfer (STL/NSTL) → employment. First hit wins. */
   const msm = pv.eligibility.minSalaryMatrix ?? {};
   const stlKey = c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
-  const msmKey = [c.customerType, c.residency, stlKey, c.employment].find((k) => k != null && msm[k] != null) ?? null;
+  /* Compound keys (e.g. "NSTL:EXPAT") are the most specific, tried first. */
+  const compoundKey = stlKey ? `${stlKey}:${c.customerType}` : null;
+  const msmKey = [compoundKey, c.customerType, c.residency, stlKey, c.employment].find((k) => k != null && msm[k] != null) ?? null;
   const effMinSalary = (msmKey ? msm[msmKey] : undefined) ?? pv.eligibility.minSalary;
   if (effMinSalary != null && c.monthlyIncome < effMinSalary) {
     blocked = true;
@@ -459,6 +462,8 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       push({ code: "EIBOR-UNKNOWN", severity: "WARN", category: "pricing", message: "Current EIBOR fix unavailable — index-based pricing cannot be confirmed", explanation: "Publish an EIBOR fix, then re-run. The engine never invents an index value." });
     } else {
       push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
+      if (cell.stressRate != null)
+        push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Bank-published stress rate ${cell.stressRate.toFixed(2)}% applies for DSR`, resultingValue: `${cell.stressRate.toFixed(2)}%`, source: pd.bankId });
       for (const p of promos) {
         push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
       }
@@ -616,7 +621,7 @@ export function personToProfile(p: {
   emirate?: string; uaeResident?: boolean;
   basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
   propertiesOwned?: number; developer?: string;
-  segment?: string; employer?: string; preferredFixedYears?: number;
+  segment?: string; employer?: string; preferredFixedYears?: number; existingLoanRate?: number;
 }, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
   propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
   const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
@@ -632,6 +637,7 @@ export function personToProfile(p: {
     yearsEmployed: p.yearsEmployed ?? 2,
     propertiesOwned: p.propertiesOwned, developer: p.developer,
     segment: p.segment, employer: p.employer, preferredFixedYears: p.preferredFixedYears,
+    existingLoanRate: p.existingLoanRate,
     /* credit group */
     aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
     homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,

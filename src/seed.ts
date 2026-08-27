@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 22;
+export const SEED_VERSION = 23;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -456,6 +456,168 @@ const PRODUCT_DEFS: ProductDef[] = [
         paValidityDays: 30, folValidityDays: 60, valuationValidityDays: 30,
         accountOpeningDays: 1, disbursalDays: 5, transferDays: 2,
       },
+    })],
+  },
+  /* ---------------- Arab Bank · Salaried (full sheet mapped — Conventional only) ---------------- */
+  {
+    id: "pd-arab-sal", bankId: "b-arab", name: "Home Finance — Salaried", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT", "BUYOUT_EQUITY", "EQUITY"],
+    axes: ["stl", "tenure", "transaction", "employment"],
+    tags: ["Salaried", "Conventional"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Arab Bank salaried pricing card (Aug 2026)",
+      eligibility: {
+        minSalaryMatrix: { "STL": 20000, "NSTL:EXPAT": 25000, "NSTL:NATIONAL": 15000 },
+        minLoan: 200000, maxLoan: 7300000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        maxAgeSalaried: 70,
+        minLosMonths: 12,
+        coApplicantRule: "1 blood relation — Expat & Local",
+        employerRequirements: { minYearsEstablished: 2, note: "Decent profile; field visit mandatory for loan ≥ AED 2.5M" },
+        incomeRecognition: { bonusPct: 90, rentalPct: 75, commissionPct: 75 },
+        gates: [
+          { id: "b1", kind: "NATIONALITY_BLOCK", label: "Iranian nationals — restricted", values: ["Iran"], hardStop: true },
+          { id: "b2", kind: "FLAG", label: "Min LOS: 1yr UAE Nationals & core Arabs · 2yr non-core Arabs & non-Arabs", hardStop: false },
+          { id: "b3", kind: "FLAG", label: "Refinance LTV: 60% Arabs · 50% non-Arabs — verify nationality group", hardStop: false },
+          { id: "b4", kind: "FLAG", label: "Buyout + top-up: cash equity may not exceed 30% of property value", hardStop: false },
+          { id: "b5", kind: "FLAG", label: "Non-Arab salaried: 2 yrs same company, or 6 months + 5 yrs UAE residency", hardStop: false },
+          { id: "b6", kind: "FLAG", label: "Family business financed case-to-case, subject to 2 yrs salary credit proof", hardStop: false },
+          { id: "b7", kind: "FLAG", label: "Rental income: 75% counted, capped at 25% of gross salary — Ejari mandatory", hardStop: false },
+          { id: "b8", kind: "FLAG", label: "Bonus: 90–100% (case-to-case) of lower of last 2 years", hardStop: false },
+          { id: "b9", kind: "FLAG", label: "Credit card must be sold with each loan (all segments)", hardStop: false },
+          { id: "b10", kind: "FLAG", label: "Hotel apartments financed (not hotel rooms)", hardStop: false },
+          { id: "b11", kind: "FLAG", label: "Top-up pricing: customer rate vs offer rate scenarios apply (STL/NSTL ±0.5%) — verify existing rate", hardStop: false },
+          { id: "b12", kind: "FLAG", label: "Emirates: Dubai, Abu Dhabi, Sharjah, RAK (Al Hambra only)", hardStop: false },
+        ],
+        notes: [
+          "Grace period up to 90 days for 1st instalment (payment holiday 90 days from disbursal).",
+          "Buyout + equity: equity to customer account; quotation required for upgrade.",
+          "Commission: 75% avg last 6 months, or 90% avg last 9 months (quarterly); education allowance considered even if paid to school.",
+          "Company listing not required; trade license copy if company not listed. HR contact info required (no application form).",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* Other types (purchase/resale/handover) */
+        { id: "o-s2", key: { stl: "STL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 3.78, fixedMonths: 24, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 5.88 },
+        { id: "o-s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.95, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 6.05 },
+        { id: "o-n2", key: { stl: "NSTL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 3.95, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.05 },
+        { id: "o-n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.10, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.20 },
+        /* Equity release */
+        { id: "e-s2", key: { stl: "STL", tenure: "2", transaction: "EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.28, fixedMonths: 24, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 6.58 },
+        { id: "e-s3", key: { stl: "STL", tenure: "3", transaction: "EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.45, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 6.75 },
+        { id: "e-n2", key: { stl: "NSTL", tenure: "2", transaction: "EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.45, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.38 },
+        { id: "e-n3", key: { stl: "NSTL", tenure: "3", transaction: "EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.60, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.55 },
+        /* Buyout with cash-out (NSTL) */
+        { id: "bc-n2", key: { stl: "NSTL", tenure: "2", transaction: "BUYOUT_EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.40, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.50 },
+        { id: "bc-n3", key: { stl: "NSTL", tenure: "3", transaction: "BUYOUT_EQUITY" }, structure: "FIXED_THEN_VAR", fixedRate: 4.55, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.65 },
+      ]},
+      fees: {
+        processingPct: 0.25, processingMin: 5000, valuation: 3000, preApproval: 1000, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        partialSettlement: "Free up to 25% yearly",
+        lifeInsurancePct: 0.035, lifeInsuranceNote: "per month of loan amount",
+        lifeAssignmentFee: 5000,
+        propertyInsurancePct: 0.005, propertyInsuranceNote: "per month of property value",
+        valuationByEmirate: { AJMAN: 3500 },
+        ltvDiscounts: [{ maxLtv: 60, bps: 25, label: "LTV ≤ 60% → −0.25% off introductory rates" }],
+        txOverrides: [
+          { txType: "EQUITY", processingPct: 1, note: "Pure equity 1%" },
+          { txType: "BUYOUT", processingPct: 0, note: "Buyout free" },
+          { txType: "BUYOUT_EQUITY", processingPct: 0, note: "Buyout + equity free" },
+        ],
+        feeFinancing: { allowed: false, basis: "No — 10% of purchase price personal loan over 4 yrs instead" },
+        note: "Annexure fee AED 250 (collection cases) / AED 500 (rate annexure) · stress test uses published per-cell stress rates",
+      },
+      affordability: { maxDBR: 50, rentalPct: 75, bonusPct: 90 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true },
+        { name: "AECB Consent Form (signed)", required: true },
+        { name: "Salary Certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (only if pay varies)", required: false },
+        { name: "Bank Statements — 6 months (E-statements)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "HR contact information (no application form)", required: true },
+        { name: "Trade license copy (if company not listed)", required: false },
+        { name: "Ejari (if rental income considered)", required: false },
+      ],
+      tat: {
+        paDays: 3, valuationDays: 2, folDays: 2, totalDays: 12,
+        paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 45,
+        accountOpeningDays: 1, disbursalDays: 2, transferDays: 2,
+      },
+    })],
+  },
+  {
+    id: "pd-arab-buyout", bankId: "b-arab", name: "Buyout — Salaried & SE", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["BUYOUT"],
+    axes: ["stl", "tenure", "employment"],
+    tags: ["Buyout"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Arab Bank buyout card",
+      eligibility: {
+        minSalaryMatrix: { "STL": 20000, "NSTL:EXPAT": 25000, "NSTL:NATIONAL": 15000 },
+        minLoan: 200000, maxLoan: 7300000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        gates: [{ id: "c1", kind: "NATIONALITY_BLOCK", label: "Iranian nationals — restricted", values: ["Iran"], hardStop: true }],
+        notes: ["Max term 25 years for buyout", "Primary/fresh purchase proc 0.25% + VAT · low docs 0.50% + VAT · refinance/top-up/ER 1% of incremental"],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "b-s1", key: { stl: "STL", tenure: "1", employment: "SALARIED" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 12, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 } },
+        { id: "b-n1", key: { stl: "NSTL", tenure: "1", employment: "SALARIED" }, structure: "FIXED_THEN_VAR", fixedRate: 4.24, fixedMonths: 12, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 } },
+        { id: "b-se1", key: { tenure: "1", employment: "SELF_EMPLOYED" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 12, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 } },
+        { id: "b-s2", key: { stl: "STL", tenure: "2", employment: "SALARIED" }, structure: "FIXED_THEN_VAR", fixedRate: 4.24, fixedMonths: 24, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 } },
+        { id: "b-n2", key: { stl: "NSTL", tenure: "2", employment: "SALARIED" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 } },
+        { id: "b-se2", key: { tenure: "2", employment: "SELF_EMPLOYED" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 } },
+      ]},
+      fees: {
+        processingPct: 0, processingMin: 5000, valuation: 3000, preApproval: 1000, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        partialSettlement: "Free up to 25% yearly",
+        lifeInsurancePct: 0.035, lifeAssignmentFee: 5000, propertyInsurancePct: 0.005,
+        valuationByEmirate: { AJMAN: 3500 },
+        note: "Buyout processing fee 0% · min AED 5,000 applies to non-buyout cases",
+      },
+      affordability: { maxDBR: 50 },
+      documents: [{ name: "Passport, Visa & EID (PDF)", required: true }, { name: "AECB Consent Form (signed)", required: true }, { name: "Salary Certificate (within 30 days)", required: true }, { name: "Bank Statements — 6 months", required: true }],
+      tat: { paDays: 3, valuationDays: 2, folDays: 2, totalDays: 12, paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 45 },
+    })],
+  },
+  {
+    id: "pd-arab-equity", bankId: "b-arab", name: "Equity Release — Cashout", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["EQUITY"],
+    axes: ["stl", "tenure"],
+    tags: ["Equity release"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Arab Bank equity release card",
+      eligibility: {
+        minSalaryMatrix: { "STL": 20000, "NSTL:EXPAT": 25000, "NSTL:NATIONAL": 15000 },
+        minLoan: 200000, maxLoan: 2500000,
+        ltvMatrix: { NATIONAL: 60, EXPAT: 50 },
+        gates: [
+          { id: "d1", kind: "NATIONALITY_BLOCK", label: "Iranian nationals — restricted", values: ["Iran"], hardStop: true },
+          { id: "d2", kind: "FLAG", label: "Locals / Arabs / dual nationalities 60% · non-Arabs 50% — verify nationality group", hardStop: false },
+        ],
+        notes: ["Max AED 2.5M per property", "Max term 10 years (50% LTV)", "Equity amount paid to client's account"],
+      },
+      tenure: { maxMonths: 120 },
+      grid: { cells: [
+        { id: "q-s2", key: { stl: "STL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.28, fixedMonths: 24, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 6.58 },
+        { id: "q-s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.45, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_6M", floor: 3.24 }, stressRate: 6.75 },
+        { id: "q-n2", key: { stl: "NSTL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.45, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.38 },
+        { id: "q-n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.60, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_6M", floor: 3.75 }, stressRate: 6.55 },
+      ]},
+      fees: {
+        processingPct: 1, processingMin: 5000, valuation: 3000, preApproval: 1000, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        lifeInsurancePct: 0.035, lifeAssignmentFee: 5000, propertyInsurancePct: 0.005,
+        valuationByEmirate: { AJMAN: 3500 },
+        note: "Processing 1% on equity release amount",
+      },
+      affordability: { maxDBR: 50 },
+      documents: [{ name: "Passport, Visa & EID (PDF)", required: true }, { name: "AECB Consent Form (signed)", required: true }, { name: "Title deed", required: true }, { name: "Bank Statements — 6 months", required: true }],
+      tat: { paDays: 3, valuationDays: 2, folDays: 2, totalDays: 12, paValidityDays: 60, folValidityDays: 30 },
     })],
   },
   /* ---------------- ADIB · Salaried (full sheet mapped — Islamic only) ---------------- */
@@ -1001,6 +1163,24 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-adib-sal", verdict: "NOT_ELIGIBLE" }],
     note: "NSTL minimum salary is 15k (matrix key NSTL) — 12k income blocks.",
   },
+  {
+    id: "golden-10", name: "Arab Bank — STL 3yr at 55% LTV earns 0.25% discount",
+    client: { ...baseProfile, name: "Golden · Arab STL 3yr", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 3, age: 36, monthlyIncome: 35000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1100000 },
+    expected: [{ productDefId: "pd-arab-sal", verdict: "ELIGIBLE" }],
+    note: "Other Types STL 3yr 3.95% − 0.25% (LTV ≤ 60%) → 3.70%; stress rate 6.05% published.",
+  },
+  {
+    id: "golden-11", name: "Arab Bank — Iranian nationality is blocked",
+    client: { ...baseProfile, name: "Golden · Iranian", nationality: "Iran", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 3, age: 36, monthlyIncome: 35000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1100000 },
+    expected: [{ productDefId: "pd-arab-sal", verdict: "NOT_ELIGIBLE" }],
+    note: "NATIONALITY_BLOCK gate — Iranians restricted.",
+  },
+  {
+    id: "golden-12", name: "Arab Bank — NSTL expat below 25k is blocked (compound key)",
+    client: { ...baseProfile, name: "Golden · Arab NSTL expat 22k", customerType: "EXPAT" as const, salaryTransfer: false, preferredFixedYears: 3, age: 34, monthlyIncome: 22000, monthlyLiabilities: 2000, propertyValue: 1500000, loanRequested: 900000 },
+    expected: [{ productDefId: "pd-arab-sal", verdict: "NOT_ELIGIBLE" }],
+    note: "Compound key NSTL:EXPAT = 25k minimum — 22k blocks.",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -1056,6 +1236,7 @@ export function buildSeed(): AppState {
       { id: "a0", at: ts(-0.05), by: "hfmm-15", module: "RULE", action: "Policy revised", target: "Mashreq — Sept 2026 revision", detail: "High-risk bands (60%/70%) effective immediately + top-developer exemption; NR segment scheduled 1 Sept 2026" },
       { id: "a-adcb", at: ts(-0.02), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADCB · Home Finance — Salaried (pd-adcb-sal v1)", detail: "Segment pricing (Priv/Aspire/Home Saver) + fixed-term grid, employer discount −0.25%, fee tiers, 9-field TAT" },
       { id: "a-adib", at: ts(-0.01), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADIB · Home Finance — Salaried (pd-adib-sal/var/equity v1)", detail: "STL/NSTL/UC/NR grids across 2–20yr tenors, LTV ≤60% −0.25% discount, STL 10k/NSTL 15k min, land 60% LTV, buyout campaign promo to 30 Aug 2026" },
+      { id: "a-arab", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Arab Bank · Home Finance — Salaried (pd-arab-sal/buyout/equity v1)", detail: "STL/NSTL × 2–3yr grids + ER & buyout-cashout rows, published stress rates, compound min-salary keys (STL 20k / NSTL:EXPAT 25k / NSTL:NATIONAL 15k), Ajman valuation 3,500, life assignment fee 5,000, TAT 12d" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

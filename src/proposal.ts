@@ -126,11 +126,14 @@ export function buildProposal(def: ProductDef, decision: ProductDecision, c: Cli
   const procPct = pv.fees.processingPct ?? 0;
   const procMin = pv.fees.processingMin ?? 0;
   const proc = finance > 0 ? Math.max(finance * (procPct / 100), procMin) : 0;
-  const val = pv.fees.valuation ?? 0;
+  /* Valuation may vary by emirate (e.g. Arab Bank: Ajman 3,500 vs 3,000). */
+  const emirateKey = (c.emirate ?? "").toUpperCase();
+  const val = pv.fees.valuationByEmirate?.[emirateKey] ?? pv.fees.valuation ?? 0;
   const pa = pv.fees.preApproval ?? 0;
+  const lifeAssign = pv.fees.lifeAssignmentFee ?? 0;
   const vatPct = pv.fees.vatPct ?? 0;
-  const vat = vatPct > 0 ? (proc + val + pa) * (vatPct / 100) : null;
-  const total = finance > 0 ? proc + val + pa + (vat ?? 0) : null;
+  const vat = vatPct > 0 ? (proc + val + pa + lifeAssign) * (vatPct / 100) : null;
+  const total = finance > 0 ? proc + val + pa + lifeAssign + (vat ?? 0) : null;
 
   const lifePct = pv.fees.lifeInsurancePct;
   const propPct = pv.fees.propertyInsurancePct;
@@ -145,6 +148,7 @@ export function buildProposal(def: ProductDef, decision: ProductDecision, c: Cli
       { label: "Processing fee", amount: finance > 0 ? proc : null, note: procPct > 0 ? `${procPct}% of finance${procMin ? ` (min ${fmtAED(procMin)})` : ""}${vatPct ? ` + VAT ${vatPct}%` : ""}` : pv.fees.note },
       { label: "Valuation fee", amount: val || null, note: vatPct ? `incl. VAT` : undefined },
       { label: "Pre-approval fee", amount: pa || null, note: pa ? undefined : "Not applicable" },
+      ...(lifeAssign ? [{ label: "Life insurance assignment", amount: lifeAssign as number | null, note: "One-time fee" }] : []),
       { label: "Arrangement fee", amount: null, note: pv.fees.arrangementFee ?? "Not applicable" },
     ],
     vat, totalUpfront: total,

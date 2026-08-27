@@ -28,6 +28,7 @@ export interface Person {
   preferredName?: string; gender?: string; maritalStatus?: string; dependants?: number;
   countryOfBirth?: string; goldenVisa?: boolean;
   propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
+  existingLoanRate?: number;                      /* customer's current loan rate — top-up pricing scenarios */
 
   /* Contact */
   altMobile?: string; whatsapp?: string;
@@ -127,7 +128,9 @@ export type RateStructure = "FIXED" | "MARGIN_INDEX" | "FIXED_THEN_VAR" | "VAR_D
 export interface RateCell {
   id: string; key: Record<string, string>; structure: RateStructure;
   fixedRate?: number; fixedMonths?: number; margin?: number; index?: RateIndex; floor?: number;
-  followOn?: { margin: number; index: RateIndex; floor?: number }; note?: string;
+  followOn?: { margin: number; index: RateIndex; floor?: number };
+  stressRate?: number;   /* bank-published stress rate for DSR (e.g. Arab Bank per-cell stress grid) */
+  note?: string;
 }
 export interface EligGate {
   id: string; kind: "NATIONALITY_ALLOW" | "NATIONALITY_BLOCK" | "FLAG" | "EMPLOYMENT_BLOCK";
@@ -188,6 +191,8 @@ export interface ProductVersion {
     processingPct?: number; processingMin?: number; processingMax?: number; valuation?: number; preApproval?: number;
     earlySettlement?: string; note?: string;
     ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
+    valuationByEmirate?: Record<string, number>;   /* e.g. AJMAN: 3500 vs default 3000 */
+    lifeAssignmentFee?: number;                    /* one-time life-insurance assignment fee */
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
     processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
@@ -253,6 +258,7 @@ export interface ClientProfile {
   segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
   employer?: string;                 /* drives employer-based rate discounts */
   preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
+  existingLoanRate?: number;         /* for top-up pricing scenarios (customer's current rate) */
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;

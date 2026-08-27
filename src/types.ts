@@ -27,6 +27,7 @@ export interface Person {
   /* Customer group */
   preferredName?: string; gender?: string; maritalStatus?: string; dependants?: number;
   countryOfBirth?: string; goldenVisa?: boolean;
+  propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
 
   /* Contact */
   altMobile?: string; whatsapp?: string;
@@ -132,6 +133,16 @@ export interface EligGate {
   id: string; kind: "NATIONALITY_ALLOW" | "NATIONALITY_BLOCK" | "FLAG" | "EMPLOYMENT_BLOCK";
   label: string; values?: string[]; hardStop: boolean; when?: string;
 }
+/* Nationality / sector risk band — the strictest matching band wins.
+   topDeveloperExempt: a real-estate sector is NOT high-risk when the developer
+   is on the bank's approved top-developer list. */
+export interface HighRiskBand {
+  ltv: number;
+  nationalities?: string[];
+  sectors: string[];               /* display names from the circular */
+  sectorKeywords?: string[];       /* matching tokens against client.sector (case-insensitive) */
+  topDeveloperExempt?: boolean;
+}
 export interface ProductVersion {
   version: number; status: "DRAFT" | "SCHEDULED" | "ACTIVE" | "RETIRED";
   effectiveFrom?: string; source?: string; createdAt: string;
@@ -154,6 +165,9 @@ export interface ProductVersion {
     secondPropertyLtv?: number;                /* LTV cap for 2nd/subsequent property */
     highAmountThreshold?: number;              /* loan amount above which LTV tightens */
     ltvAboveThreshold?: number;                /* LTV applied above the threshold */
+    statementMonths?: number;                  /* required personal bank-statement months */
+    multiPropertyRule?: { minCount: number; ltv: number }; /* > minCount properties (AECB/internal) → LTV cap */
+    highRiskBands?: HighRiskBand[];            /* nationality/sector risk bands, strictest match wins */
 
     /* Income-recognition rules (% of each component counted) */
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
@@ -218,6 +232,7 @@ export interface ClientProfile {
   monthlyIncome: number; otherIncome: number; monthlyLiabilities: number; creditCardLimits: number;
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
+  propertiesOwned?: number; developer?: string;
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
@@ -270,6 +285,7 @@ export interface AppState {
   templates: EmailTemplate[]; trackerDates: string[]; dismissedAlerts?: string[];
   axes: AxisDef[]; productDefs: ProductDef[]; promos: Promo[];
   weightingProfiles: WeightingProfile[]; decisionSnapshots: DecisionSnapshot[]; goldenCases: GoldenCase[];
+  topDevelopers: string[];   /* bank-approved top-developer list — drives high-risk exemptions */
 }
 
 export type View =

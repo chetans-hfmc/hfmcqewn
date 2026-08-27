@@ -106,6 +106,38 @@ const MASHREQ_INTERIM_NOTES = [
   "Applies to all fresh logins & WIP cases immediately on activation; pre-approved & final-approved cases continue under existing policy (v1)",
 ];
 
+/* ---------- Approved top-developer list (drives the real-estate high-risk exemption) ---------- */
+const TOP_DEVELOPERS = [
+  "Al Futtaim Real Estate", "Al Habtoor Real Estate", "Aldar", "Azizi Developments",
+  "Binghatti Developers", "DAMAC Properties", "Dubai Holding Real Estate (Meraas, Nakheel, Dubai Properties, Meydan)",
+  "Dubai South", "Dubai Sports City", "Emaar PJSC", "Expo City Dubai", "Majid Al Futtaim Real Estate",
+  "Nshama", "Omniyat", "Sobha Realty", "TDIC (Tourism Development & Investment Company)", "Wasl Properties",
+];
+
+/* ---------- September 2026 revision: high-risk bands (effective immediately) ---------- */
+const MASHREQ_HR_60 = {
+  ltv: 60, topDeveloperExempt: true,
+  nationalities: ["Iranian", "Israeli"],
+  sectors: ["Jewelry", "Real Estate / Developers (excluding top developers)", "Construction / Contracting", "Hospitality / Hotels / Resorts", "Furnished Apartments / Holiday Homes", "Travel & Tourism"],
+  sectorKeywords: ["jewelry", "real estate", "developer", "construction", "contracting", "hospitality", "hotel", "resort", "holiday home", "furnished apartment", "travel", "tourism"],
+};
+const MASHREQ_HR_70 = {
+  ltv: 70,
+  sectors: ["Aviation / Airlines / Airport", "Restaurants / Café", "Taxi / Rent A Car", "Manpower Supply", "Investment Companies", "Event Management", "Shipping / Logistics / Transportation", "Oil & Gas", "Trading (Self-Employed)"],
+  sectorKeywords: ["aviation", "airline", "airport", "restaurant", "cafe", "café", "taxi", "rent a car", "manpower", "investment", "event management", "shipping", "logistics", "transportation", "oil & gas", "oil and gas", "trading"],
+};
+const MASHREQ_SEPT_NOTES = [
+  "High-risk borrower segment revised & effective immediately; all other industries reinstated to standard policy parameters.",
+  "Real estate / developers assessed at 60% LTV EXCEPT approved top developers (standard policy).",
+  "Approved top-developer list updated (17 names) — maintained in Master Data, not per-product.",
+];
+const MASHREQ_NR_SEPT_NOTES = [
+  "NR revised policy effective for all new applications logged from 1 September 2026 onwards.",
+  "WIP cases proposed under the revised policy: updated criteria considered by credit on a best-effort basis, subject to assessment & approval.",
+  "NR bank statements: latest 6 months; minimum-balance criterion must be met in at least 4 of the last 6 months.",
+  "NR customers holding more than two properties (AECB/internal records): max LTV restricted to 50%.",
+];
+
 const PRODUCT_DEFS: ProductDef[] = [
   {
     id: "pd-dib-res", bankId: "b-dib", name: "Home Finance — Residential (Islamic)", loanType: "ISLAMIC",
@@ -214,19 +246,34 @@ const PRODUCT_DEFS: ProductDef[] = [
     tags: ["Buyout", "FTV-banded"], createdAt: ts(-60), createdBy: "hfmm-15",
     versions: [
       pv({
-        version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Mashreq current policy",
+        version: 1, status: "RETIRED", effectiveFrom: d(-60), source: "Mashreq current policy (superseded by Sept 2026 revision)",
         eligibility: {
           minSalary: 15000, maxLoan: 15000000,
           ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 50 },
-          minLobYears: 2, minLosMonths: 12,
-          investmentLtv: 65, secondPropertyLtv: 65,
+          gates: [], notes: ["Superseded — high-risk & NR revised Sept 2026"],
+        },
+        grid: { cells: [
+          { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
+          { id: "c2", key: { employment: "SALARIED", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 2.5, index: "EIBOR_3M" },
+        ]},
+        fees: { valuation: 2500, preApproval: 1575, processingPct: 1 },
+        affordability: { maxDBR: 50, ccPct: 5 },
+      }),
+      pv({
+        version: 2, status: "RETIRED", source: "Mashreq Interim Policy Circular — proposed (withdrawn, replaced by Sept 2026 revision)",
+        eligibility: { minSalary: 25000, maxLoan: 15000000, gates: [], notes: ["Withdrawn — replaced by the Sept 2026 revision (v3/v4)"] },
+        grid: { cells: [] }, fees: {}, affordability: { maxDBR: 50 },
+      }),
+      pv({
+        version: 3, status: "ACTIVE", effectiveFrom: d(0), source: "Sept 2026 revision — High-Risk Segment (effective immediately)",
+        eligibility: {
+          minSalary: 15000, maxLoan: 15000000,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 50 },
+          highRiskBands: [MASHREQ_HR_60, MASHREQ_HR_70],
           gates: [
-            { id: "g1", kind: "FLAG", label: "Current: max 4 properties", hardStop: false },
-            { id: "g2", kind: "FLAG", label: "Current: high-risk (Iranian nationals, jewelry, real estate, construction, collections) — LTV capped 65%", hardStop: false },
-            { id: "g3", kind: "FLAG", label: "Current: seller buyout allowed in Dubai & Abu Dhabi", hardStop: false },
-            { id: "g4", kind: "FLAG", label: "Current: NR buyout allowed", when: "NON_RESIDENT", hardStop: false },
+            { id: "g1", kind: "FLAG", label: "NR buyout allowed", when: "NON_RESIDENT", hardStop: false },
           ],
-          notes: ["Current policy — see v2 (SCHEDULED) for the Interim Policy Proposed"],
+          notes: MASHREQ_SEPT_NOTES,
         },
         grid: { cells: [
           { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
@@ -238,17 +285,20 @@ const PRODUCT_DEFS: ProductDef[] = [
         affordability: { maxDBR: 50, ccPct: 5 },
       }),
       pv({
-        version: 2, status: "SCHEDULED", source: "Mashreq Interim Policy Circular — proposed",
+        version: 4, status: "SCHEDULED", effectiveFrom: "2026-09-01", source: "Sept 2026 revision — Non-Resident Segment (effective 1 Sept 2026)",
         eligibility: {
-          minSalary: 25000, maxLoan: 15000000,
-          restrictedSectors: MASHREQ_HIGH_RISK_SECTORS,
-          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 55 },
-          minLobYears: 3, minLosMonths: 18,
-          level3Threshold: { lobYears: 2, losMonths: 12 },
-          investmentLtv: 60, secondPropertyLtv: 60,
-          highAmountThreshold: 5000000, ltvAboveThreshold: 55,
-          gates: mashreqInterimGates(true),
-          notes: MASHREQ_INTERIM_NOTES,
+          minSalary: 15000, maxLoan: 15000000,
+          ltvMatrix: { "SALARIED": 80, "SELF_EMPLOYED": 70, "NON_RESIDENT": 60 },
+          highAmountThreshold: 5000000, ltvAboveThreshold: 50,   /* NR: ≤5M → 60%, >5M → 50% */
+          multiPropertyRule: { minCount: 2, ltv: 50 },            /* >2 properties → 50% */
+          statementMonths: 6,
+          highRiskBands: [MASHREQ_HR_60, MASHREQ_HR_70],
+          gates: [
+            { id: "g1", kind: "FLAG", label: "NR minimum monthly income AED 40,000", when: "NON_RESIDENT", hardStop: true },
+            { id: "g2", kind: "FLAG", label: "NR bank statements: latest 6 months; minimum-balance criterion met in ≥ 4 of last 6 months", when: "NON_RESIDENT", hardStop: false },
+            { id: "g3", kind: "FLAG", label: "NR buyout allowed", when: "NON_RESIDENT", hardStop: false },
+          ],
+          notes: MASHREQ_NR_SEPT_NOTES,
         },
         grid: { cells: [
           { id: "c1", key: { employment: "SALARIED", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 2.25, index: "EIBOR_3M" },
@@ -622,6 +672,24 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-dib-res", verdict: "REFER" }],
     note: "Existing obligations leave little DBR headroom → refer, not a clean yes.",
   },
+  {
+    id: "golden-4", name: "Iranian national — high-risk band caps LTV, does not block",
+    client: { ...baseProfile, name: "Golden · Iranian buyout", nationality: "Iranian", age: 36, monthlyIncome: 50000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1100000 },
+    expected: [{ productDefId: "pd-mash-buyout", verdict: "ELIGIBLE" }],
+    note: "60% high-risk band caps finance to 1.2M — still above the 1.1M request, so ELIGIBLE (cap ≠ block).",
+  },
+  {
+    id: "golden-5", name: "Real-estate sector + top developer — exempt from risk band",
+    client: { ...baseProfile, name: "Golden · Emaar RE", sector: "Real Estate / Developers", developer: "Emaar PJSC", age: 35, monthlyIncome: 50000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1500000 },
+    expected: [{ productDefId: "pd-mash-buyout", verdict: "ELIGIBLE" }],
+    note: "Emaar is on the approved top-developer list → standard 80% LTV (1.6M) applies, not the 60% band.",
+  },
+  {
+    id: "golden-6", name: "Multi-property (>2) — LTV restricted to 50%",
+    client: { ...baseProfile, name: "Golden · 3 properties", customerType: "NON_RESIDENT" as const, residency: "NON_RESIDENT" as const, propertiesOwned: 3, age: 40, monthlyIncome: 60000, monthlyLiabilities: 5000, propertyValue: 2000000, loanRequested: 900000 },
+    expected: [{ productDefId: "pd-mash-buyout", verdict: "ELIGIBLE" }],
+    note: "NR with 3 properties → 50% cap (1.0M) still covers the 0.9M request (v4 NR policy, SCHEDULED 1 Sept 2026).",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -672,7 +740,9 @@ export function buildSeed(): AppState {
     cases: CASES, tasks: TASKS, queries: QUERIES, rules: RULES, eibor: EIBOR, calcs: [], templates: TEMPLATES,
     trackerDates: TRACKER_DATES, axes: AXES, productDefs: PRODUCT_DEFS, promos: PROMOS,
     weightingProfiles: WEIGHTING_PROFILES, decisionSnapshots: [], goldenCases: GOLDEN_CASES,
+    topDevelopers: TOP_DEVELOPERS,
     audit: [
+      { id: "a0", at: ts(-0.05), by: "hfmm-15", module: "RULE", action: "Policy revised", target: "Mashreq — Sept 2026 revision", detail: "High-risk bands (60%/70%) effective immediately + top-developer exemption; NR segment scheduled 1 Sept 2026" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

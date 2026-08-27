@@ -250,6 +250,35 @@ export default function BankRulesView() {
                         )}
                       </div>
                     </div>
+
+                    {/* High-risk bands + additional LTV limits */}
+                    <div className="bg-card border border-mist rounded-lg p-4 lg:col-span-2">
+                      <p className="font-display font-bold text-[13.5px] tracking-tight mb-1.5">High-risk bands & LTV limits</p>
+                      <p className="text-[10.5px] text-ink-soft mb-3">Strictest matching band wins. Top-developer exemption removes real-estate from the risk band.</p>
+                      <div className="grid md:grid-cols-3 gap-4 mb-4">
+                        <Field label="Statement months"><NumInput disabled={!editable} value={ver.eligibility.statementMonths ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, statementMonths: n || undefined } })} suffix="mo" /></Field>
+                        <Field label="Multi-property: more than"><NumInput disabled={!editable} value={ver.eligibility.multiPropertyRule?.minCount ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, multiPropertyRule: { minCount: n, ltv: ver.eligibility.multiPropertyRule?.ltv ?? 50 } } })} suffix="props" /></Field>
+                        <Field label="…cap LTV at"><NumInput disabled={!editable} value={ver.eligibility.multiPropertyRule?.ltv ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, multiPropertyRule: { minCount: ver.eligibility.multiPropertyRule?.minCount ?? 2, ltv: n } } })} suffix="%" /></Field>
+                      </div>
+                      {(ver.eligibility.highRiskBands ?? []).length > 0 ? (
+                        <div className="grid md:grid-cols-2 gap-3">
+                          {(ver.eligibility.highRiskBands ?? []).map((b, bi) => (
+                            <div key={bi} className="border border-mist rounded-md px-3 py-2.5 bg-paper/40">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="num text-[11px] font-bold bg-rust-100 text-rust-700 rounded px-1.5 py-0.5">LTV {b.ltv}%</span>
+                                {b.topDeveloperExempt && <span className="text-[10px] font-display font-bold text-pine-700 bg-pine-100 rounded px-1.5 py-0.5">top-developer exempt</span>}
+                                {editable && <button onClick={() => setPv({ eligibility: { ...ver.eligibility, highRiskBands: (ver.eligibility.highRiskBands ?? []).filter((_, j) => j !== bi) } })} className="focusable ml-auto p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                              </div>
+                              {(b.nationalities ?? []).length > 0 && <p className="text-[11px] text-ink-soft"><strong className="text-ink">Nationalities:</strong> {b.nationalities!.join(", ")}</p>}
+                              <p className="text-[11px] text-ink-soft mt-0.5"><strong className="text-ink">Sectors:</strong> {b.sectors.join("; ")}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11.5px] text-ink-soft italic">No high-risk bands — standard policy applies to all sectors.</p>
+                      )}
+                      <p className="num text-[10.5px] text-ink-soft mt-3">Approved top-developer list: {state.topDevelopers.length} names (maintained in Master Data).</p>
+                    </div>
                   </div>
                 )}
 

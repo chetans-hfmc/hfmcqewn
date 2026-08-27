@@ -49,7 +49,7 @@ export default function DecisionView() {
   };
 
   const evaluate = () => {
-    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO() };
+    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO(), topDevelopers: state.topDevelopers };
     const raw = evaluateAll(state.productDefs, profile, ctx);
     setDecisions(rankDecisions(raw, weight?.weights ?? { finance: 30, rate: 25, ltv: 20, fees: 15, tat: 10 }));
     setExpanded(null);
@@ -68,7 +68,7 @@ export default function DecisionView() {
 
   const goldenResults = useMemo(() => {
     if (tab !== "golden") return null;
-    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO() };
+    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO(), topDevelopers: state.topDevelopers };
     return runGoldenCases(state.goldenCases, state.productDefs, ctx);
   }, [tab, eibor, state.rules, state.promos, state.goldenCases, state.productDefs]);
 
@@ -114,7 +114,9 @@ export default function DecisionView() {
               <Field label="Property value"><NumInput value={profile.propertyValue} onChange={(n) => setProfile({ ...profile, propertyValue: n })} suffix="AED" /></Field>
               <Field label="Loan requested"><NumInput value={profile.loanRequested} onChange={(n) => setProfile({ ...profile, loanRequested: n })} suffix="AED" /></Field>
               <Field label="Finance count"><Select value={String(profile.financeCount)} onChange={(v) => setProfile({ ...profile, financeCount: v === "2" ? 2 : 1 })} options={[{ v: "1", l: "1st" }, { v: "2", l: "2nd+" }]} /></Field>
-              <Field label="Sector"><TextInput value={profile.sector} onChange={(e) => setProfile({ ...profile, sector: e.target.value })} placeholder="optional" /></Field>
+              <Field label="Sector"><TextInput value={profile.sector} onChange={(e) => setProfile({ ...profile, sector: e.target.value })} placeholder="e.g. Real Estate / Developers" /></Field>
+              <Field label="Properties owned"><NumInput value={profile.propertiesOwned ?? 0} onChange={(n) => setProfile({ ...profile, propertiesOwned: n || undefined })} suffix="#" /></Field>
+              <Field label="Developer"><TextInput value={profile.developer ?? ""} onChange={(e) => setProfile({ ...profile, developer: e.target.value || undefined })} placeholder="e.g. Emaar PJSC" /></Field>
             </div>
 
             {/* credit group */}
@@ -243,7 +245,7 @@ export default function DecisionView() {
                 <Btn size="sm" variant="outline" onClick={() => setReplayFor(replayFor?.id === s.id ? null : s)}><Ic n="refresh" size={13} /> {replayFor?.id === s.id ? "Hide replay" : "Replay vs today"}</Btn>
               </div>
               {replayFor?.id === s.id && (() => {
-                const r = replayDecision(s, state.productDefs, state.rules, state.promos, todayISO());
+                const r = replayDecision(s, state.productDefs, state.rules, state.promos, todayISO(), state.topDevelopers);
                 return (
                   <div className={cx("mt-3 rounded-lg px-4 py-3 border", r.changed ? "bg-amber-100/50 border-amber-500/40" : "bg-pine-100/50 border-pine-200")}>
                     <p className={cx("font-display font-bold text-[13px]", r.changed ? "text-amber-700" : "text-pine-800")}>

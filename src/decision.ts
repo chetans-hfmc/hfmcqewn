@@ -12,7 +12,7 @@
    ============================================================ */
 import type {
   ClientProfile, DecisionSnapshot, EiborFix, EiborRow, Finding, GoldenCase, GoldenResult,
-  ProductDecision, ProductDef, ProductVersion, Promo, RateCell, Remediation, Resolution,
+  HighRiskBand, ProductDecision, ProductDef, ProductVersion, Promo, RateCell, Remediation, Resolution,
   Rule, RuleCandidate, Verdict, WeightingProfile,
 } from "./types";
 import { emi, loanFromEmi } from "./calc";
@@ -130,7 +130,7 @@ export function resolveLtv(matrix: Record<string, number> | undefined, c: Client
 }
 
 /* ---------- evaluation context ---------- */
-export interface EvalCtx { eibor: EiborFix | null; rules: Rule[]; promos: Promo[]; today: string; }
+export interface EvalCtx { eibor: EiborFix | null; rules: Rule[]; promos: Promo[]; today: string; topDevelopers?: string[]; }
 function livePromos(promos: Promo[], bankId: string, today: string): Promo[] {
   return promos.filter((p) => (!p.bankId || p.bankId === bankId) && p.from <= today && (!p.to || p.to >= today));
 }
@@ -291,6 +291,41 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     push({ code: "LTV-HIGH-AMT", severity: "APPLIED", category: "financing", message: `High loan-amount LTV cap applied (> ${fmtMoney(pv.eligibility.highAmountThreshold)})`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.ltvAboveThreshold}%`, source: pd.bankId });
     ltvPct = pv.eligibility.ltvAboveThreshold;
   }
+
+  /* ---- multi-property rule (> N properties per AECB/internal → LTV cap) ---- */
+  const mp = pv.eligibility.multiPropertyRule;
+  if (mp && c.propertiesOwned != null && c.propertiesOwned > mp.minCount && ltvPct > mp.ltv) {
+    push({ code: "MULTI-PROP", severity: "APPLIED", category: "financing", message: `Multi-property LTV cap applied (${c.propertiesOwned} properties > ${mp.minCount})`, previousValue: `${ltvPct}%`, resultingValue: `${mp.ltv}%`, source: pd.bankId, explanation: "Identified via AECB or internal records." });
+    ltvPct = mp.ltv;
+  }
+
+  /* ---- high-risk bands (nationality / sector), strictest match wins ---- */
+  const bands = pv.eligibility.highRiskBands ?? [];
+  if (bands.length && (c.nationality || c.sector)) {
+    const nat = (c.nationality ?? "").toLowerCase();
+    const sector = (c.sector ?? "").toLowerCase();
+    const dev = (c.developer ?? "").toLowerCase();
+    const topDevs = ctx.topDevelopers ?? [];
+    const hits: { band: HighRiskBand; via: string }[] = [];
+    for (const band of bands) {
+      const natHit = (band.nationalities ?? []).some((n) => nat && n.toLowerCase() === nat);
+      let secHit = (band.sectorKeywords ?? band.sectors).some((k) => sector && sector.includes(k.toLowerCase()));
+      if (secHit && band.topDeveloperExempt && dev && topDevs.some((td) => { const t = td.toLowerCase(); return dev.includes(t) || t.includes(dev); })) {
+        secHit = false;
+        push({ code: "HR-DEV-EXEMPT", severity: "INFO", category: "eligibility", message: `Top-developer exemption — ${c.developer} is on the approved list; standard policy applies`, source: pd.bankId });
+      }
+      if (natHit) hits.push({ band, via: "nationality" });
+      else if (secHit) hits.push({ band, via: "sector" });
+    }
+    if (hits.length) {
+      const strictest = hits.reduce((a, b) => (a.band.ltv <= b.band.ltv ? a : b));
+      if (ltvPct > strictest.band.ltv) {
+        push({ code: "HR-LTV", severity: "APPLIED", category: "financing", message: `High-risk segment LTV cap ${strictest.band.ltv}% applied (${strictest.via})`, previousValue: `${ltvPct}%`, resultingValue: `${strictest.band.ltv}%`, source: pd.bankId });
+        ltvPct = strictest.band.ltv;
+      }
+    }
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
@@ -487,10 +522,10 @@ export function collectRuleVersions(decisions: ProductDecision[]): { refId: stri
   return [...map.entries()].map(([refId, version]) => ({ refId, version }));
 }
 export interface ReplayDiff { productDefId: string; field: "verdict" | "eligibleAmount"; was: string; now: string }
-export function replayDecision(snap: DecisionSnapshot, productDefs: ProductDef[], rules: Rule[], promos: Promo[], today: string): { diffs: ReplayDiff[]; changed: boolean } {
+export function replayDecision(snap: DecisionSnapshot, productDefs: ProductDef[], rules: Rule[], promos: Promo[], today: string, topDevelopers?: string[]): { diffs: ReplayDiff[]; changed: boolean } {
   /* Replay uses the SAME EIBOR fix stored in the snapshot, so index movement
      doesn't masquerade as a rule change. Drift therefore means a rule changed. */
-  const ctx: EvalCtx = { eibor: snap.eiborFix, rules, promos, today };
+  const ctx: EvalCtx = { eibor: snap.eiborFix, rules, promos, today, topDevelopers };
   const fresh = evaluateAll(productDefs, snap.client, ctx);
   const diffs: ReplayDiff[] = [];
   for (const oldD of snap.decisions) {
@@ -526,6 +561,7 @@ export function personToProfile(p: {
   lobYears?: number; losMonths?: number; lowDoc?: boolean; salaryTransfer?: boolean;
   emirate?: string; uaeResident?: boolean;
   basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
+  propertiesOwned?: number; developer?: string;
 }, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
   propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
   const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
@@ -539,6 +575,7 @@ export function personToProfile(p: {
     propertyValue, loanRequested, financeCount: p.financeCount,
     propertyType: "RESIDENTIAL", emirate: p.emirate ?? "DUBAI", sector: p.sector ?? "",
     yearsEmployed: p.yearsEmployed ?? 2,
+    propertiesOwned: p.propertiesOwned, developer: p.developer,
     /* credit group */
     aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
     homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,

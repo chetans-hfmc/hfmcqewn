@@ -53,6 +53,16 @@ function candFromRule(r: Rule): RuleCandidate {
     axesMatched: axes, priority: 0, effectiveFrom: r.effectiveFrom, version: r.version,
   };
 }
+/* Like candFromRule, but returns null when the rule's scope doesn't apply to this
+   client/bank — so resolution only ever considers genuinely-applicable rules. */
+function candFromScopedRule(r: Rule, c: ClientProfile, bankId: string): RuleCandidate | null {
+  const s = r.scope;
+  if (s.customerType && s.customerType !== c.customerType) return null;
+  if (s.employment && s.employment !== c.employment) return null;
+  if (s.financeCount && s.financeCount !== c.financeCount) return null;
+  if (s.bankId && s.bankId !== bankId) return null;
+  return candFromRule(r);
+}
 
 /* ---------- client axis values for grid matching ---------- */
 function clientAxisValue(axis: string, c: ClientProfile): string | null {
@@ -85,9 +95,10 @@ function pickCell(cells: RateCell[], c: ClientProfile): RateCell | null {
 }
 
 /* ---------- rate resolution (recipes, never stored snapshots) ---------- */
-export function cellRate(cell: Pick<RateCell, "structure" | "fixedRate" | "margin" | "index" | "floor">, fix: EiborFix): number | null {
+export function cellRate(cell: Pick<RateCell, "structure" | "fixedRate" | "margin" | "index" | "floor">, fix: EiborFix | null): number | null {
   if (cell.structure === "FIXED" || cell.structure === "FIXED_THEN_VAR") return cell.fixedRate ?? null;
   if (cell.margin == null) return null;
+  if (!fix) return null; /* index-based pricing is unconfirmable without a published fix */
   const idx = cell.index === "EIBOR_1M" ? fix.m1 : cell.index === "EIBOR_6M" ? fix.m6 : cell.index === "EIBOR_1Y" ? fix.y1 : fix.m3;
   const raw = cell.margin + idx;
   return cell.floor != null ? Math.max(raw, cell.floor) : raw;
@@ -119,15 +130,14 @@ export function resolveLtv(matrix: Record<string, number> | undefined, c: Client
 }
 
 /* ---------- evaluation context ---------- */
-export interface EvalCtx { eibor: EiborFix; rules: Rule[]; promos: Promo[]; today: string; }
+export interface EvalCtx { eibor: EiborFix | null; rules: Rule[]; promos: Promo[]; today: string; }
 function livePromos(promos: Promo[], bankId: string, today: string): Promo[] {
   return promos.filter((p) => (!p.bankId || p.bankId === bankId) && p.from <= today && (!p.to || p.to >= today));
 }
-export function currentEiborFix(rows: EiborRow[]): EiborFix {
+/* Returns null when no fix is published — the engine NEVER invents an EIBOR. */
+export function currentEiborFix(rows: EiborRow[]): EiborFix | null {
   const last = rows[rows.length - 1];
-  return last
-    ? { date: last.date, m1: last.m1, m3: last.m3, m6: last.m6, y1: last.y1 }
-    : { date: new Date().toISOString().slice(0, 10), m1: 4.0, m3: 4.1, m6: 4.2, y1: 4.3 };
+  return last ? { date: last.date, m1: last.m1, m3: last.m3, m6: last.m6, y1: last.y1 } : null;
 }
 
 /* ---------- product evaluation → verdict + findings ---------- */
@@ -138,6 +148,7 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   const conditions: string[] = [];
   let blocked = false;
   let refer = false;
+  let unknown = false; /* set when a required rule/fixing is missing — never fabricated */
 
   const pv: ProductVersion | undefined =
     pd.versions.find((v) => v.status === "ACTIVE") ?? [...pd.versions].sort((a, b) => b.version - a.version)[0];
@@ -257,7 +268,11 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
         ruleId: res.winner.refId, ruleVersion: res.winner.version, resultingValue: `${ltvPct}%`,
         explanation: res.overridden.length ? `overrode ${res.overridden.map((o) => o.refLabel).join(", ")}` : undefined,
       });
-    } else ltvPct = 80;
+    } else {
+      /* No LTV rule for this client segment — the engine does not invent one. */
+      unknown = true;
+      push({ code: "LTV-UNKNOWN", severity: "WARN", category: "financing", message: "No LTV rule matches this client segment — LTV is UNKNOWN", explanation: "Add an LTV rule (product matrix or scoped rule) for this nationality/residency/finance-count." });
+    }
   }
   /* ---- property group: investment / second-property / high-amount LTV caps ---- */
   const eligibleValue = c.valuation && c.valuation > 0 ? Math.min(c.propertyValue, c.valuation) : c.propertyValue;
@@ -287,15 +302,32 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   }
   const ltvLimited = Math.min(maxByLtv, maxLoanCap === Infinity ? maxByLtv : maxLoanCap);
 
-  /* ---- tenure & age ---- */
-  const retireAge = c.customerType === "NATIONAL" ? 70 : 65;
-  const maxByAge = Math.max(0, (retireAge - c.age) * 12);
+  /* ---- tenure & age (retirement age is a policy rule, never hard-coded) ---- */
+  const retireCands = ctx.rules
+    .filter((r) => r.module === "RETIRE" && r.active)
+    .map((r) => candFromScopedRule(r, c, pd.bankId))
+    .filter((x): x is RuleCandidate => x != null);
+  const retireRes = resolveSlot(retireCands);
+  let retireAge: number | null = null;
+  if (retireRes) {
+    retireAge = retireRes.winner.value;
+    firedRules.push(retireRes);
+    push({
+      code: "RETIRE-AGE", severity: "APPLIED", category: "tenure", message: `Retirement/maturity age ${retireAge} from ${retireRes.winner.refLabel}`,
+      ruleId: retireRes.winner.refId, ruleVersion: retireRes.winner.version, resultingValue: `${retireAge}`,
+      explanation: retireRes.overridden.length ? `overrode ${retireRes.overridden.map((o) => o.refLabel).join(", ")}` : undefined,
+    });
+  } else {
+    unknown = true;
+    push({ code: "RETIRE-UNKNOWN", severity: "WARN", category: "tenure", message: "No retirement-age rule matches this client — age limit is UNKNOWN", explanation: "Add a RETIRE rule scoped to this customer type / employment." });
+  }
+  const maxByAge = retireAge == null ? Number.POSITIVE_INFINITY : Math.max(0, (retireAge - c.age) * 12);
   const capMonths = pv.tenure.maxMonths ?? 300;
   const tenure = Math.min(capMonths, maxByAge);
-  if (maxByAge < 12) {
+  if (retireAge != null && maxByAge < 12) {
     blocked = true;
     push({ code: "AGE", severity: "BLOCK", category: "tenure", message: `Age at maturity exceeds limit (retires at ${retireAge})`, explanation: `client is ${c.age}; tenure would end at ${c.age + 1}+`, source: pd.bankId });
-  } else if (maxByAge < capMonths) {
+  } else if (retireAge != null && maxByAge < capMonths) {
     refer = refer || maxByAge < 60;
     push({ code: "AGE", severity: maxByAge < 60 ? "WARN" : "INFO", category: "tenure", message: `Tenure capped at ${tenure} months by age`, previousValue: `${capMonths} mo`, resultingValue: `${tenure} mo`, source: pd.bankId });
   }
@@ -317,11 +349,20 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     push({ code: "INCOME-RECOG", severity: "INFO", category: "affordability", message: `Recognized income after recognition rules`, resultingValue: fmtMoney(recognizedIncome) + "/mo", source: pd.bankId });
   }
 
-  /* ---- affordability: DBR ceiling via resolver ---- */
-  const dbrCands = ctx.rules.filter((r) => r.module === "DBR" && r.active).map(candFromRule);
+  /* ---- affordability: DBR ceiling via resolver (scope-matched, never fabricated) ---- */
+  const dbrCands = ctx.rules
+    .filter((r) => r.module === "DBR" && r.active)
+    .map((r) => candFromScopedRule(r, c, pd.bankId))
+    .filter((x): x is RuleCandidate => x != null);
   const dbrRes = resolveSlot(dbrCands);
+  /* 50 is only a computational placeholder when no rule exists; the verdict is
+     flagged UNKNOWN so nobody relies on it. */
   const dbrCap = dbrRes ? dbrRes.winner.value : 50;
   if (dbrRes) firedRules.push(dbrRes);
+  else {
+    unknown = true;
+    push({ code: "DBR-UNKNOWN", severity: "WARN", category: "affordability", message: "No DBR ceiling rule matches this client — affordability limit is UNKNOWN", explanation: "Add a DBR rule (global or bank-scoped)." });
+  }
   const ccPct = pv.affordability.ccPct ?? 5;
   const existingOblig = c.monthlyLiabilities + c.creditCardLimits * (ccPct / 100);
   const income = recognizedIncome;
@@ -344,9 +385,17 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   if (cell) {
     ratePct = cellRate(cell, ctx.eibor);
     recipe = cellRecipe(cell);
-    push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
-    for (const p of promos) {
-      push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
+    const needsIndex = cell.structure === "MARGIN_INDEX" || cell.structure === "VAR_DAY1";
+    if (needsIndex && ratePct == null) {
+      /* An index-based cell matched but no EIBOR fix is published — we must not quote. */
+      unknown = true;
+      recipe = "pricing unconfirmed — EIBOR fix unavailable";
+      push({ code: "EIBOR-UNKNOWN", severity: "WARN", category: "pricing", message: "Current EIBOR fix unavailable — index-based pricing cannot be confirmed", explanation: "Publish an EIBOR fix, then re-run. The engine never invents an index value." });
+    } else {
+      push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
+      for (const p of promos) {
+        push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
+      }
     }
   }
 
@@ -375,8 +424,13 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   if (fees > 0) push({ code: "FEES", severity: "INFO", category: "fees", message: `Est. fees ${fmtMoney(fees)} (processing ${procPct}% min ${fmtMoney(procMin)} + valuation + PA)`, resultingValue: fmtMoney(fees), source: pd.bankId });
 
   /* ---- verdict ---- */
+  /* Precedence: blocked → UNKNOWN (missing rule/fixing) → not eligible → refer/conditions → eligible.
+     UNKNOWN is checked before "eligible <= 0" because a missing LTV rule or missing EIBOR fix
+     zeroes the eligible amount — that is "we cannot determine", not "rejected". */
   let verdict: Verdict = "ELIGIBLE";
-  if (blocked || eligible <= 0) verdict = "NOT_ELIGIBLE";
+  if (blocked) verdict = "NOT_ELIGIBLE";
+  else if (unknown) { verdict = "UNKNOWN"; conditions.push("One or more required rules/fixings are missing — verify before relying on this result."); }
+  else if (eligible <= 0) verdict = "NOT_ELIGIBLE";
   else if (refer || conditions.length > 0) verdict = refer ? "REFER" : "ELIGIBLE_WITH_CONDITIONS";
   if (verdict === "REFER") conditions.push("Senior review required before submission.");
 

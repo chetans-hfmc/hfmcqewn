@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 17;
+export const SEED_VERSION = 18;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -345,6 +345,8 @@ const RULES: Rule[] = [
   R({ id: "r-dbr", code: "DBR-MAX", module: "DBR", name: "DBR ceiling", kind: "pct", value: 50, scope: {}, version: 2, effectiveFrom: "2026-09-01", active: true, note: "Strictly below 50% — TO VERIFY", history: [{ version: 1, value: 55, effectiveFrom: "2025-01-01" }, { version: 2, value: 50, effectiveFrom: "2026-09-01" }] }),
   R({ id: "r-ret-n", code: "RETIRE-NAT", module: "RETIRE", name: "Retirement age — National", kind: "years", value: 70, scope: { customerType: "NATIONAL" }, version: 1, effectiveFrom: "2026-01-01", active: true }),
   R({ id: "r-ret-e", code: "RETIRE-EXP", module: "RETIRE", name: "Retirement age — Expat", kind: "years", value: 65, scope: { customerType: "EXPAT" }, version: 1, effectiveFrom: "2026-01-01", active: true }),
+  R({ id: "r-ret-nr", code: "RETIRE-NR", module: "RETIRE", name: "Retirement age — Non-Resident", kind: "years", value: 65, scope: { customerType: "NON_RESIDENT" }, version: 1, effectiveFrom: "2026-01-01", active: true, note: "TO VERIFY" }),
+  R({ id: "r-ret-dib-se", code: "RETIRE-DIB-SE", module: "RETIRE", name: "Retirement age — DIB Self-Employed", kind: "years", value: 70, scope: { bankId: "b-dib", employment: "SELF_EMPLOYED" }, version: 1, effectiveFrom: "2026-01-01", active: true, note: "Bank-specific: SE mature to 70 at DIB (overrides customer-type rule) — TO VERIFY" }),
   R({ id: "r-ten", code: "TENURE-MAX", module: "TENURE", name: "Max tenure", kind: "months", value: 300, scope: {}, version: 1, effectiveFrom: "2026-01-01", active: true }),
   R({ id: "r-cc", code: "CC-LIAB", module: "CC", name: "Credit card liability", kind: "pct", value: 5, scope: {}, version: 1, effectiveFrom: "2026-01-01", active: true, note: "Arab Bank 5% — TO VERIFY" }),
   R({ id: "r-stmt", code: "STMT-ADIB", module: "STMT", name: "Statement period — ADIB", kind: "months", value: 3, scope: { bankId: "b-adib" }, version: 1, effectiveFrom: "2026-01-01", active: true }),

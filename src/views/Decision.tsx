@@ -10,6 +10,7 @@ const VERDICT_META: Record<Verdict, { tone: string; l: string; icon: string }> =
   ELIGIBLE_WITH_CONDITIONS: { tone: "steel", l: "Eligible · conditions", icon: "check" },
   REFER: { tone: "amber", l: "Refer", icon: "alert" },
   NOT_ELIGIBLE: { tone: "rust", l: "Not eligible", icon: "x" },
+  UNKNOWN: { tone: "ink", l: "Unknown · to verify", icon: "help" },
 };
 
 function VerdictPill({ v }: { v: Verdict }) {
@@ -148,7 +149,9 @@ export default function DecisionView() {
               <Btn onClick={evaluate}><Ic n="spark" size={15} /> Evaluate all banks</Btn>
               {decisions && <Btn variant="outline" onClick={saveSnapshot}><Ic n="lock" size={13} /> Save decision snapshot</Btn>}
             </div>
-            <p className="text-[10.5px] text-ink-soft mt-3 num">resolver v{RESOLVER_VERSION} · EIBOR 3M {eibor.m3}% ({fmtDate(eibor.date)})</p>
+            <p className={cx("text-[10.5px] mt-3 num", eibor ? "text-ink-soft" : "text-amber-700 font-semibold")}>
+              resolver v{RESOLVER_VERSION} · {eibor ? <>EIBOR 3M {eibor.m3}% ({fmtDate(eibor.date)})</> : <>EIBOR fix unavailable — index-based pricing will show UNKNOWN</>}
+            </p>
           </div>
 
           {/* results */}
@@ -235,7 +238,7 @@ export default function DecisionView() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-display font-bold text-[14px]">{s.client.name || "Unnamed client"} <span className="num text-[11px] text-ink-soft font-normal">· {fmtDate(s.at.slice(0, 10))} · by {state.users.find((u) => u.id === s.by)?.name ?? s.by}</span></p>
-                  <p className="num text-[11px] text-ink-soft mt-0.5">resolver v{s.resolverVersion} · EIBOR 3M {s.eiborFix.m3}% · {s.ruleVersions.length} rules pinned · {s.decisions.length} products</p>
+                  <p className="num text-[11px] text-ink-soft mt-0.5">resolver v{s.resolverVersion} · {s.eiborFix ? `EIBOR 3M ${s.eiborFix.m3}%` : "EIBOR not published"} · {s.ruleVersions.length} rules pinned · {s.decisions.length} products</p>
                 </div>
                 <Btn size="sm" variant="outline" onClick={() => setReplayFor(replayFor?.id === s.id ? null : s)}><Ic n="refresh" size={13} /> {replayFor?.id === s.id ? "Hide replay" : "Replay vs today"}</Btn>
               </div>

@@ -174,7 +174,7 @@ export interface ProductDef {
 export interface Promo { id: string; bankId?: string; name: string; from: string; to?: string; summary: string; createdBy: string; createdAt: string; }
 
 /* ---------- Decision Engine: Verdict + Findings contract ---------- */
-export type Verdict = "ELIGIBLE" | "ELIGIBLE_WITH_CONDITIONS" | "REFER" | "NOT_ELIGIBLE";
+export type Verdict = "ELIGIBLE" | "ELIGIBLE_WITH_CONDITIONS" | "REFER" | "NOT_ELIGIBLE" | "UNKNOWN";
 export type FindingSeverity = "BLOCK" | "WARN" | "INFO" | "APPLIED";
 export type FindingCategory = "eligibility" | "financing" | "affordability" | "tenure" | "pricing" | "fees" | "condition";
 
@@ -238,7 +238,7 @@ export interface WeightingProfile { id: string; name: string; weights: { finance
 
 export interface DecisionSnapshot {
   id: string; at: string; by: string; client: ClientProfile; resolverVersion: string;
-  eiborFix: EiborFix; weightingProfileId: string;
+  eiborFix: EiborFix | null; weightingProfileId: string;
   ruleVersions: { refId: string; version: number }[]; decisions: ProductDecision[];
 }
 export interface GoldenCase {

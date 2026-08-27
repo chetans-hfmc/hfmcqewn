@@ -74,7 +74,7 @@ export default function BankRulesView() {
       <div className="anim-up flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display font-bold text-[24px] tracking-tight">Bank Rule Engine</h1>
-          <p className="text-[12.5px] text-ink-soft mt-0.5">Admin-only · Global → Bank → Product, most specific wins · rates are recipes resolved live against EIBOR {`3M ${eibor.m3}%`}</p>
+          <p className="text-[12.5px] text-ink-soft mt-0.5">Admin-only · Global → Bank → Product, most specific wins · rates are recipes resolved live against EIBOR {eibor ? `3M ${eibor.m3}%` : "(fix unpublished — pricing UNKNOWN)"}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Btn variant="outline" size="sm" onClick={() => setShowAxes(true)}><Ic n="sliders" size={13} /> Axes ({state.axes.length})</Btn>

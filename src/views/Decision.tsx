@@ -10,6 +10,7 @@ const VERDICT_META: Record<Verdict, { tone: string; l: string; icon: string }> =
   ELIGIBLE_WITH_CONDITIONS: { tone: "steel", l: "Eligible · conditions", icon: "check" },
   REFER: { tone: "amber", l: "Refer", icon: "alert" },
   NOT_ELIGIBLE: { tone: "rust", l: "Not eligible", icon: "x" },
+  UNKNOWN: { tone: "ink", l: "Unknown · to verify", icon: "help" },
 };
 
 function VerdictPill({ v }: { v: Verdict }) {
@@ -48,7 +49,7 @@ export default function DecisionView() {
   };
 
   const evaluate = () => {
-    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO() };
+    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO(), topDevelopers: state.topDevelopers };
     const raw = evaluateAll(state.productDefs, profile, ctx);
     setDecisions(rankDecisions(raw, weight?.weights ?? { finance: 30, rate: 25, ltv: 20, fees: 15, tat: 10 }));
     setExpanded(null);
@@ -67,7 +68,7 @@ export default function DecisionView() {
 
   const goldenResults = useMemo(() => {
     if (tab !== "golden") return null;
-    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO() };
+    const ctx = { eibor, rules: state.rules, promos: state.promos, today: todayISO(), topDevelopers: state.topDevelopers };
     return runGoldenCases(state.goldenCases, state.productDefs, ctx);
   }, [tab, eibor, state.rules, state.promos, state.goldenCases, state.productDefs]);
 
@@ -113,13 +114,49 @@ export default function DecisionView() {
               <Field label="Property value"><NumInput value={profile.propertyValue} onChange={(n) => setProfile({ ...profile, propertyValue: n })} suffix="AED" /></Field>
               <Field label="Loan requested"><NumInput value={profile.loanRequested} onChange={(n) => setProfile({ ...profile, loanRequested: n })} suffix="AED" /></Field>
               <Field label="Finance count"><Select value={String(profile.financeCount)} onChange={(v) => setProfile({ ...profile, financeCount: v === "2" ? 2 : 1 })} options={[{ v: "1", l: "1st" }, { v: "2", l: "2nd+" }]} /></Field>
-              <Field label="Sector"><TextInput value={profile.sector} onChange={(e) => setProfile({ ...profile, sector: e.target.value })} placeholder="optional" /></Field>
+              <Field label="Sector"><TextInput value={profile.sector} onChange={(e) => setProfile({ ...profile, sector: e.target.value })} placeholder="e.g. Real Estate / Developers" /></Field>
+              <Field label="Employer"><TextInput value={profile.employer ?? ""} onChange={(e) => setProfile({ ...profile, employer: e.target.value || undefined })} placeholder="e.g. ADNOC, Etihad, Mubadala…" /></Field>
+              <Field label="Bank segment"><Select value={profile.segment ?? ""} onChange={(v) => setProfile({ ...profile, segment: v || undefined })} options={[{ v: "", l: "Standard" }, { v: "PRIV", l: "Private" }, { v: "EXCELLENCY", l: "Excellency" }, { v: "ASPIRE", l: "Aspire / Privilege" }, { v: "HOMESAVER", l: "Home Saver" }, { v: "PREMIER", l: "Premier" }, { v: "ELITE", l: "Elite" }]} /></Field>
+              <Field label="Preferred fixed term"><Select value={profile.preferredFixedYears != null ? String(profile.preferredFixedYears) : ""} onChange={(v) => setProfile({ ...profile, preferredFixedYears: v ? Number(v) : undefined })} options={[{ v: "", l: "Best available" }, { v: "1", l: "1 year" }, { v: "2", l: "2–3 years" }, { v: "4", l: "4 years" }, { v: "5", l: "5 years" }, { v: "7", l: "7 years" }, { v: "10", l: "8–10 years" }, { v: "15", l: "11–15 years" }, { v: "20", l: "16–20 years" }]} /></Field>
+              <Field label="Properties owned"><NumInput value={profile.propertiesOwned ?? 0} onChange={(n) => setProfile({ ...profile, propertiesOwned: n || undefined })} suffix="#" /></Field>
+              <Field label="Developer"><TextInput value={profile.developer ?? ""} onChange={(e) => setProfile({ ...profile, developer: e.target.value || undefined })} placeholder="e.g. Emaar PJSC" /></Field>
+            </div>
+
+            {/* credit group */}
+            <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Credit</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="AECB score"><NumInput value={profile.aecbScore ?? 0} onChange={(n) => setProfile({ ...profile, aecbScore: n || undefined })} /></Field>
+              <Field label="Dependants"><NumInput value={profile.dependants ?? 0} onChange={(n) => setProfile({ ...profile, dependants: n || undefined })} /></Field>
+              <Field label="Negative bureau?"><Select value={profile.negativeBureau ? "1" : "0"} onChange={(v) => setProfile({ ...profile, negativeBureau: v === "1" || undefined })} options={[{ v: "0", l: "No" }, { v: "1", l: "Yes" }]} /></Field>
+            </div>
+
+            {/* self-employed group (shown only when relevant) */}
+            {profile.employment === "SELF_EMPLOYED" && (
+              <div className="anim-tick">
+                <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Self-employed</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Business age (LOB)"><NumInput value={profile.lobYears ?? 0} onChange={(n) => setProfile({ ...profile, lobYears: n || undefined })} suffix="yrs" /></Field>
+                  <Field label="Service (LOS)"><NumInput value={profile.losMonths ?? 0} onChange={(n) => setProfile({ ...profile, losMonths: n || undefined })} suffix="mo" /></Field>
+                  <Field label="Low doc?"><Select value={profile.lowDoc ? "1" : "0"} onChange={(v) => setProfile({ ...profile, lowDoc: v === "1" || undefined })} options={[{ v: "0", l: "Full doc" }, { v: "1", l: "Low doc" }]} /></Field>
+                </div>
+              </div>
+            )}
+
+            {/* property & transaction group */}
+            <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Property & transaction</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Use"><Select value={profile.propertyUse ?? "OWNER_OCCUPIED"} onChange={(v) => setProfile({ ...profile, propertyUse: v as ClientProfile["propertyUse"] })} options={[{ v: "OWNER_OCCUPIED", l: "Owner-occupied" }, { v: "INVESTMENT", l: "Investment" }]} /></Field>
+              <Field label="Status"><Select value={profile.propertyStatus ?? "READY"} onChange={(v) => setProfile({ ...profile, propertyStatus: v as ClientProfile["propertyStatus"] })} options={[{ v: "READY", l: "Ready" }, { v: "OFF_PLAN", l: "Off plan" }, { v: "UNDER_CONSTRUCTION", l: "Under construction" }, { v: "LAND", l: "Land" }]} /></Field>
+              <Field label="Valuation"><NumInput value={profile.valuation ?? 0} onChange={(n) => setProfile({ ...profile, valuation: n || undefined })} suffix="AED" /></Field>
+              <Field label="Transaction"><Select value={profile.txType ?? "PURCHASE"} onChange={(v) => setProfile({ ...profile, txType: v as ClientProfile["txType"] })} options={[{ v: "PURCHASE", l: "Purchase" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + equity" }, { v: "EQUITY", l: "Equity release" }]} /></Field>
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <Btn onClick={evaluate}><Ic n="spark" size={15} /> Evaluate all banks</Btn>
               {decisions && <Btn variant="outline" onClick={saveSnapshot}><Ic n="lock" size={13} /> Save decision snapshot</Btn>}
             </div>
-            <p className="text-[10.5px] text-ink-soft mt-3 num">resolver v{RESOLVER_VERSION} · EIBOR 3M {eibor.m3}% ({fmtDate(eibor.date)})</p>
+            <p className={cx("text-[10.5px] mt-3 num", eibor ? "text-ink-soft" : "text-amber-700 font-semibold")}>
+              resolver v{RESOLVER_VERSION} · {eibor ? <>EIBOR 3M {eibor.m3}% ({fmtDate(eibor.date)})</> : <>EIBOR fix unavailable — index-based pricing will show UNKNOWN</>}
+            </p>
           </div>
 
           {/* results */}
@@ -206,12 +243,12 @@ export default function DecisionView() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-display font-bold text-[14px]">{s.client.name || "Unnamed client"} <span className="num text-[11px] text-ink-soft font-normal">· {fmtDate(s.at.slice(0, 10))} · by {state.users.find((u) => u.id === s.by)?.name ?? s.by}</span></p>
-                  <p className="num text-[11px] text-ink-soft mt-0.5">resolver v{s.resolverVersion} · EIBOR 3M {s.eiborFix.m3}% · {s.ruleVersions.length} rules pinned · {s.decisions.length} products</p>
+                  <p className="num text-[11px] text-ink-soft mt-0.5">resolver v{s.resolverVersion} · {s.eiborFix ? `EIBOR 3M ${s.eiborFix.m3}%` : "EIBOR not published"} · {s.ruleVersions.length} rules pinned · {s.decisions.length} products</p>
                 </div>
                 <Btn size="sm" variant="outline" onClick={() => setReplayFor(replayFor?.id === s.id ? null : s)}><Ic n="refresh" size={13} /> {replayFor?.id === s.id ? "Hide replay" : "Replay vs today"}</Btn>
               </div>
               {replayFor?.id === s.id && (() => {
-                const r = replayDecision(s, state.productDefs, state.rules, state.promos, todayISO());
+                const r = replayDecision(s, state.productDefs, state.rules, state.promos, todayISO(), state.topDevelopers);
                 return (
                   <div className={cx("mt-3 rounded-lg px-4 py-3 border", r.changed ? "bg-amber-100/50 border-amber-500/40" : "bg-pine-100/50 border-pine-200")}>
                     <p className={cx("font-display font-bold text-[13px]", r.changed ? "text-amber-700" : "text-pine-800")}>

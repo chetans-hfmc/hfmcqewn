@@ -10,6 +10,7 @@ import CalculatorsView from "./views/Calc";
 import { RuleCentre, UsersView, AuditView, GuideView } from "./views/Govern";
 import BankRulesView from "./views/BankRules";
 import DecisionView from "./views/Decision";
+import ProposalsView from "./views/Proposals";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
   { g: "Operate", items: [
@@ -29,6 +30,7 @@ const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
   ]},
   { g: "Decide", items: [
     { v: "decision", l: "Decision Engine", icon: "spark" },
+    { v: "proposals", l: "Proposal Desk", icon: "file" },
     { v: "calculators", l: "Calculators", icon: "calc" },
   ]},
   { g: "Govern", items: [
@@ -57,7 +59,7 @@ function Shell() {
   const titles: Record<View, string> = {
     dashboard: "Home", tracker: "Morning Board", tat: "TAT & Escalation", people: "People", leads: "Leads",
     cases: nav.caseId ? "Case 360" : "Cases", tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries",
-    decision: "Decision Engine", calculators: "Calculator Centre", templates: "Desk Tools", rules: "Rule Centre",
+    decision: "Decision Engine", proposals: "Proposal Desk", calculators: "Calculator Centre", templates: "Desk Tools", rules: "Rule Centre",
     bankrules: "Bank Rule Engine", users: "Users & Roles", guide: "Guide Book", audit: "Audit Trail",
   };
 
@@ -146,6 +148,7 @@ function Shell() {
           {view === "documents" && <DocumentsView />}
           {view === "queries" && <QueriesView />}
           {view === "decision" && <DecisionView />}
+          {view === "proposals" && <ProposalsView />}
           {view === "calculators" && <CalculatorsView />}
           {view === "rules" && <RuleCentre />}
           {view === "bankrules" && <BankRulesView />}

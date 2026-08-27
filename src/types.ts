@@ -13,6 +13,9 @@ export type Employment = "SALARIED" | "SELF_EMPLOYED";
 export type TxType = "PURCHASE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY";
 export type LeadStatus = "NEW" | "CONTACTED" | "APPOINTMENT" | "QUALIFIED" | "PROPOSAL" | "CONVERTED" | "LOST";
 
+/* Person — exhaustive client profile across the agreed field groups.
+   Legacy fields (monthlySalary/otherIncome) remain the canonical income
+   totals; the breakdown below feeds income-recognition rules. */
 export interface Person {
   id: string; name: string; customerType: CustomerType; nationality: string;
   employment: Employment; dob: string; mobile: string; email: string; employer?: string;
@@ -20,6 +23,40 @@ export interface Person {
   cards: { bank: string; limit: number }[];
   liabilities: { type: string; monthly: number }[];
   createdAt: string;
+
+  /* Customer group */
+  preferredName?: string; gender?: string; maritalStatus?: string; dependants?: number;
+  countryOfBirth?: string; goldenVisa?: boolean;
+  propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
+
+  /* Contact */
+  altMobile?: string; whatsapp?: string;
+
+  /* Residency & Visa group */
+  uaeResident?: boolean; residencyStatus?: string; visaType?: string; visaExpiry?: string;
+  eidNumber?: string; eidExpiry?: string; passportNo?: string; passportExpiry?: string;
+  emirate?: string; currentAddress?: string;
+
+  /* Employment group */
+  jobTitle?: string; sector?: string; yearsEmployed?: number; workLocation?: string;
+  hrName?: string; hrPhone?: string; salaryTransfer?: boolean;          /* STL / NSTL */
+  /* Self-employed specifics */
+  businessName?: string; businessActivity?: string;
+  lobYears?: number;                  /* length of business */
+  losMonths?: number;                 /* length of service in business */
+  companyOwnershipPct?: number; annualTurnover?: number; auditedFinancials?: boolean; lowDoc?: boolean;
+
+  /* Income group (breakdown) */
+  basicSalary?: number; allowances?: number; commission?: number; bonus?: number;
+  rentalIncome?: number; businessIncome?: number;
+
+  /* Credit group */
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
+  creditScoreBand?: string;
+
+  /* Assignment & registration */
+  assignedTeam?: string; assignedRm?: string; dateRegistered?: string; leadSource?: string;
+  primaryAccountBank?: string;
 }
 
 export interface Lead {
@@ -96,20 +133,75 @@ export interface EligGate {
   id: string; kind: "NATIONALITY_ALLOW" | "NATIONALITY_BLOCK" | "FLAG" | "EMPLOYMENT_BLOCK";
   label: string; values?: string[]; hardStop: boolean; when?: string;
 }
+/* Nationality / sector risk band — the strictest matching band wins.
+   topDeveloperExempt: a real-estate sector is NOT high-risk when the developer
+   is on the bank's approved top-developer list. */
+export interface HighRiskBand {
+  ltv: number;
+  nationalities?: string[];
+  sectors: string[];               /* display names from the circular */
+  sectorKeywords?: string[];       /* matching tokens against client.sector (case-insensitive) */
+  topDeveloperExempt?: boolean;
+}
 export interface ProductVersion {
   version: number; status: "DRAFT" | "SCHEDULED" | "ACTIVE" | "RETIRED";
   effectiveFrom?: string; source?: string; createdAt: string;
   eligibility: {
     minSalary?: number; minLoan?: number; maxLoan?: number;
+    /* Keys tried in order: customerType → residency → STL/NSTL (salary transfer) → employment. */
+    minSalaryMatrix?: Record<string, number>;  /* e.g. NATIONAL 8K / EXPAT 15K · or · STL 10K / NSTL 15K */
     maxAgeSalaried?: number; maxAgeSelfEmp?: number; maxLoanByNationality?: Record<string, number>;
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
+    constructionLtv?: number;                  /* LTV cap for under-construction / off-plan finance */
+    landLtv?: number;                          /* LTV cap for land purchase */
+    maxUnits?: number;                         /* max loan = amount cap OR n units, whichever lower */
+    paymentHoliday?: string;                   /* e.g. "STL up to 6 months · NSTL up to 3 months" */
+    coApplicantRule?: string;                  /* e.g. "1 blood relation (no siblings)" */
+    employerRequirements?: { minYearsEstablished?: number; minEmployees?: number; profileForm?: boolean; note?: string };
+
+    /* Credit-group rules */
+    minAecb?: number;                          /* minimum bureau score */
+    negativeBureauBlock?: boolean;             /* hard-stop on negative bureau */
+
+    /* Self-employed LOB / LOS rules (computed, not just notes) */
+    minLobYears?: number;                      /* minimum length of business */
+    minLosMonths?: number;                     /* minimum length of service */
+    level3Threshold?: { lobYears: number; losMonths: number };  /* at/above → Level 3 approval (REFER) */
+
+    /* Property-group rules */
+    investmentLtv?: number;                    /* LTV cap for investment property */
+    secondPropertyLtv?: number;                /* LTV cap for 2nd/subsequent property */
+    highAmountThreshold?: number;              /* loan amount above which LTV tightens */
+    ltvAboveThreshold?: number;                /* LTV applied above the threshold */
+    statementMonths?: number;                  /* required personal bank-statement months */
+    multiPropertyRule?: { minCount: number; ltv: number }; /* > minCount properties (AECB/internal) → LTV cap */
+    highRiskBands?: HighRiskBand[];            /* nationality/sector risk bands, strictest match wins */
+
+    /* Income-recognition rules (% of each component counted) */
+    incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
+    variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
+    salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
   };
   tenure: { maxMonths?: number; note?: string };
   grid: { cells: RateCell[] };
-  fees: { processingPct?: number; processingMin?: number; valuation?: number; preApproval?: number; earlySettlement?: string; note?: string };
+  fees: {
+    processingPct?: number; processingMin?: number; processingMax?: number; valuation?: number; preApproval?: number;
+    earlySettlement?: string; note?: string;
+    ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
+    vatPct?: number; arrangementFee?: string; partialSettlement?: string;
+    lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
+    processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
+    txOverrides?: { txType: TxType; processingPct?: number; valuationWaived?: boolean; note?: string }[];
+    feeFinancing?: { allowed: boolean; pct?: number; basis?: string };  /* e.g. 6% DLD & broker fee */
+    employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
+  };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
-  documents: { name: string; required: boolean }[];
-  tat: { paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number; paValidityDays?: number };
+  documents: { name: string; required: boolean; note?: string }[];
+  tat: {
+    paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number;
+    paValidityDays?: number; folValidityDays?: number; valuationValidityDays?: number;
+    accountOpeningDays?: number; disbursalDays?: number; transferDays?: number;
+  };
 }
 export interface ProductDef {
   id: string; bankId: string; name: string; loanType: "ISLAMIC" | "CONVENTIONAL" | "BOTH";
@@ -119,7 +211,7 @@ export interface ProductDef {
 export interface Promo { id: string; bankId?: string; name: string; from: string; to?: string; summary: string; createdBy: string; createdAt: string; }
 
 /* ---------- Decision Engine: Verdict + Findings contract ---------- */
-export type Verdict = "ELIGIBLE" | "ELIGIBLE_WITH_CONDITIONS" | "REFER" | "NOT_ELIGIBLE";
+export type Verdict = "ELIGIBLE" | "ELIGIBLE_WITH_CONDITIONS" | "REFER" | "NOT_ELIGIBLE" | "UNKNOWN";
 export type FindingSeverity = "BLOCK" | "WARN" | "INFO" | "APPLIED";
 export type FindingCategory = "eligibility" | "financing" | "affordability" | "tenure" | "pricing" | "fees" | "condition";
 
@@ -157,13 +249,37 @@ export interface ClientProfile {
   monthlyIncome: number; otherIncome: number; monthlyLiabilities: number; creditCardLimits: number;
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
+  propertiesOwned?: number; developer?: string;
+  segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
+  employer?: string;                 /* drives employer-based rate discounts */
+  preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
+
+  /* Credit group */
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
+  dependants?: number; goldenVisa?: boolean;
+
+  /* Employment group (self-employed specifics) */
+  lobYears?: number;                  /* length of business */
+  losMonths?: number;                 /* length of service in business */
+  lowDoc?: boolean; salaryTransfer?: boolean;   /* STL / NSTL */
+
+  /* Property group */
+  propertyUse?: "OWNER_OCCUPIED" | "INVESTMENT";
+  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND";
+  valuation?: number;
+
+  /* Transaction / Finance group */
+  txType?: TxType;
+
+  /* Income group (breakdown, for income-recognition rules) */
+  incomeBreakdown?: { basic?: number; allowances?: number; commission?: number; bonus?: number; rental?: number; business?: number };
 }
 export interface EiborFix { date: string; m1: number; m3: number; m6: number; y1: number; }
 export interface WeightingProfile { id: string; name: string; weights: { finance: number; rate: number; ltv: number; fees: number; tat: number }; }
 
 export interface DecisionSnapshot {
   id: string; at: string; by: string; client: ClientProfile; resolverVersion: string;
-  eiborFix: EiborFix; weightingProfileId: string;
+  eiborFix: EiborFix | null; weightingProfileId: string;
   ruleVersions: { refId: string; version: number }[]; decisions: ProductDecision[];
 }
 export interface GoldenCase {
@@ -189,8 +305,9 @@ export interface AppState {
   templates: EmailTemplate[]; trackerDates: string[]; dismissedAlerts?: string[];
   axes: AxisDef[]; productDefs: ProductDef[]; promos: Promo[];
   weightingProfiles: WeightingProfile[]; decisionSnapshots: DecisionSnapshot[]; goldenCases: GoldenCase[];
+  topDevelopers: string[];   /* bank-approved top-developer list — drives high-risk exemptions */
 }
 
 export type View =
   | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
-  | "queries" | "decision" | "calculators" | "templates" | "rules" | "bankrules" | "users" | "audit" | "guide";
+  | "queries" | "decision" | "proposals" | "calculators" | "templates" | "rules" | "bankrules" | "users" | "audit" | "guide";

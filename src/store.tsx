@@ -47,11 +47,11 @@ export type Action =
 
 /* ---------- permissions (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
-  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
-  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
-  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "calculators", "templates", "guide", "audit"],
-  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "decision", "calculators", "templates", "guide"],
-  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "decision", "calculators", "templates", "guide"],
+  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
+  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
+  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide", "audit"],
+  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide"],
+  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "decision", "proposals", "calculators", "templates", "guide"],
   PA: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "templates", "guide"],
   TBD: ["dashboard"],
 };
@@ -374,6 +374,7 @@ function loadInitial(): AppState {
       const p = JSON.parse(raw) as AppState;
       if (p.version === SEED_VERSION && Array.isArray(p.cases) && Array.isArray(p.users) &&
         Array.isArray(p.productDefs) && Array.isArray(p.weightingProfiles) && Array.isArray(p.goldenCases) &&
+        Array.isArray(p.topDevelopers) &&
         p.users.some((u) => u.empId === "hfmm-15")) {
         if (!p.users.some((u) => u.empId === "hfmm-00")) p.users = [{ ...SUPER_ADMIN }, ...p.users];
         return p;

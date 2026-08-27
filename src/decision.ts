@@ -12,7 +12,7 @@
    ============================================================ */
 import type {
   ClientProfile, DecisionSnapshot, EiborFix, EiborRow, Finding, GoldenCase, GoldenResult,
-  ProductDecision, ProductDef, ProductVersion, Promo, RateCell, Remediation, Resolution,
+  HighRiskBand, ProductDecision, ProductDef, ProductVersion, Promo, RateCell, Remediation, Resolution,
   Rule, RuleCandidate, Verdict, WeightingProfile,
 } from "./types";
 import { emi, loanFromEmi } from "./calc";
@@ -53,6 +53,16 @@ function candFromRule(r: Rule): RuleCandidate {
     axesMatched: axes, priority: 0, effectiveFrom: r.effectiveFrom, version: r.version,
   };
 }
+/* Like candFromRule, but returns null when the rule's scope doesn't apply to this
+   client/bank — so resolution only ever considers genuinely-applicable rules. */
+function candFromScopedRule(r: Rule, c: ClientProfile, bankId: string): RuleCandidate | null {
+  const s = r.scope;
+  if (s.customerType && s.customerType !== c.customerType) return null;
+  if (s.employment && s.employment !== c.employment) return null;
+  if (s.financeCount && s.financeCount !== c.financeCount) return null;
+  if (s.bankId && s.bankId !== bankId) return null;
+  return candFromRule(r);
+}
 
 /* ---------- client axis values for grid matching ---------- */
 function clientAxisValue(axis: string, c: ClientProfile): string | null {
@@ -60,6 +70,10 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "employment": return c.employment;
     case "residency": return c.residency;
     case "customerType": return c.customerType;
+    case "segment": return c.segment ?? null;
+    case "tenure": return c.preferredFixedYears != null ? String(c.preferredFixedYears) : null;
+    case "stl": return c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
+    case "propertyStatus": return c.propertyStatus ?? null;
     case "ftvBand": {
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
@@ -85,9 +99,10 @@ function pickCell(cells: RateCell[], c: ClientProfile): RateCell | null {
 }
 
 /* ---------- rate resolution (recipes, never stored snapshots) ---------- */
-export function cellRate(cell: Pick<RateCell, "structure" | "fixedRate" | "margin" | "index" | "floor">, fix: EiborFix): number | null {
+export function cellRate(cell: Pick<RateCell, "structure" | "fixedRate" | "margin" | "index" | "floor">, fix: EiborFix | null): number | null {
   if (cell.structure === "FIXED" || cell.structure === "FIXED_THEN_VAR") return cell.fixedRate ?? null;
   if (cell.margin == null) return null;
+  if (!fix) return null; /* index-based pricing is unconfirmable without a published fix */
   const idx = cell.index === "EIBOR_1M" ? fix.m1 : cell.index === "EIBOR_6M" ? fix.m6 : cell.index === "EIBOR_1Y" ? fix.y1 : fix.m3;
   const raw = cell.margin + idx;
   return cell.floor != null ? Math.max(raw, cell.floor) : raw;
@@ -119,15 +134,14 @@ export function resolveLtv(matrix: Record<string, number> | undefined, c: Client
 }
 
 /* ---------- evaluation context ---------- */
-export interface EvalCtx { eibor: EiborFix; rules: Rule[]; promos: Promo[]; today: string; }
+export interface EvalCtx { eibor: EiborFix | null; rules: Rule[]; promos: Promo[]; today: string; topDevelopers?: string[]; }
 function livePromos(promos: Promo[], bankId: string, today: string): Promo[] {
   return promos.filter((p) => (!p.bankId || p.bankId === bankId) && p.from <= today && (!p.to || p.to >= today));
 }
-export function currentEiborFix(rows: EiborRow[]): EiborFix {
+/* Returns null when no fix is published — the engine NEVER invents an EIBOR. */
+export function currentEiborFix(rows: EiborRow[]): EiborFix | null {
   const last = rows[rows.length - 1];
-  return last
-    ? { date: last.date, m1: last.m1, m3: last.m3, m6: last.m6, y1: last.y1 }
-    : { date: new Date().toISOString().slice(0, 10), m1: 4.0, m3: 4.1, m6: 4.2, y1: 4.3 };
+  return last ? { date: last.date, m1: last.m1, m3: last.m3, m6: last.m6, y1: last.y1 } : null;
 }
 
 /* ---------- product evaluation → verdict + findings ---------- */
@@ -138,6 +152,7 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   const conditions: string[] = [];
   let blocked = false;
   let refer = false;
+  let unknown = false; /* set when a required rule/fixing is missing — never fabricated */
 
   const pv: ProductVersion | undefined =
     pd.versions.find((v) => v.status === "ACTIVE") ?? [...pd.versions].sort((a, b) => b.version - a.version)[0];
@@ -164,7 +179,9 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       hit = (g.values ?? []).includes(c.employment);
       detail = `blocked employment: ${g.values?.join(", ")}`;
     } else if (g.kind === "FLAG") {
-      hit = g.when === "NON_RESIDENT" ? c.residency === "NON_RESIDENT" : false;
+      /* A FLAG with no `when` applies to everyone; with `when`, it scopes to a
+         residency / employment / customer-type segment (e.g. "SELF_EMPLOYED"). */
+      hit = !g.when ? true : (g.when === c.residency || g.when === c.employment || g.when === c.customerType);
     }
     if (hit) {
       if (g.hardStop) {
@@ -176,9 +193,14 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       }
     }
   }
-  if (pv.eligibility.restrictedSectors?.length && c.sector && pv.eligibility.restrictedSectors.includes(c.sector)) {
-    blocked = true;
-    push({ code: "SECTOR", severity: "BLOCK", category: "eligibility", message: `Sector restricted: ${c.sector}`, source: pd.bankId });
+  /* ---- documentation requirement: bank-statement months (verified by underwriter) ---- */
+  if (pv.eligibility.statementMonths) {
+    push({
+      code: "STMT-MONTHS", severity: "INFO", category: "eligibility",
+      message: `Requires latest ${pv.eligibility.statementMonths} months of bank statements`,
+      explanation: "Document requirement — the engine flags it; an underwriter verifies the statements before submission.",
+      source: pd.bankId,
+    });
   }
 
   /* ---- employment class fit ---- */
@@ -187,15 +209,61 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     push({ code: "CLASS", severity: "BLOCK", category: "eligibility", message: `Product is for ${pd.classes.map((x) => x.toLowerCase()).join(" / ")} only`, explanation: `client is ${c.employment.toLowerCase()}`, source: pd.bankId });
   }
 
-  /* ---- income floor ---- */
-  if (pv.eligibility.minSalary != null && c.monthlyIncome < pv.eligibility.minSalary) {
+  /* ---- income floor (per-customer-type matrix wins over the flat minimum) ---- */
+  /* Matrix keys are tried in order of specificity: customer type → residency →
+     salary-transfer (STL/NSTL) → employment. First hit wins. */
+  const msm = pv.eligibility.minSalaryMatrix ?? {};
+  const stlKey = c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
+  const msmKey = [c.customerType, c.residency, stlKey, c.employment].find((k) => k != null && msm[k] != null) ?? null;
+  const effMinSalary = (msmKey ? msm[msmKey] : undefined) ?? pv.eligibility.minSalary;
+  if (effMinSalary != null && c.monthlyIncome < effMinSalary) {
     blocked = true;
     push({
       code: "MIN-INCOME", severity: "BLOCK", category: "eligibility",
-      message: `Income below minimum`, previousValue: fmtMoney(c.monthlyIncome) + "/mo",
-      resultingValue: "≥ " + fmtMoney(pv.eligibility.minSalary) + "/mo", source: pd.bankId,
+      message: `Income below minimum${msmKey ? ` for ${msmKey.replace(/_/g, " ").toLowerCase()}` : ""}`,
+      previousValue: fmtMoney(c.monthlyIncome) + "/mo",
+      resultingValue: "≥ " + fmtMoney(effMinSalary) + "/mo", source: pd.bankId,
     });
-    remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(pv.eligibility.minSalary) + "/mo", delta: fmtMoney(pv.eligibility.minSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
+    remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(effMinSalary) + "/mo", delta: fmtMoney(effMinSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
+  } else if (effMinSalary != null) {
+    push({ code: "MIN-INCOME-OK", severity: "APPLIED", category: "eligibility", message: `Minimum income satisfied (${(msmKey ?? c.customerType).replace(/_/g, " ").toLowerCase()} ≥ ${fmtMoney(effMinSalary)}/mo)`, resultingValue: fmtMoney(effMinSalary) + "/mo", source: pd.bankId });
+  }
+
+  /* ---- credit group: bureau score floor ---- */
+  if (pv.eligibility.minAecb != null && (c.aecbScore ?? 0) < pv.eligibility.minAecb) {
+    blocked = true;
+    push({
+      code: "AECB", severity: "BLOCK", category: "eligibility",
+      message: `Bureau score below minimum`, previousValue: String(c.aecbScore ?? "not provided"),
+      resultingValue: "≥ " + pv.eligibility.minAecb, source: pd.bankId,
+    });
+  }
+
+  /* ---- credit group: negative bureau ---- */
+  if (pv.eligibility.negativeBureauBlock && c.negativeBureau) {
+    blocked = true;
+    push({ code: "NEG-BUREAU", severity: "BLOCK", category: "eligibility", message: `Negative bureau record — not accepted`, explanation: "product declines applicants with adverse bureau history", source: pd.bankId });
+  }
+
+  /* ---- employment group: self-employed LOB / LOS (computed) ---- */
+  if (c.employment === "SELF_EMPLOYED") {
+    const lob = c.lobYears ?? 0;
+    const los = c.losMonths ?? 0;
+    const minLob = pv.eligibility.minLobYears;
+    const minLos = pv.eligibility.minLosMonths;
+    if (minLob != null && lob < minLob) {
+      blocked = true;
+      push({ code: "LOB", severity: "BLOCK", category: "eligibility", message: `Business age below minimum`, previousValue: `${lob} yrs`, resultingValue: `≥ ${minLob} yrs`, source: pd.bankId });
+    }
+    if (minLos != null && los < minLos) {
+      blocked = true;
+      push({ code: "LOS", severity: "BLOCK", category: "eligibility", message: `Length of service below minimum`, previousValue: `${los} mo`, resultingValue: `≥ ${minLos} mo`, source: pd.bankId });
+    }
+    const lvl3 = pv.eligibility.level3Threshold;
+    if (!blocked && lvl3 && (lob < lvl3.lobYears || los < lvl3.losMonths)) {
+      refer = true;
+      push({ code: "LOB-LOS-L3", severity: "WARN", category: "eligibility", message: `LOB/LOS below standard — Level 3 approval required`, explanation: `standard: LOB ≥ ${lvl3.lobYears}y & LOS ≥ ${lvl3.losMonths}m; client: ${lob}y / ${los}m`, source: pd.bankId });
+    }
   }
 
   /* ---- LTV (product matrix, specificity-ranked) ---- */
@@ -218,9 +286,78 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
         ruleId: res.winner.refId, ruleVersion: res.winner.version, resultingValue: `${ltvPct}%`,
         explanation: res.overridden.length ? `overrode ${res.overridden.map((o) => o.refLabel).join(", ")}` : undefined,
       });
-    } else ltvPct = 80;
+    } else {
+      /* No LTV rule for this client segment — the engine does not invent one. */
+      unknown = true;
+      push({ code: "LTV-UNKNOWN", severity: "WARN", category: "financing", message: "No LTV rule matches this client segment — LTV is UNKNOWN", explanation: "Add an LTV rule (product matrix or scoped rule) for this nationality/residency/finance-count." });
+    }
   }
-  const maxByLtv = ltvPct > 0 && c.propertyValue > 0 ? Math.floor((c.propertyValue * ltvPct) / 100) : 0;
+  /* ---- property group: investment / second-property / high-amount LTV caps ---- */
+  const eligibleValue = c.valuation && c.valuation > 0 ? Math.min(c.propertyValue, c.valuation) : c.propertyValue;
+  if (c.valuation && c.valuation > 0 && c.valuation < c.propertyValue) {
+    push({ code: "VALUATION", severity: "INFO", category: "financing", message: `Finance based on lower of value & valuation`, previousValue: fmtMoney(c.propertyValue), resultingValue: fmtMoney(eligibleValue), source: pd.bankId });
+  }
+  if (pv.eligibility.investmentLtv != null && c.propertyUse === "INVESTMENT" && ltvPct > pv.eligibility.investmentLtv) {
+    push({ code: "LTV-INVEST", severity: "APPLIED", category: "financing", message: `Investment property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.investmentLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.investmentLtv;
+  }
+  if (pv.eligibility.secondPropertyLtv != null && c.financeCount === 2 && ltvPct > pv.eligibility.secondPropertyLtv) {
+    push({ code: "LTV-SECOND", severity: "APPLIED", category: "financing", message: `Second/subsequent property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.secondPropertyLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.secondPropertyLtv;
+  }
+  if (pv.eligibility.highAmountThreshold != null && pv.eligibility.ltvAboveThreshold != null && c.loanRequested > pv.eligibility.highAmountThreshold && ltvPct > pv.eligibility.ltvAboveThreshold) {
+    push({ code: "LTV-HIGH-AMT", severity: "APPLIED", category: "financing", message: `High loan-amount LTV cap applied (> ${fmtMoney(pv.eligibility.highAmountThreshold)})`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.ltvAboveThreshold}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.ltvAboveThreshold;
+  }
+
+  /* ---- multi-property rule (> N properties per AECB/internal → LTV cap) ---- */
+  const mp = pv.eligibility.multiPropertyRule;
+  if (mp && c.propertiesOwned != null && c.propertiesOwned > mp.minCount && ltvPct > mp.ltv) {
+    push({ code: "MULTI-PROP", severity: "APPLIED", category: "financing", message: `Multi-property LTV cap applied (${c.propertiesOwned} properties > ${mp.minCount})`, previousValue: `${ltvPct}%`, resultingValue: `${mp.ltv}%`, source: pd.bankId, explanation: "Identified via AECB or internal records." });
+    ltvPct = mp.ltv;
+  }
+
+  /* ---- high-risk bands (nationality / sector), strictest match wins ---- */
+  const bands = pv.eligibility.highRiskBands ?? [];
+  if (bands.length && (c.nationality || c.sector)) {
+    const nat = (c.nationality ?? "").toLowerCase();
+    const sector = (c.sector ?? "").toLowerCase();
+    const dev = (c.developer ?? "").toLowerCase();
+    const topDevs = ctx.topDevelopers ?? [];
+    const hits: { band: HighRiskBand; via: string }[] = [];
+    for (const band of bands) {
+      const natHit = (band.nationalities ?? []).some((n) => nat && n.toLowerCase() === nat);
+      let secHit = (band.sectorKeywords ?? band.sectors).some((k) => sector && sector.includes(k.toLowerCase()));
+      if (secHit && band.topDeveloperExempt && dev && topDevs.some((td) => { const t = td.toLowerCase(); return dev.includes(t) || t.includes(dev); })) {
+        secHit = false;
+        push({ code: "HR-DEV-EXEMPT", severity: "INFO", category: "eligibility", message: `Top-developer exemption — ${c.developer} is on the approved list; standard policy applies`, source: pd.bankId });
+      }
+      if (natHit) hits.push({ band, via: "nationality" });
+      else if (secHit) hits.push({ band, via: "sector" });
+    }
+    if (hits.length) {
+      const strictest = hits.reduce((a, b) => (a.band.ltv <= b.band.ltv ? a : b));
+      if (ltvPct > strictest.band.ltv) {
+        push({ code: "HR-LTV", severity: "APPLIED", category: "financing", message: `High-risk segment LTV cap ${strictest.band.ltv}% applied (${strictest.via})`, previousValue: `${ltvPct}%`, resultingValue: `${strictest.band.ltv}%`, source: pd.bankId });
+        ltvPct = strictest.band.ltv;
+      }
+    }
+  }
+
+  /* ---- construction / off-plan finance LTV cap ---- */
+  const isConstruction = c.propertyStatus === "UNDER_CONSTRUCTION" || c.propertyStatus === "OFF_PLAN";
+  if (pv.eligibility.constructionLtv != null && isConstruction && ltvPct > pv.eligibility.constructionLtv) {
+    push({ code: "LTV-CONSTR", severity: "APPLIED", category: "financing", message: `Construction/off-plan finance LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.constructionLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.constructionLtv;
+  }
+
+  /* ---- land purchase LTV cap ---- */
+  if (pv.eligibility.landLtv != null && c.propertyStatus === "LAND" && ltvPct > pv.eligibility.landLtv) {
+    push({ code: "LTV-LAND", severity: "APPLIED", category: "financing", message: `Land purchase LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.landLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.landLtv;
+  }
+
+  const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
   let maxLoanCap = pv.eligibility.maxLoan ?? Infinity;
@@ -231,27 +368,70 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   }
   const ltvLimited = Math.min(maxByLtv, maxLoanCap === Infinity ? maxByLtv : maxLoanCap);
 
-  /* ---- tenure & age ---- */
-  const retireAge = c.customerType === "NATIONAL" ? 70 : 65;
-  const maxByAge = Math.max(0, (retireAge - c.age) * 12);
+  /* ---- tenure & age (retirement age is a policy rule, never hard-coded) ---- */
+  const retireCands = ctx.rules
+    .filter((r) => r.module === "RETIRE" && r.active)
+    .map((r) => candFromScopedRule(r, c, pd.bankId))
+    .filter((x): x is RuleCandidate => x != null);
+  const retireRes = resolveSlot(retireCands);
+  let retireAge: number | null = null;
+  if (retireRes) {
+    retireAge = retireRes.winner.value;
+    firedRules.push(retireRes);
+    push({
+      code: "RETIRE-AGE", severity: "APPLIED", category: "tenure", message: `Retirement/maturity age ${retireAge} from ${retireRes.winner.refLabel}`,
+      ruleId: retireRes.winner.refId, ruleVersion: retireRes.winner.version, resultingValue: `${retireAge}`,
+      explanation: retireRes.overridden.length ? `overrode ${retireRes.overridden.map((o) => o.refLabel).join(", ")}` : undefined,
+    });
+  } else {
+    unknown = true;
+    push({ code: "RETIRE-UNKNOWN", severity: "WARN", category: "tenure", message: "No retirement-age rule matches this client — age limit is UNKNOWN", explanation: "Add a RETIRE rule scoped to this customer type / employment." });
+  }
+  const maxByAge = retireAge == null ? Number.POSITIVE_INFINITY : Math.max(0, (retireAge - c.age) * 12);
   const capMonths = pv.tenure.maxMonths ?? 300;
   const tenure = Math.min(capMonths, maxByAge);
-  if (maxByAge < 12) {
+  if (retireAge != null && maxByAge < 12) {
     blocked = true;
     push({ code: "AGE", severity: "BLOCK", category: "tenure", message: `Age at maturity exceeds limit (retires at ${retireAge})`, explanation: `client is ${c.age}; tenure would end at ${c.age + 1}+`, source: pd.bankId });
-  } else if (maxByAge < capMonths) {
+  } else if (retireAge != null && maxByAge < capMonths) {
     refer = refer || maxByAge < 60;
     push({ code: "AGE", severity: maxByAge < 60 ? "WARN" : "INFO", category: "tenure", message: `Tenure capped at ${tenure} months by age`, previousValue: `${capMonths} mo`, resultingValue: `${tenure} mo`, source: pd.bankId });
   }
 
-  /* ---- affordability: DBR ceiling via resolver ---- */
-  const dbrCands = ctx.rules.filter((r) => r.module === "DBR" && r.active).map(candFromRule);
+  /* ---- income group: recognition percentages + variable-income cap ---- */
+  let recognizedIncome = c.monthlyIncome + c.otherIncome;
+  const ir = pv.eligibility.incomeRecognition;
+  const ib = c.incomeBreakdown;
+  if (ir && ib) {
+    const pct = (v?: number) => v ?? 100;
+    const fixed = (ib.basic ?? 0) * (pct(ir.basicPct) / 100) + (ib.allowances ?? 0) * (pct(ir.allowancePct) / 100);
+    let variable = (ib.commission ?? 0) * (pct(ir.commissionPct) / 100) + (ib.bonus ?? 0) * (pct(ir.bonusPct) / 100)
+      + (ib.rental ?? 0) * (pct(ir.rentalPct) / 100) + (ib.business ?? 0) * (pct(ir.businessPct) / 100);
+    if (pv.eligibility.variableIncomeCapPct != null && variable > fixed) {
+      push({ code: "VAR-INCOME-CAP", severity: "WARN", category: "affordability", message: `Variable income capped — may not exceed fixed income`, previousValue: fmtMoney(variable), resultingValue: fmtMoney(fixed), source: pd.bankId });
+      variable = fixed;
+    }
+    recognizedIncome = fixed + variable;
+    push({ code: "INCOME-RECOG", severity: "INFO", category: "affordability", message: `Recognized income after recognition rules`, resultingValue: fmtMoney(recognizedIncome) + "/mo", source: pd.bankId });
+  }
+
+  /* ---- affordability: DBR ceiling via resolver (scope-matched, never fabricated) ---- */
+  const dbrCands = ctx.rules
+    .filter((r) => r.module === "DBR" && r.active)
+    .map((r) => candFromScopedRule(r, c, pd.bankId))
+    .filter((x): x is RuleCandidate => x != null);
   const dbrRes = resolveSlot(dbrCands);
+  /* 50 is only a computational placeholder when no rule exists; the verdict is
+     flagged UNKNOWN so nobody relies on it. */
   const dbrCap = dbrRes ? dbrRes.winner.value : 50;
   if (dbrRes) firedRules.push(dbrRes);
+  else {
+    unknown = true;
+    push({ code: "DBR-UNKNOWN", severity: "WARN", category: "affordability", message: "No DBR ceiling rule matches this client — affordability limit is UNKNOWN", explanation: "Add a DBR rule (global or bank-scoped)." });
+  }
   const ccPct = pv.affordability.ccPct ?? 5;
   const existingOblig = c.monthlyLiabilities + c.creditCardLimits * (ccPct / 100);
-  const income = c.monthlyIncome + c.otherIncome;
+  const income = recognizedIncome;
   const availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
   const dbrNow = income > 0 ? (existingOblig / income) * 100 : 0;
   push({ code: "DBR", severity: "APPLIED", category: "affordability", message: `DBR ceiling ${dbrCap}%${dbrRes ? ` (${dbrRes.winner.refLabel})` : ""}`, resultingValue: `${dbrCap}%`, ruleId: dbrRes?.winner.refId, ruleVersion: dbrRes?.winner.version });
@@ -271,9 +451,40 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   if (cell) {
     ratePct = cellRate(cell, ctx.eibor);
     recipe = cellRecipe(cell);
-    push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
-    for (const p of promos) {
-      push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
+    const needsIndex = cell.structure === "MARGIN_INDEX" || cell.structure === "VAR_DAY1";
+    if (needsIndex && ratePct == null) {
+      /* An index-based cell matched but no EIBOR fix is published — we must not quote. */
+      unknown = true;
+      recipe = "pricing unconfirmed — EIBOR fix unavailable";
+      push({ code: "EIBOR-UNKNOWN", severity: "WARN", category: "pricing", message: "Current EIBOR fix unavailable — index-based pricing cannot be confirmed", explanation: "Publish an EIBOR fix, then re-run. The engine never invents an index value." });
+    } else {
+      push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
+      for (const p of promos) {
+        push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
+      }
+    }
+  }
+
+  /* ---- employer-based rate discount (e.g. ADCB −0.25% for approved companies) ---- */
+  const discounts = pv.fees.employerDiscounts ?? [];
+  if (ratePct != null && discounts.length && c.employer) {
+    const emp = c.employer.toLowerCase();
+    const hit = discounts.find((dd) => dd.employers.some((e) => emp.includes(e.toLowerCase())));
+    if (hit) {
+      const before = ratePct;
+      ratePct = Math.max(0, ratePct - hit.bps / 100);
+      push({ code: "EMPLOYER-DISC", severity: "APPLIED", category: "pricing", message: `Employer discount −${(hit.bps / 100).toFixed(2)}% (${hit.label})`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId, explanation: `Employer "${c.employer}" is on the approved list.` });
+    }
+  }
+
+  /* ---- LTV-conditional rate discount (e.g. ADIB −0.25% when LTV ≤ 60%) ---- */
+  const ltvDiscs = pv.fees.ltvDiscounts ?? [];
+  if (ratePct != null && ltvDiscs.length && ltvPct > 0) {
+    const hit = ltvDiscs.find((dd) => ltvPct <= dd.maxLtv);
+    if (hit) {
+      const before = ratePct;
+      ratePct = Math.max(0, ratePct - hit.bps / 100);
+      push({ code: "LTV-DISC", severity: "APPLIED", category: "pricing", message: `Low-LTV discount −${(hit.bps / 100).toFixed(2)}% (LTV ≤ ${hit.maxLtv}%)`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId });
     }
   }
 
@@ -302,8 +513,13 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   if (fees > 0) push({ code: "FEES", severity: "INFO", category: "fees", message: `Est. fees ${fmtMoney(fees)} (processing ${procPct}% min ${fmtMoney(procMin)} + valuation + PA)`, resultingValue: fmtMoney(fees), source: pd.bankId });
 
   /* ---- verdict ---- */
+  /* Precedence: blocked → UNKNOWN (missing rule/fixing) → not eligible → refer/conditions → eligible.
+     UNKNOWN is checked before "eligible <= 0" because a missing LTV rule or missing EIBOR fix
+     zeroes the eligible amount — that is "we cannot determine", not "rejected". */
   let verdict: Verdict = "ELIGIBLE";
-  if (blocked || eligible <= 0) verdict = "NOT_ELIGIBLE";
+  if (blocked) verdict = "NOT_ELIGIBLE";
+  else if (unknown) { verdict = "UNKNOWN"; conditions.push("One or more required rules/fixings are missing — verify before relying on this result."); }
+  else if (eligible <= 0) verdict = "NOT_ELIGIBLE";
   else if (refer || conditions.length > 0) verdict = refer ? "REFER" : "ELIGIBLE_WITH_CONDITIONS";
   if (verdict === "REFER") conditions.push("Senior review required before submission.");
 
@@ -360,10 +576,10 @@ export function collectRuleVersions(decisions: ProductDecision[]): { refId: stri
   return [...map.entries()].map(([refId, version]) => ({ refId, version }));
 }
 export interface ReplayDiff { productDefId: string; field: "verdict" | "eligibleAmount"; was: string; now: string }
-export function replayDecision(snap: DecisionSnapshot, productDefs: ProductDef[], rules: Rule[], promos: Promo[], today: string): { diffs: ReplayDiff[]; changed: boolean } {
+export function replayDecision(snap: DecisionSnapshot, productDefs: ProductDef[], rules: Rule[], promos: Promo[], today: string, topDevelopers?: string[]): { diffs: ReplayDiff[]; changed: boolean } {
   /* Replay uses the SAME EIBOR fix stored in the snapshot, so index movement
      doesn't masquerade as a rule change. Drift therefore means a rule changed. */
-  const ctx: EvalCtx = { eibor: snap.eiborFix, rules, promos, today };
+  const ctx: EvalCtx = { eibor: snap.eiborFix, rules, promos, today, topDevelopers };
   const fresh = evaluateAll(productDefs, snap.client, ctx);
   const diffs: ReplayDiff[] = [];
   for (const oldD of snap.decisions) {
@@ -390,21 +606,46 @@ export function runGoldenCases(cases: GoldenCase[], productDefs: ProductDef[], c
   });
 }
 
-/* ---------- person → normalized profile ---------- */
+/* ---------- person → normalized profile (full field capture) ---------- */
 export function personToProfile(p: {
   name: string; nationality: string; customerType: ClientProfile["customerType"]; employment: ClientProfile["employment"];
   dob: string; monthlySalary: number; otherIncome: number; financeCount: 1 | 2;
   liabilities: { monthly: number }[]; cards: { limit: number }[]; sector?: string; yearsEmployed?: number;
-}, propertyValue: number, loanRequested: number, age: number): ClientProfile {
+  aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number; dependants?: number; goldenVisa?: boolean;
+  lobYears?: number; losMonths?: number; lowDoc?: boolean; salaryTransfer?: boolean;
+  emirate?: string; uaeResident?: boolean;
+  basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
+  propertiesOwned?: number; developer?: string;
+  segment?: string; employer?: string; preferredFixedYears?: number;
+}, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
+  propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
+  const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
   return {
     name: p.name, nationality: p.nationality, customerType: p.customerType,
-    residency: p.customerType === "NON_RESIDENT" ? "NON_RESIDENT" : "RESIDENT",
+    residency: p.customerType === "NON_RESIDENT" || p.uaeResident === false ? "NON_RESIDENT" : "RESIDENT",
     employment: p.employment, age,
     monthlyIncome: p.monthlySalary, otherIncome: p.otherIncome,
-    monthlyLiabilities: p.liabilities.reduce((s, l) => s + l.monthly, 0),
+    monthlyLiabilities: liabilities,
     creditCardLimits: p.cards.reduce((s, c) => s + c.limit, 0),
     propertyValue, loanRequested, financeCount: p.financeCount,
-    propertyType: "RESIDENTIAL", emirate: "DUBAI", sector: p.sector ?? "",
+    propertyType: "RESIDENTIAL", emirate: p.emirate ?? "DUBAI", sector: p.sector ?? "",
     yearsEmployed: p.yearsEmployed ?? 2,
+    propertiesOwned: p.propertiesOwned, developer: p.developer,
+    segment: p.segment, employer: p.employer, preferredFixedYears: p.preferredFixedYears,
+    /* credit group */
+    aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
+    homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,
+    dependants: p.dependants, goldenVisa: p.goldenVisa,
+    /* employment group */
+    lobYears: p.lobYears, losMonths: p.losMonths, lowDoc: p.lowDoc, salaryTransfer: p.salaryTransfer,
+    /* property group */
+    propertyUse, propertyStatus, valuation,
+    /* transaction group */
+    txType,
+    /* income breakdown */
+    incomeBreakdown: {
+      basic: p.basicSalary ?? p.monthlySalary, allowances: p.allowances, commission: p.commission,
+      bonus: p.bonus, rental: p.rentalIncome, business: p.businessIncome,
+    },
   };
 }

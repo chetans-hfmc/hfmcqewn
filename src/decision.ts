@@ -189,9 +189,14 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       }
     }
   }
-  if (pv.eligibility.restrictedSectors?.length && c.sector && pv.eligibility.restrictedSectors.includes(c.sector)) {
-    blocked = true;
-    push({ code: "SECTOR", severity: "BLOCK", category: "eligibility", message: `Sector restricted: ${c.sector}`, source: pd.bankId });
+  /* ---- documentation requirement: bank-statement months (verified by underwriter) ---- */
+  if (pv.eligibility.statementMonths) {
+    push({
+      code: "STMT-MONTHS", severity: "INFO", category: "eligibility",
+      message: `Requires latest ${pv.eligibility.statementMonths} months of bank statements`,
+      explanation: "Document requirement — the engine flags it; an underwriter verifies the statements before submission.",
+      source: pd.bankId,
+    });
   }
 
   /* ---- employment class fit ---- */

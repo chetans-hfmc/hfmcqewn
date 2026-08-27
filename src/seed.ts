@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 20;
+export const SEED_VERSION = 21;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -49,7 +49,7 @@ const BANKS: Bank[] = [
 /* ---------- pricing axes registry ---------- */
 const AXES: AxisDef[] = [
   { id: "stl", name: "Salary transfer", values: [{ v: "STL", l: "STL" }, { v: "NSTL", l: "NSTL" }] },
-  { id: "segment", name: "Segment", values: [{ v: "ELITE", l: "Elite" }, { v: "PREMIER", l: "Premier" }, { v: "STANDARD", l: "Standard" }, { v: "EXCELLENCY", l: "Excellency" }, { v: "THARWA", l: "Tharwa" }] },
+  { id: "segment", name: "Segment", values: [{ v: "ELITE", l: "Elite" }, { v: "PREMIER", l: "Premier" }, { v: "STANDARD", l: "Standard" }, { v: "EXCELLENCY", l: "Excellency" }, { v: "THARWA", l: "Tharwa" }, { v: "PRIV", l: "Private" }, { v: "ASPIRE", l: "Aspire / Privilege" }, { v: "HOMESAVER", l: "Home Saver" }, { v: "EMIRATI", l: "Emirati Customer" }] },
   { id: "employment", name: "Employment", values: [{ v: "SALARIED", l: "Salaried" }, { v: "SELF_EMPLOYED", l: "Self Employed" }] },
   { id: "residency", name: "Residency", values: [{ v: "RESIDENT", l: "UAE Resident" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
   { id: "customerType", name: "Customer type", values: [{ v: "NATIONAL", l: "UAE National" }, { v: "EXPAT", l: "Expat" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
@@ -364,6 +364,99 @@ const PRODUCT_DEFS: ProductDef[] = [
         affordability: { maxDBR: 50, ccPct: 5 },
       }),
     ],
+  },
+  {
+    /* ---------------- ADCB · Salaried (full sheet mapped) ---------------- */
+    id: "pd-adcb-sal", bankId: "b-adcb", name: "Home Finance — Salaried", loanType: "BOTH",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "BUYOUT", "BUYOUT_EQUITY", "EQUITY"],
+    axes: ["segment", "tenure", "customerType"],
+    tags: ["Salaried", "Segment-priced"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "ADCB salaried pricing card (Aug 2026)",
+      eligibility: {
+        minSalaryMatrix: { NATIONAL: 8000, EXPAT: 15000 },       /* joint borrowers 12k + 8k — note */
+        minLoan: 250000, maxLoan: 24000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        constructionLtv: 70,
+        maxAgeSalaried: 70,
+        minLosMonths: 3,                                          /* with confirmation + experience letter */
+        coApplicantRule: "1 blood relation (no siblings) — Expat & Local",
+        employerRequirements: { minYearsEstablished: 2, minEmployees: 50, profileForm: true, note: "Company well established, proper office, decent profile" },
+        incomeRecognition: { rentalPct: 83, bonusPct: 50, commissionPct: 50 },
+        restrictedSectors: ["Small Real Estate Companies", "Tourism", "Hotel"],
+        gates: [
+          { id: "a1", kind: "FLAG", label: "Bonuses counted only if company is listed + 2 yrs bonus history → 50% of average", hardStop: false },
+          { id: "a2", kind: "FLAG", label: "Commission: lowest received in last 6 months considered", hardStop: false },
+          { id: "a3", kind: "FLAG", label: "Total monthly debts must not exceed fixed salary", hardStop: false },
+          { id: "a4", kind: "FLAG", label: "Rental income add-back 83% — up to primary income only", hardStop: false },
+          { id: "a5", kind: "FLAG", label: "Hotel-apartment finance: Expats salaried only, self-occupancy declaration, Abu Dhabi & Dubai excl. remote areas", hardStop: false },
+          { id: "a6", kind: "FLAG", label: "Russia & Belarus — basis compliance approval", hardStop: false },
+          { id: "a7", kind: "FLAG", label: "Salary certificate must be within 30 days", hardStop: false },
+        ],
+        notes: [
+          "Rental income: customer to provide undertaking for self-occupancy/investment, no sale during tenor.",
+          "Emirates Airline staff: 50% of accommodation allowance; variable pay not considered; salary reference no. required.",
+          "Sheikh Zayed Housing Program: linked to 1M EIBOR (SZHP_Zero −20%, SZHP_INT −20%).",
+          "Dubai properties: registration based on Oqood applicable.",
+          "No payment holidays. Non-spousal applicants: 1 blood relation (no siblings).",
+          "Buyout: ADCB does not provide equity except on handover payment; B+E can settle another mortgage loan.",
+          "Equity release: amount to purchase another property (3rd-party payment); residential only (villa/apartment/plot).",
+        ],
+      },
+      tenure: { maxMonths: 300 },                                 /* 25 years */
+      grid: { cells: [
+        /* Private / Excellency / Emirati */
+        { id: "p1", key: { segment: "PRIV", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 12, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        { id: "p3", key: { segment: "PRIV", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.50, fixedMonths: 36, followOn: { margin: 2.25, index: "EIBOR_3M" } },
+        { id: "p5", key: { segment: "PRIV", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.50, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        /* Aspire / Privilege */
+        { id: "a1y", key: { segment: "ASPIRE", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 12, followOn: { margin: 2.25, index: "EIBOR_3M" } },
+        { id: "a3y", key: { segment: "ASPIRE", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 36, followOn: { margin: 2.25, index: "EIBOR_3M" } },
+        { id: "a5y", key: { segment: "ASPIRE", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        /* Home Saver */
+        { id: "hs2", key: { segment: "HOMESAVER", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 24, followOn: { margin: 2.99, index: "EIBOR_3M", floor: 6.5 }, note: "Floor rate 6.50%" },
+        /* Fully variable — Day 1 */
+        { id: "dv-priv", key: { segment: "PRIV", tenure: "1" }, structure: "VAR_DAY1", margin: 1.50, index: "EIBOR_3M", note: "Fully variable Day 1 (1M/3M both 1.50%)" },
+        { id: "dv-asp", key: { segment: "ASPIRE", tenure: "1" }, structure: "VAR_DAY1", margin: 1.75, index: "EIBOR_3M" },
+        { id: "dv-hs", key: { segment: "HOMESAVER", tenure: "1" }, structure: "VAR_DAY1", margin: 2.99, index: "EIBOR_3M", floor: 5 },
+      ]},
+      fees: {
+        processingPct: 0.7875, valuation: 3150, preApproval: 0, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        partialSettlement: "Free partial up to 30% of principal outstanding per year",
+        lifeInsurancePct: 0.0184, lifeInsuranceNote: "p.m. on loan outstanding",
+        propertyInsurancePct: 0.042, propertyInsuranceNote: "p.a. of property value",
+        processingFeeTiers: [
+          { label: "Standard", pct: 0.7875 },
+          { label: "Golden Visa holders", pct: 0.5375 },
+          { label: "Excellency", pct: 0.525 },
+          { label: "Excellency + Golden Visa", pct: 0.275 },
+        ],
+        txOverrides: [
+          { txType: "BUYOUT", processingPct: 0, valuationWaived: true, note: "Buyout promo — NIL processing & NIL valuation fees" },
+          { txType: "EQUITY", processingPct: 0.75, note: "0.50% for Excellency" },
+        ],
+        feeFinancing: { allowed: true, pct: 6, basis: "DLD & broker fee" },
+        employerDiscounts: [{ label: "Approved companies — 0.25% off fixed pricing", employers: ADCB_DISCOUNT_EMPLOYERS, bps: 25 }],
+        note: "Stress test for DSR: follow-on margin + 3M EIBOR · floor 1.99%",
+      },
+      affordability: { maxDBR: 50, rentalPct: 83, bonusPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true },
+        { name: "Mortgage Referral Form", required: true },
+        { name: "Salary Certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (only if pay varies)", required: false },
+        { name: "Bank Statements — 6 months (E-statements)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "Confirmation + experience letter (LOS 3 months)", required: true },
+        { name: "Company profile form", required: true },
+      ],
+      tat: {
+        paDays: 3, valuationDays: 3, folDays: 3, totalDays: 17,
+        paValidityDays: 30, folValidityDays: 60, valuationValidityDays: 30,
+        accountOpeningDays: 1, disbursalDays: 5, transferDays: 2,
+      },
+    })],
   },
   {
     id: "pd-adib-nr", bankId: "b-adib", name: "NR Home Finance — Islamic", loanType: "ISLAMIC",
@@ -696,7 +789,13 @@ const GOLDEN_CASES: GoldenCase[] = [
     id: "golden-6", name: "Multi-property (>2) — LTV restricted to 50%",
     client: { ...baseProfile, name: "Golden · 3 properties", customerType: "NON_RESIDENT" as const, residency: "NON_RESIDENT" as const, propertiesOwned: 3, age: 40, monthlyIncome: 60000, monthlyLiabilities: 5000, propertyValue: 2000000, loanRequested: 900000 },
     expected: [{ productDefId: "pd-mash-buyout", verdict: "ELIGIBLE" }],
-    note: "NR with 3 properties → 50% cap (1.0M) still covers the 0.9M request (v4 NR policy, SCHEDULED 1 Sept 2026).",
+    note: "Mashreq v4 NR: >2 properties (AECB/internal) caps LTV at 50%.",
+  },
+  {
+    id: "golden-7", name: "ADCB — ADNOC employee gets 0.25% employer discount",
+    client: { ...baseProfile, name: "Golden · ADNOC salaried", customerType: "EXPAT" as const, employer: "ADNOC", segment: "PRIV", preferredFixedYears: 3, age: 33, monthlyIncome: 45000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1400000 },
+    expected: [{ productDefId: "pd-adcb-sal", verdict: "ELIGIBLE" }],
+    note: "ADCB salaried: Private segment 3yr fixed 4.50%, minus 0.25% employer discount (ADNOC) → 4.25%.",
   },
 ];
 
@@ -751,6 +850,7 @@ export function buildSeed(): AppState {
     topDevelopers: TOP_DEVELOPERS,
     audit: [
       { id: "a0", at: ts(-0.05), by: "hfmm-15", module: "RULE", action: "Policy revised", target: "Mashreq — Sept 2026 revision", detail: "High-risk bands (60%/70%) effective immediately + top-developer exemption; NR segment scheduled 1 Sept 2026" },
+      { id: "a-adcb", at: ts(-0.02), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADCB · Home Finance — Salaried (pd-adcb-sal v1)", detail: "Segment pricing (Priv/Aspire/Home Saver) + fixed-term grid, employer discount −0.25%, fee tiers, 9-field TAT" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

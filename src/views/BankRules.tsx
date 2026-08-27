@@ -208,6 +208,29 @@ export default function BankRulesView() {
                           <Field label="Max loan"><NumInput disabled={!editable} value={ver.eligibility.maxLoan ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxLoan: n || undefined } })} suffix="AED" /></Field>
                           <Field label="Max age — salaried"><NumInput disabled={!editable} value={ver.eligibility.maxAgeSalaried ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxAgeSalaried: n || undefined } })} suffix="yrs" /></Field>
                           <Field label="Max age — self emp"><NumInput disabled={!editable} value={ver.eligibility.maxAgeSelfEmp ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxAgeSelfEmp: n || undefined } })} suffix="yrs" /></Field>
+                          <Field label="Construction LTV"><NumInput disabled={!editable} value={ver.eligibility.constructionLtv ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, constructionLtv: n || undefined } })} suffix="%" /></Field>
+                          <Field label="Min LOS (months)"><NumInput disabled={!editable} value={ver.eligibility.minLosMonths ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, minLosMonths: n || undefined } })} suffix="mo" /></Field>
+                        </div>
+                        {/* per-customer-type minimum salary */}
+                        <div>
+                          <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Min salary by customer type</p>
+                          {Object.entries(ver.eligibility.minSalaryMatrix ?? {}).map(([k, v]) => (
+                            <div key={k} className="flex items-center gap-2 mb-1.5">
+                              <span className="num text-[11px] font-semibold bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 w-[150px]">{k}</span>
+                              {editable
+                                ? <span className="w-[120px]"><NumInput value={v} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, minSalaryMatrix: { ...(ver.eligibility.minSalaryMatrix ?? {}), [k]: n } } })} suffix="AED" /></span>
+                                : <span className="num font-bold text-pine-700">{v.toLocaleString()} AED</span>}
+                              {editable && <button onClick={() => { const m = { ...(ver.eligibility.minSalaryMatrix ?? {}) }; delete m[k]; setPv({ eligibility: { ...ver.eligibility, minSalaryMatrix: m } }); }} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                            </div>
+                          ))}
+                          {!Object.keys(ver.eligibility.minSalaryMatrix ?? {}).length && <p className="text-[11px] text-ink-soft italic">Uses the flat min salary above.</p>}
+                        </div>
+                        {/* co-applicant + employer requirements */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Co-applicant rule"><TextInput disabled={!editable} value={ver.eligibility.coApplicantRule ?? ""} onChange={(e) => setPv({ eligibility: { ...ver.eligibility, coApplicantRule: e.target.value || undefined } })} placeholder="e.g. 1 blood relation (no siblings)" /></Field>
+                          <Field label="Employer — min years"><NumInput disabled={!editable} value={ver.eligibility.employerRequirements?.minYearsEstablished ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, employerRequirements: { ...(ver.eligibility.employerRequirements ?? {}), minYearsEstablished: n || undefined } } })} suffix="yrs" /></Field>
+                          <Field label="Employer — min employees"><NumInput disabled={!editable} value={ver.eligibility.employerRequirements?.minEmployees ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, employerRequirements: { ...(ver.eligibility.employerRequirements ?? {}), minEmployees: n || undefined } } })} suffix="#" /></Field>
+                          <Field label="Profile form required"><Select disabled={!editable} value={ver.eligibility.employerRequirements?.profileForm ? "yes" : "no"} onChange={(v) => setPv({ eligibility: { ...ver.eligibility, employerRequirements: { ...(ver.eligibility.employerRequirements ?? {}), profileForm: v === "yes" } } })} options={[{ v: "no", l: "No" }, { v: "yes", l: "Yes" }]} /></Field>
                         </div>
                         <div>
                           <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">LTV matrix (key → %)</p>
@@ -302,6 +325,58 @@ export default function BankRulesView() {
                       <Field label="Pre-approval"><NumInput disabled={!editable} value={ver.fees.preApproval ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, preApproval: n || undefined } })} suffix="AED" /></Field>
                     </div>
                     <div className="mt-3"><Field label="Early settlement"><TextInput disabled={!editable} value={ver.fees.earlySettlement ?? ""} onChange={(e) => setPv({ fees: { ...ver.fees, earlySettlement: e.target.value || undefined } })} placeholder="e.g. 1% or 10k, whichever lower" /></Field></div>
+
+                    {/* processing fee tiers */}
+                    <div className="mt-4">
+                      <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Processing fee tiers</p>
+                      {(ver.fees.processingFeeTiers ?? []).map((t, ti) => (
+                        <div key={ti} className="flex items-center gap-2 mb-1.5">
+                          {editable
+                            ? <TextInput className="h-[30px] text-[12px] flex-1" value={t.label} onChange={(e) => setPv({ fees: { ...ver.fees, processingFeeTiers: (ver.fees.processingFeeTiers ?? []).map((x, j) => j === ti ? { ...x, label: e.target.value } : x) } })} />
+                            : <span className="text-[12px] font-medium flex-1">{t.label}</span>}
+                          <span className={cx("num font-bold", editable ? "" : "text-pine-700")}>{t.pct}%</span>
+                          {editable && <button onClick={() => setPv({ fees: { ...ver.fees, processingFeeTiers: (ver.fees.processingFeeTiers ?? []).filter((_, j) => j !== ti) } })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                        </div>
+                      ))}
+                      {editable && <Btn size="sm" variant="outline" onClick={() => setPv({ fees: { ...ver.fees, processingFeeTiers: [...(ver.fees.processingFeeTiers ?? []), { label: "New tier", pct: 0.5 }] } })}><Ic n="plus" size={12} /> Add tier</Btn>}
+                    </div>
+
+                    {/* transaction overrides */}
+                    <div className="mt-4">
+                      <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Transaction overrides</p>
+                      {(ver.fees.txOverrides ?? []).map((o, oi) => (
+                        <div key={oi} className="border border-mist rounded-md px-3 py-2 mb-1.5 bg-paper/40">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-display font-bold bg-steel-100 text-steel-700 rounded px-1.5 py-0.5">{o.txType.replace(/_/g, " ")}</span>
+                            {o.processingPct != null && <span className="num text-[11px]">proc {o.processingPct}%</span>}
+                            {o.valuationWaived && <span className="text-[10.5px] font-semibold text-pine-700">valuation waived</span>}
+                            <span className="text-[10.5px] text-ink-soft flex-1">{o.note}</span>
+                            {editable && <button onClick={() => setPv({ fees: { ...ver.fees, txOverrides: (ver.fees.txOverrides ?? []).filter((_, j) => j !== oi) } })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                          </div>
+                        </div>
+                      ))}
+                      {editable && <Btn size="sm" variant="outline" onClick={() => setPv({ fees: { ...ver.fees, txOverrides: [...(ver.fees.txOverrides ?? []), { txType: "BUYOUT", processingPct: 0, note: "" }] } })}><Ic n="plus" size={12} /> Add override</Btn>}
+                    </div>
+
+                    {/* fee financing + employer discounts */}
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                      <Field label="Fee finance allowed"><Select disabled={!editable} value={ver.fees.feeFinancing?.allowed ? "yes" : "no"} onChange={(v) => setPv({ fees: { ...ver.fees, feeFinancing: { ...(ver.fees.feeFinancing ?? {}), allowed: v === "yes" } } })} options={[{ v: "no", l: "No" }, { v: "yes", l: "Yes" }]} /></Field>
+                      <Field label="Fee finance %"><NumInput disabled={!editable} value={ver.fees.feeFinancing?.pct ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, feeFinancing: { allowed: ver.fees.feeFinancing?.allowed ?? false, ...(ver.fees.feeFinancing ?? {}), pct: n || undefined } } })} suffix="%" /></Field>
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Employer rate discounts</p>
+                      {(ver.fees.employerDiscounts ?? []).map((ed, ei) => (
+                        <div key={ei} className="border border-mist rounded-md px-3 py-2 mb-1.5 bg-paper/40">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11.5px] font-semibold flex-1">{ed.label}</span>
+                            <span className="num text-[11px] font-bold text-pine-700">−{(ed.bps / 100).toFixed(2)}%</span>
+                            {editable && <button onClick={() => setPv({ fees: { ...ver.fees, employerDiscounts: (ver.fees.employerDiscounts ?? []).filter((_, j) => j !== ei) } })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                          </div>
+                          <p className="text-[10.5px] text-ink-soft mt-1">{ed.employers.join(", ")}</p>
+                        </div>
+                      ))}
+                      {editable && <Btn size="sm" variant="outline" onClick={() => setPv({ fees: { ...ver.fees, employerDiscounts: [...(ver.fees.employerDiscounts ?? []), { label: "Approved companies", employers: [], bps: 25 }] } })}><Ic n="plus" size={12} /> Add discount</Btn>}
+                    </div>
                   </div>
                 )}
 
@@ -347,6 +422,11 @@ export default function BankRulesView() {
                       <Field label="FOL TAT"><NumInput disabled={!editable} value={ver.tat.folDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, folDays: n || undefined } })} suffix="d" /></Field>
                       <Field label="Total TAT"><NumInput disabled={!editable} value={ver.tat.totalDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, totalDays: n || undefined } })} suffix="d" /></Field>
                       <Field label="PA validity"><NumInput disabled={!editable} value={ver.tat.paValidityDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, paValidityDays: n || undefined } })} suffix="d" /></Field>
+                      <Field label="FOL validity"><NumInput disabled={!editable} value={ver.tat.folValidityDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, folValidityDays: n || undefined } })} suffix="d" /></Field>
+                      <Field label="Valuation validity"><NumInput disabled={!editable} value={ver.tat.valuationValidityDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, valuationValidityDays: n || undefined } })} suffix="d" /></Field>
+                      <Field label="Account opening"><NumInput disabled={!editable} value={ver.tat.accountOpeningDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, accountOpeningDays: n || undefined } })} suffix="d" /></Field>
+                      <Field label="Disbursal"><NumInput disabled={!editable} value={ver.tat.disbursalDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, disbursalDays: n || undefined } })} suffix="d" /></Field>
+                      <Field label="Transfer"><NumInput disabled={!editable} value={ver.tat.transferDays ?? 0} onChange={(n) => setPv({ tat: { ...ver.tat, transferDays: n || undefined } })} suffix="d" /></Field>
                     </div>
                   </div>
                 )}

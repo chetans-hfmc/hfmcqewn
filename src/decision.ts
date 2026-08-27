@@ -593,6 +593,7 @@ export function personToProfile(p: {
   emirate?: string; uaeResident?: boolean;
   basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
   propertiesOwned?: number; developer?: string;
+  segment?: string; employer?: string; preferredFixedYears?: number;
 }, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
   propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
   const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
@@ -607,6 +608,7 @@ export function personToProfile(p: {
     propertyType: "RESIDENTIAL", emirate: p.emirate ?? "DUBAI", sector: p.sector ?? "",
     yearsEmployed: p.yearsEmployed ?? 2,
     propertiesOwned: p.propertiesOwned, developer: p.developer,
+    segment: p.segment, employer: p.employer, preferredFixedYears: p.preferredFixedYears,
     /* credit group */
     aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
     homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,

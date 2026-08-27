@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 18;
+export const SEED_VERSION = 19;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -117,15 +117,24 @@ const PRODUCT_DEFS: ProductDef[] = [
         minSalary: 10000, minLoan: 250000, maxLoan: 20000000, maxAgeSalaried: 70, maxAgeSelfEmp: 70,
         ltvMatrix: { "NATIONAL:1": 85, "NATIONAL:2": 70, "EXPAT:1": 80, "EXPAT:2": 65, "NON_RESIDENT": 50, "SELF_EMPLOYED": 70 },
         gates: [],
+        salaryTransferRequired: false,
         notes: ["AUH developer promo: NSTL 3.95% fixed 3yr, zero processing fee (Q window)."],
       },
       tenure: { maxMonths: 300 },
       grid: { cells: [
-        { id: "c1", key: { employment: "SALARIED", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.95, fixedMonths: 36, followOn: { margin: 1.0, index: "EIBOR_3M", floor: 1.0 }, note: "STL standard" },
-        { id: "c2", key: { employment: "SALARIED", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 60, followOn: { margin: 1.25, index: "EIBOR_3M", floor: 1.25 } },
+        { id: "c1", key: { employment: "SALARIED", tenure: "3" }, structure: "FIXED", fixedRate: 4.1, fixedMonths: 36, note: "NSTL — fixed 3 years (proposal sheet)" },
+        { id: "c2", key: { employment: "SALARIED" }, structure: "MARGIN_INDEX", margin: 1.5, index: "EIBOR_3M", note: "NSTL — bank margin 1.50% + 3M EIBOR (variable)" },
         { id: "c3", key: { employment: "SELF_EMPLOYED", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.6, fixedMonths: 36, followOn: { margin: 1.5, index: "EIBOR_3M", floor: 1.5 } },
       ]},
-      fees: { processingPct: 1, processingMin: 3000, valuation: 2500, preApproval: 0, earlySettlement: "1% or 10k, whichever lower" },
+      fees: {
+        processingPct: 0.5, valuation: 2500, preApproval: 0, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever is lower",
+        partialSettlement: "1.05% of outstanding, max AED 10,500 (incl. 5% VAT)",
+        arrangementFee: "Not applicable",
+        lifeInsurancePct: 0.03, lifeInsuranceNote: "monthly, on outstanding loan amount",
+        propertyInsurancePct: 0.03325, propertyInsuranceNote: "yearly, on property value",
+        note: "Processing fee plus VAT @ 5%",
+      },
       affordability: { maxDBR: 50, ccPct: 5, rentalPct: 70 },
       documents: [{ name: "Salary Certificate", required: true }, { name: "Bank Statements — 6 months", required: true }, { name: "EID + Passport + Visa", required: true }],
       tat: { paDays: 4, valuationDays: 3, folDays: 5, totalDays: 22, paValidityDays: 60 },

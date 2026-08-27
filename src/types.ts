@@ -158,10 +158,16 @@ export interface ProductVersion {
     /* Income-recognition rules (% of each component counted) */
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
     variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
+    salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
   };
   tenure: { maxMonths?: number; note?: string };
   grid: { cells: RateCell[] };
-  fees: { processingPct?: number; processingMin?: number; valuation?: number; preApproval?: number; earlySettlement?: string; note?: string };
+  fees: {
+    processingPct?: number; processingMin?: number; valuation?: number; preApproval?: number;
+    earlySettlement?: string; note?: string;
+    vatPct?: number; arrangementFee?: string; partialSettlement?: string;
+    lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
+  };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
   documents: { name: string; required: boolean }[];
   tat: { paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number; paValidityDays?: number };
@@ -268,4 +274,4 @@ export interface AppState {
 
 export type View =
   | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
-  | "queries" | "decision" | "calculators" | "templates" | "rules" | "bankrules" | "users" | "audit" | "guide";
+  | "queries" | "decision" | "proposals" | "calculators" | "templates" | "rules" | "bankrules" | "users" | "audit" | "guide";

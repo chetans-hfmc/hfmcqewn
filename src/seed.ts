@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 21;
+export const SEED_VERSION = 22;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -55,7 +55,7 @@ const AXES: AxisDef[] = [
   { id: "customerType", name: "Customer type", values: [{ v: "NATIONAL", l: "UAE National" }, { v: "EXPAT", l: "Expat" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
   { id: "propertyStatus", name: "Property status", values: [{ v: "READY", l: "Completed / Ready" }, { v: "UNDER_CONSTRUCTION", l: "Under Construction" }, { v: "OFF_PLAN", l: "Off Plan" }, { v: "LAND", l: "Land" }] },
   { id: "transaction", name: "Transaction", values: [{ v: "PURCHASE", l: "New Purchase" }, { v: "RESALE", l: "Resale" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + Equity" }, { v: "EQUITY", l: "Equity Release" }, { v: "REFINANCE", l: "Refinance" }] },
-  { id: "tenure", name: "Fixed tenure", values: [{ v: "1", l: "1 yr" }, { v: "2", l: "2 yr" }, { v: "3", l: "3 yr" }, { v: "5", l: "5 yr" }] },
+  { id: "tenure", name: "Fixed tenure", values: [{ v: "1", l: "1 yr" }, { v: "2", l: "2–3 yr" }, { v: "4", l: "4 yr" }, { v: "5", l: "5 yr" }, { v: "7", l: "7 yr" }, { v: "10", l: "8–10 yr" }, { v: "15", l: "11–15 yr" }, { v: "20", l: "16–20 yr" }] },
   { id: "amountBand", name: "Loan amount band", values: [{ v: "LT2M", l: "Below 2M" }, { v: "2TO35M", l: "2M – 3.49M" }, { v: "GE35M", l: "3.5M+" }] },
   { id: "emirate", name: "Emirate", values: [{ v: "ALL", l: "All Emirates" }, { v: "DUBAI", l: "Dubai" }, { v: "ABU_DHABI", l: "Abu Dhabi" }, { v: "AJMAN", l: "Ajman" }] },
   { id: "relationship", name: "Relationship", values: [{ v: "ETB", l: "ETB" }, { v: "NTB", l: "NTB" }] },
@@ -458,6 +458,197 @@ const PRODUCT_DEFS: ProductDef[] = [
       },
     })],
   },
+  /* ---------------- ADIB · Salaried (full sheet mapped — Islamic only) ---------------- */
+  {
+    id: "pd-adib-sal", bankId: "b-adib", name: "Home Finance — Salaried (Fixed schemes)", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT", "BUYOUT_EQUITY", "EQUITY"],
+    axes: ["stl", "tenure", "propertyStatus", "employment"],
+    tags: ["Salaried", "Islamic", "STL/NSTL"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "ADIB Home Finance pricing grid (logins 10 Aug – 30 Sep)",
+      eligibility: {
+        minSalaryMatrix: { STL: 10000, NSTL: 15000 },   /* NSTL: net salary post pension deduction; joint 10k + 10k */
+        minLoan: 250000, maxLoan: 10000000, maxUnits: 4,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        landLtv: 60,
+        maxAgeSalaried: 70, maxAgeSelfEmp: 65,
+        paymentHoliday: "STL up to 6 months · NSTL up to 3 months (grace period)",
+        coApplicantRule: "Local: 1 blood relation · Expat: spouse or parent",
+        incomeRecognition: { rentalPct: 83, bonusPct: 50, commissionPct: 50 },
+        gates: [
+          { id: "b1", kind: "NATIONALITY_BLOCK", label: "Restricted nationalities: Israel, Qatar — not financed", values: ["Israel", "Qatar"], hardStop: true },
+          { id: "b2", kind: "FLAG", label: "Syrian & Yemeni nationals — STL only", when: "SALARIED", hardStop: false },
+          { id: "b3", kind: "FLAG", label: "LOS: > 6 months in present UAE company (Option 1); or 1 salary credit + 1 yr UAE employment + 5 credits from previous employer, 1-month gap acceptable (Option 2)", hardStop: false },
+          { id: "b4", kind: "FLAG", label: "Credit card must be sold with each loan — all segments (STL/NSTL/SE)", hardStop: false },
+          { id: "b5", kind: "FLAG", label: "Non-Arab salaried: 2 yrs same company, or 6 months + UAE resident last 5 yrs", hardStop: false },
+          { id: "b6", kind: "FLAG", label: "Family business financed subject to 2 yrs salary-credit proof, case to case", hardStop: false },
+          { id: "b7", kind: "FLAG", label: "Emirates Airline: 50% variable pay + 100% accommodation allowance; salary certificate required", hardStop: false },
+          { id: "b8", kind: "FLAG", label: "Refinance LTV: Arabs 60% · non-Arabs 50%", hardStop: false },
+          { id: "b9", kind: "FLAG", label: "Buyout + top-up: cash equity cannot exceed 30% of property value", hardStop: false },
+          { id: "b10", kind: "FLAG", label: "Construction finance: on exception only", hardStop: false },
+          { id: "b11", kind: "FLAG", label: "Aviation: not cabin crew · no cashout · only 1 property with ADIB", hardStop: false },
+          { id: "b12", kind: "FLAG", label: "Hotel apartments financed (not hotel rooms)", hardStop: false },
+          { id: "b13", kind: "FLAG", label: "Rental income: mortgaged property rental excluded; minimum 2 properties required to consider", hardStop: false },
+          { id: "b14", kind: "FLAG", label: "STL not required with HM Exclusive", hardStop: false },
+        ],
+        notes: [
+          "DSR stress: fixed rate = variable rate + life insurance; variable = 1M EIBOR + 1.6% margin; floor = margin + 1.5% (min 3%).",
+          "Fee finance: NO — instead 10% of purchase price personal loan over 4 yrs @ 5.99% (STL only).",
+          "Company profile for non-Arabs must be multinational / decent profile; site visit by exception.",
+          "Check ADIB Ops master folder for developer-specific handover payment offers.",
+          "Max loan AED 10M or 4 units, whichever lower (2nd-degree mortgage above that).",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* STL — Resale / Developer / Buyout */
+        { id: "s2", key: { stl: "STL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 24, followOn: { margin: 1.60, index: "EIBOR_1M", floor: 3.10 }, note: "2 & 3 yr band" },
+        { id: "s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.60, index: "EIBOR_1M", floor: 3.10 }, note: "2 & 3 yr band" },
+        { id: "s4", key: { stl: "STL", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 48, followOn: { margin: 1.85, index: "EIBOR_1M", floor: 3.35 } },
+        { id: "s5", key: { stl: "STL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.34, fixedMonths: 60, followOn: { margin: 1.75, index: "EIBOR_1M", floor: 3.25 } },
+        { id: "s7", key: { stl: "STL", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.50, fixedMonths: 84, followOn: { margin: 1.85, index: "EIBOR_1M", floor: 5.50 } },
+        { id: "s10", key: { stl: "STL", tenure: "10" }, structure: "FIXED_THEN_VAR", fixedRate: 5.50, fixedMonths: 120, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.50 } },
+        { id: "s15", key: { stl: "STL", tenure: "15" }, structure: "FIXED_THEN_VAR", fixedRate: 5.75, fixedMonths: 180, followOn: { margin: 2.49, index: "EIBOR_1M", floor: 5.75 } },
+        { id: "s20", key: { stl: "STL", tenure: "20" }, structure: "FIXED_THEN_VAR", fixedRate: 6.00, fixedMonths: 240, followOn: { margin: 2.75, index: "EIBOR_1M", floor: 6.00 } },
+        /* NSTL — Resale / Developer / Buyout */
+        { id: "n2", key: { stl: "NSTL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.14, fixedMonths: 24, followOn: { margin: 1.60, index: "EIBOR_1M", floor: 3.10 }, note: "2 & 3 yr band" },
+        { id: "n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.14, fixedMonths: 36, followOn: { margin: 1.60, index: "EIBOR_1M", floor: 3.10 }, note: "2 & 3 yr band" },
+        { id: "n4", key: { stl: "NSTL", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 4.89, fixedMonths: 48, followOn: { margin: 1.85, index: "EIBOR_1M", floor: 3.35 } },
+        { id: "n5", key: { stl: "NSTL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 60, followOn: { margin: 1.75, index: "EIBOR_1M", floor: 3.25 } },
+        { id: "n7", key: { stl: "NSTL", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.50, fixedMonths: 84, followOn: { margin: 1.85, index: "EIBOR_1M", floor: 5.50 } },
+        { id: "n10", key: { stl: "NSTL", tenure: "10" }, structure: "FIXED_THEN_VAR", fixedRate: 5.75, fixedMonths: 120, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.50 } },
+        { id: "n15", key: { stl: "NSTL", tenure: "15" }, structure: "FIXED_THEN_VAR", fixedRate: 6.00, fixedMonths: 180, followOn: { margin: 2.49, index: "EIBOR_1M", floor: 5.75 } },
+        { id: "n20", key: { stl: "NSTL", tenure: "20" }, structure: "FIXED_THEN_VAR", fixedRate: 6.25, fixedMonths: 240, followOn: { margin: 2.75, index: "EIBOR_1M", floor: 6.00 } },
+        /* Under construction — STL */
+        { id: "uc-s3", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.79, fixedMonths: 36, followOn: { margin: 1.80, index: "EIBOR_1M", floor: 4.79 } },
+        { id: "uc-s4", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 48, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.24 } },
+        { id: "uc-s5", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 60, followOn: { margin: 1.80, index: "EIBOR_1M", floor: 4.99 } },
+        { id: "uc-s7", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 84, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.49 } },
+        /* Under construction — NSTL */
+        { id: "uc-n3", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 36, followOn: { margin: 1.80, index: "EIBOR_1M", floor: 4.79 } },
+        { id: "uc-n4", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 48, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.24 } },
+        { id: "uc-n5", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.29, fixedMonths: 60, followOn: { margin: 1.80, index: "EIBOR_1M", floor: 4.99 } },
+        { id: "uc-n7", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.74, fixedMonths: 84, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.49 } },
+        /* NR / SE / Low-doc */
+        { id: "ld3", key: { employment: "SELF_EMPLOYED", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 36, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 4.99 }, note: "Also NR / low-doc" },
+        { id: "ld5", key: { employment: "SELF_EMPLOYED", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.19, fixedMonths: 60, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.19 }, note: "Also NR / low-doc" },
+      ]},
+      fees: {
+        valuation: 2625, preApproval: 0, vatPct: 5,
+        processingMin: 5000,
+        processingFeeTiers: [
+          { label: "STL", pct: 0 },
+          { label: "NSTL — 0.5% + VAT, min AED 5,000", pct: 0.5 },
+          { label: "Residents Handover & Buyout — waived", pct: 0 },
+        ],
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Waived for residents handover & buyout cases" }],
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower — no charge in case of sale",
+        partialSettlement: "Free partial up to 30% of principal outstanding per year",
+        lifeInsurancePct: 0.025, lifeInsuranceNote: "monthly (≈0.3% annualised)",
+        propertyInsuranceNote: "Free",
+        ltvDiscounts: [{ maxLtv: 60, bps: 25, label: "LTV ≤ 60% → 0.25% off introductory rates" }],
+        note: "Fee finance: NO — 10% of purchase price personal loan over 4 yrs @ 5.99% (STL only)",
+      },
+      affordability: { maxDBR: 50, rentalPct: 83, bonusPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (self-attested)", required: true },
+        { name: "Application form", required: true },
+        { name: "Takaful life & consent form", required: true },
+        { name: "Declaration form", required: true },
+        { name: "Health declaration form", required: true },
+        { name: "Salary certificate (can be expired at pre-approval stage)", required: true },
+        { name: "Payslips — 3 months (only if pay varies)", required: false },
+        { name: "Bank statements — 3 months (self-attested)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "Company information form (if company not listed)", required: false },
+      ],
+      tat: {
+        paDays: 3, valuationDays: 4, folDays: 6, totalDays: 22,
+        paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 60,
+        accountOpeningDays: 2, disbursalDays: 5, transferDays: 2,
+      },
+    })],
+  },
+  {
+    /* ADIB fully-variable Day-1 scheme */
+    id: "pd-adib-var", bankId: "b-adib", name: "Home Finance — Salaried (Variable Day 1)", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT", "EQUITY"],
+    axes: ["stl", "propertyStatus"],
+    tags: ["Salaried", "Islamic", "Variable"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "ADIB Day-1 variable pricing",
+      eligibility: {
+        minSalaryMatrix: { STL: 10000, NSTL: 15000 },
+        minLoan: 250000, maxLoan: 10000000, maxUnits: 4,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 }, landLtv: 60,
+        maxAgeSalaried: 70,
+        gates: [
+          { id: "v1", kind: "NATIONALITY_BLOCK", label: "Restricted nationalities: Israel, Qatar — not financed", values: ["Israel", "Qatar"], hardStop: true },
+          { id: "v2", kind: "FLAG", label: "Credit card must be sold with each loan — all segments", hardStop: false },
+          { id: "v3", kind: "FLAG", label: "NR / SE / low-doc: 1.69% margin, floor 4.49%", hardStop: false },
+        ],
+        notes: ["Ready properties, cashout & land purchases: STL 1.25% / NSTL 1.49% (min 3.99%) · Under construction STL/NSTL 1.69% (min 4.49%) · Off-plan 2.25% (min 4.99%)."],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "vr-s", key: { propertyStatus: "READY", stl: "STL" }, structure: "VAR_DAY1", margin: 1.25, index: "EIBOR_1M", floor: 3.99 },
+        { id: "vr-n", key: { propertyStatus: "READY", stl: "NSTL" }, structure: "VAR_DAY1", margin: 1.49, index: "EIBOR_1M", floor: 3.99 },
+        { id: "vl-s", key: { propertyStatus: "LAND", stl: "STL" }, structure: "VAR_DAY1", margin: 1.25, index: "EIBOR_1M", floor: 3.99 },
+        { id: "vl-n", key: { propertyStatus: "LAND", stl: "NSTL" }, structure: "VAR_DAY1", margin: 1.49, index: "EIBOR_1M", floor: 3.99 },
+        { id: "vu", key: { propertyStatus: "UNDER_CONSTRUCTION" }, structure: "VAR_DAY1", margin: 1.69, index: "EIBOR_1M", floor: 4.49 },
+        { id: "vo", key: { propertyStatus: "OFF_PLAN" }, structure: "VAR_DAY1", margin: 2.25, index: "EIBOR_1M", floor: 4.99 },
+      ]},
+      fees: {
+        valuation: 2625, preApproval: 0, vatPct: 5, processingMin: 5000,
+        processingFeeTiers: [{ label: "STL", pct: 0 }, { label: "NSTL — 0.5% + VAT, min AED 5,000", pct: 0.5 }],
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower — no charge in case of sale",
+        partialSettlement: "Free partial up to 30% of principal outstanding per year",
+        lifeInsurancePct: 0.025, lifeInsuranceNote: "monthly (≈0.3% annualised)",
+        propertyInsuranceNote: "Free",
+        ltvDiscounts: [{ maxLtv: 60, bps: 25 }],
+      },
+      affordability: { maxDBR: 50, rentalPct: 83 },
+      tat: { paDays: 3, valuationDays: 4, folDays: 6, totalDays: 22, paValidityDays: 60, folValidityDays: 30 },
+    })],
+  },
+  {
+    /* ADIB Cashout / Equity release — 1st & 2nd degree by nationality */
+    id: "pd-adib-equity", bankId: "b-adib", name: "Cashout / Equity Release", loanType: "ISLAMIC",
+    classes: ["SALARIED"], txTypes: ["EQUITY"], axes: ["propertyStatus", "tenure"],
+    tags: ["Equity", "Islamic", "1st/2nd degree"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "ADIB Cashout pricing (eff. Apr 2023)",
+      eligibility: {
+        minSalaryMatrix: { STL: 10000, NSTL: 15000 },
+        minLoan: 250000,
+        ltvMatrix: { "NATIONAL:1": 80, "EXPAT:1": 75, "NATIONAL:2": 65, "EXPAT:2": 60 },
+        gates: [
+          { id: "e1", kind: "FLAG", label: "1st degree: 80% Locals / 75% Expats · 2nd degree: 65% Locals / 60% Expats", hardStop: false },
+          { id: "e2", kind: "FLAG", label: "Equity from 1st property can fund down payment of 2nd property", hardStop: false },
+          { id: "e3", kind: "FLAG", label: "Equity reason: purchase a new property or renovation of existing property", hardStop: false },
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "eq4", key: { propertyStatus: "READY", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 4.89, fixedMonths: 48, followOn: { margin: 1.75, index: "EIBOR_1M", floor: 4.89 } },
+        { id: "eq5", key: { propertyStatus: "READY", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.89, fixedMonths: 60, followOn: { margin: 1.75, index: "EIBOR_1M", floor: 4.89 } },
+        { id: "eq7", key: { propertyStatus: "READY", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 84, followOn: { margin: 1.75, index: "EIBOR_1M", floor: 5.24 } },
+        { id: "eqv", key: { propertyStatus: "READY" }, structure: "VAR_DAY1", margin: 1.49, index: "EIBOR_1M", floor: 3 },
+        { id: "el4", key: { propertyStatus: "LAND", tenure: "4" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 48, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.24 } },
+        { id: "el5", key: { propertyStatus: "LAND", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 60, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.24 } },
+        { id: "el7", key: { propertyStatus: "LAND", tenure: "7" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 84, followOn: { margin: 2.25, index: "EIBOR_1M", floor: 5.24 } },
+      ]},
+      fees: {
+        processingPct: 0.5, processingMin: 5000, processingMax: 30000, vatPct: 5,
+        valuation: 2625, preApproval: 0,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        lifeInsurancePct: 0.025, lifeInsuranceNote: "monthly", propertyInsuranceNote: "Free",
+        note: "Processing 0.5% — min AED 5,000, max AED 30,000",
+      },
+      affordability: { maxDBR: 50 },
+      tat: { paDays: 3, valuationDays: 4, folDays: 6, totalDays: 22, paValidityDays: 60, folValidityDays: 30 },
+    })],
+  },
   {
     id: "pd-adib-nr", bankId: "b-adib", name: "NR Home Finance — Islamic", loanType: "ISLAMIC",
     classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT"], axes: ["tenure", "employment"],
@@ -494,6 +685,7 @@ const PROMOS: Promo[] = [
   { id: "promo-1", bankId: "b-adib", name: "HM Promotion — processing fee zero", from: d(-200), to: d(100), summary: "Zero processing fee on salaried home finance.", createdBy: "hfmm-15", createdAt: ts(-60) },
   { id: "promo-2", bankId: "b-cbd", name: "Aug–Sep pricing window", from: "2026-08-24", to: "2026-09-30", summary: "CBD updated mortgage pricing for applications in window.", createdBy: "hfmm-15", createdAt: ts(-60) },
   { id: "promo-3", bankId: "b-dib", name: "AUH Developers — Q window", from: d(-90), to: d(45), summary: "NSTL 3.95% fixed 3yr, zero processing fee.", createdBy: "hfmm-15", createdAt: ts(-60) },
+  { id: "promo-adib-buyout", bankId: "b-adib", name: "ADIB Buyout Campaign — extended to 30 Aug 2026", from: d(-200), to: "2026-08-30", summary: "STL/NSTL 3.99% fixed 2yr with AED 2,500 cashback option (or valuation-fee refund + early-closure-fee refund post title deed favoring ADIB). Applies to Buyout & Buyout+Equity. Pre-approval + valuation must be instructed by 30 Aug 2026.", createdBy: "hfmm-15", createdAt: ts(-60) },
 ];
 
 /* ---------- global rules (versioned, TO VERIFY) ---------- */
@@ -797,6 +989,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-adcb-sal", verdict: "ELIGIBLE" }],
     note: "ADCB salaried: Private segment 3yr fixed 4.50%, minus 0.25% employer discount (ADNOC) → 4.25%.",
   },
+  {
+    id: "golden-8", name: "ADIB — STL buyout at 55% LTV earns 0.25% low-LTV discount",
+    client: { ...baseProfile, name: "Golden · ADIB STL buyout", customerType: "EXPAT" as const, salaryTransfer: true, txType: "BUYOUT" as const, propertyStatus: "READY" as const, preferredFixedYears: 2, age: 34, monthlyIncome: 40000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1100000 },
+    expected: [{ productDefId: "pd-adib-sal", verdict: "ELIGIBLE" }],
+    note: "STL 2–3yr 3.99% − 0.25% (LTV ≤ 60%) → 3.74%. Min salary STL 10k satisfied.",
+  },
+  {
+    id: "golden-9", name: "ADIB — NSTL below 15k minimum salary is blocked",
+    client: { ...baseProfile, name: "Golden · ADIB NSTL low income", customerType: "EXPAT" as const, salaryTransfer: false, preferredFixedYears: 2, age: 31, monthlyIncome: 12000, monthlyLiabilities: 1000, propertyValue: 1000000, loanRequested: 600000 },
+    expected: [{ productDefId: "pd-adib-sal", verdict: "NOT_ELIGIBLE" }],
+    note: "NSTL minimum salary is 15k (matrix key NSTL) — 12k income blocks.",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -851,6 +1055,7 @@ export function buildSeed(): AppState {
     audit: [
       { id: "a0", at: ts(-0.05), by: "hfmm-15", module: "RULE", action: "Policy revised", target: "Mashreq — Sept 2026 revision", detail: "High-risk bands (60%/70%) effective immediately + top-developer exemption; NR segment scheduled 1 Sept 2026" },
       { id: "a-adcb", at: ts(-0.02), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADCB · Home Finance — Salaried (pd-adcb-sal v1)", detail: "Segment pricing (Priv/Aspire/Home Saver) + fixed-term grid, employer discount −0.25%, fee tiers, 9-field TAT" },
+      { id: "a-adib", at: ts(-0.01), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADIB · Home Finance — Salaried (pd-adib-sal/var/equity v1)", detail: "STL/NSTL/UC/NR grids across 2–20yr tenors, LTV ≤60% −0.25% discount, STL 10k/NSTL 15k min, land 60% LTV, buyout campaign promo to 30 Aug 2026" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

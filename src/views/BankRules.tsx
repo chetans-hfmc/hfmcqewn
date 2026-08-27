@@ -209,8 +209,11 @@ export default function BankRulesView() {
                           <Field label="Max age — salaried"><NumInput disabled={!editable} value={ver.eligibility.maxAgeSalaried ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxAgeSalaried: n || undefined } })} suffix="yrs" /></Field>
                           <Field label="Max age — self emp"><NumInput disabled={!editable} value={ver.eligibility.maxAgeSelfEmp ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxAgeSelfEmp: n || undefined } })} suffix="yrs" /></Field>
                           <Field label="Construction LTV"><NumInput disabled={!editable} value={ver.eligibility.constructionLtv ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, constructionLtv: n || undefined } })} suffix="%" /></Field>
+                          <Field label="Land LTV"><NumInput disabled={!editable} value={ver.eligibility.landLtv ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, landLtv: n || undefined } })} suffix="%" /></Field>
+                          <Field label="Max units"><NumInput disabled={!editable} value={ver.eligibility.maxUnits ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, maxUnits: n || undefined } })} suffix="units" /></Field>
                           <Field label="Min LOS (months)"><NumInput disabled={!editable} value={ver.eligibility.minLosMonths ?? 0} onChange={(n) => setPv({ eligibility: { ...ver.eligibility, minLosMonths: n || undefined } })} suffix="mo" /></Field>
                         </div>
+                        <div className="mt-3"><Field label="Payment holiday"><TextInput disabled={!editable} value={ver.eligibility.paymentHoliday ?? ""} onChange={(e) => setPv({ eligibility: { ...ver.eligibility, paymentHoliday: e.target.value || undefined } })} placeholder="e.g. STL up to 6 months · NSTL up to 3 months" /></Field></div>
                         {/* per-customer-type minimum salary */}
                         <div>
                           <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">Min salary by customer type</p>
@@ -321,10 +324,28 @@ export default function BankRulesView() {
                     <div className="grid grid-cols-2 gap-4">
                       <Field label="Processing %"><NumInput disabled={!editable} value={ver.fees.processingPct ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, processingPct: n || undefined } })} suffix="%" /></Field>
                       <Field label="Processing min"><NumInput disabled={!editable} value={ver.fees.processingMin ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, processingMin: n || undefined } })} suffix="AED" /></Field>
+                      <Field label="Processing max"><NumInput disabled={!editable} value={ver.fees.processingMax ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, processingMax: n || undefined } })} suffix="AED" /></Field>
                       <Field label="Valuation"><NumInput disabled={!editable} value={ver.fees.valuation ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, valuation: n || undefined } })} suffix="AED" /></Field>
                       <Field label="Pre-approval"><NumInput disabled={!editable} value={ver.fees.preApproval ?? 0} onChange={(n) => setPv({ fees: { ...ver.fees, preApproval: n || undefined } })} suffix="AED" /></Field>
                     </div>
                     <div className="mt-3"><Field label="Early settlement"><TextInput disabled={!editable} value={ver.fees.earlySettlement ?? ""} onChange={(e) => setPv({ fees: { ...ver.fees, earlySettlement: e.target.value || undefined } })} placeholder="e.g. 1% or 10k, whichever lower" /></Field></div>
+                    {/* LTV-conditional rate discounts */}
+                    <div className="mt-4">
+                      <p className="text-[10.5px] uppercase tracking-wider text-ink-soft font-display font-bold mb-1.5">LTV-conditional rate discounts</p>
+                      {(ver.fees.ltvDiscounts ?? []).map((dd, di) => (
+                        <div key={di} className="flex items-center gap-2 mb-1.5">
+                          <span className="num text-[11px] font-semibold bg-pine-100 text-pine-800 rounded px-1.5 py-0.5">LTV ≤ {dd.maxLtv}%</span>
+                          <span className="text-[11px] text-ink-soft">→ −{dd.bps} bps</span>
+                          {editable && <button onClick={() => setPv({ fees: { ...ver.fees, ltvDiscounts: (ver.fees.ltvDiscounts ?? []).filter((_, j) => j !== di) } })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                        </div>
+                      ))}
+                      {(ver.fees.ltvDiscounts ?? []).length === 0 && <p className="text-[11.5px] text-ink-soft italic">None.</p>}
+                      {editable && (
+                        <Btn size="sm" variant="outline" onClick={() => setPv({ fees: { ...ver.fees, ltvDiscounts: [...(ver.fees.ltvDiscounts ?? []), { maxLtv: 60, bps: 25 }] } })}>
+                          <Ic n="plus" size={12} /> Add LTV discount
+                        </Btn>
+                      )}
+                    </div>
 
                     {/* processing fee tiers */}
                     <div className="mt-4">

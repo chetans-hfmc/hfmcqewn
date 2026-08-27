@@ -351,6 +351,12 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     ltvPct = pv.eligibility.constructionLtv;
   }
 
+  /* ---- land purchase LTV cap ---- */
+  if (pv.eligibility.landLtv != null && c.propertyStatus === "LAND" && ltvPct > pv.eligibility.landLtv) {
+    push({ code: "LTV-LAND", severity: "APPLIED", category: "financing", message: `Land purchase LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.landLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.landLtv;
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
@@ -468,6 +474,17 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       const before = ratePct;
       ratePct = Math.max(0, ratePct - hit.bps / 100);
       push({ code: "EMPLOYER-DISC", severity: "APPLIED", category: "pricing", message: `Employer discount −${(hit.bps / 100).toFixed(2)}% (${hit.label})`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId, explanation: `Employer "${c.employer}" is on the approved list.` });
+    }
+  }
+
+  /* ---- LTV-conditional rate discount (e.g. ADIB −0.25% when LTV ≤ 60%) ---- */
+  const ltvDiscs = pv.fees.ltvDiscounts ?? [];
+  if (ratePct != null && ltvDiscs.length && ltvPct > 0) {
+    const hit = ltvDiscs.find((dd) => ltvPct <= dd.maxLtv);
+    if (hit) {
+      const before = ratePct;
+      ratePct = Math.max(0, ratePct - hit.bps / 100);
+      push({ code: "LTV-DISC", severity: "APPLIED", category: "pricing", message: `Low-LTV discount −${(hit.bps / 100).toFixed(2)}% (LTV ≤ ${hit.maxLtv}%)`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId });
     }
   }
 

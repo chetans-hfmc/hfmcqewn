@@ -148,10 +148,14 @@ export interface ProductVersion {
   effectiveFrom?: string; source?: string; createdAt: string;
   eligibility: {
     minSalary?: number; minLoan?: number; maxLoan?: number;
-    minSalaryMatrix?: Record<string, number>;  /* per customer type: e.g. NATIONAL 8K / EXPAT 15K */
+    /* Keys tried in order: customerType → residency → STL/NSTL (salary transfer) → employment. */
+    minSalaryMatrix?: Record<string, number>;  /* e.g. NATIONAL 8K / EXPAT 15K · or · STL 10K / NSTL 15K */
     maxAgeSalaried?: number; maxAgeSelfEmp?: number; maxLoanByNationality?: Record<string, number>;
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
     constructionLtv?: number;                  /* LTV cap for under-construction / off-plan finance */
+    landLtv?: number;                          /* LTV cap for land purchase */
+    maxUnits?: number;                         /* max loan = amount cap OR n units, whichever lower */
+    paymentHoliday?: string;                   /* e.g. "STL up to 6 months · NSTL up to 3 months" */
     coApplicantRule?: string;                  /* e.g. "1 blood relation (no siblings)" */
     employerRequirements?: { minYearsEstablished?: number; minEmployees?: number; profileForm?: boolean; note?: string };
 
@@ -181,8 +185,9 @@ export interface ProductVersion {
   tenure: { maxMonths?: number; note?: string };
   grid: { cells: RateCell[] };
   fees: {
-    processingPct?: number; processingMin?: number; valuation?: number; preApproval?: number;
+    processingPct?: number; processingMin?: number; processingMax?: number; valuation?: number; preApproval?: number;
     earlySettlement?: string; note?: string;
+    ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
     processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */

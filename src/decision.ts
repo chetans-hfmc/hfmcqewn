@@ -72,6 +72,8 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "customerType": return c.customerType;
     case "segment": return c.segment ?? null;
     case "tenure": return c.preferredFixedYears != null ? String(c.preferredFixedYears) : null;
+    case "stl": return c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
+    case "propertyStatus": return c.propertyStatus ?? null;
     case "ftvBand": {
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
@@ -208,19 +210,23 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   }
 
   /* ---- income floor (per-customer-type matrix wins over the flat minimum) ---- */
-  const effMinSalary = pv.eligibility.minSalaryMatrix?.[c.customerType] ?? pv.eligibility.minSalary;
+  /* Matrix keys are tried in order of specificity: customer type → residency →
+     salary-transfer (STL/NSTL) → employment. First hit wins. */
+  const msm = pv.eligibility.minSalaryMatrix ?? {};
+  const stlKey = c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
+  const msmKey = [c.customerType, c.residency, stlKey, c.employment].find((k) => k != null && msm[k] != null) ?? null;
+  const effMinSalary = (msmKey ? msm[msmKey] : undefined) ?? pv.eligibility.minSalary;
   if (effMinSalary != null && c.monthlyIncome < effMinSalary) {
     blocked = true;
-    const viaMatrix = pv.eligibility.minSalaryMatrix?.[c.customerType] != null;
     push({
       code: "MIN-INCOME", severity: "BLOCK", category: "eligibility",
-      message: `Income below minimum${viaMatrix ? ` for ${c.customerType.replace(/_/g, " ").toLowerCase()}` : ""}`,
+      message: `Income below minimum${msmKey ? ` for ${msmKey.replace(/_/g, " ").toLowerCase()}` : ""}`,
       previousValue: fmtMoney(c.monthlyIncome) + "/mo",
       resultingValue: "≥ " + fmtMoney(effMinSalary) + "/mo", source: pd.bankId,
     });
     remediations.push({ field: "income", current: fmtMoney(c.monthlyIncome) + "/mo", required: fmtMoney(effMinSalary) + "/mo", delta: fmtMoney(effMinSalary - c.monthlyIncome) + "/mo", message: "Increase qualifying income to the product minimum.", effort: 3 });
   } else if (effMinSalary != null) {
-    push({ code: "MIN-INCOME-OK", severity: "APPLIED", category: "eligibility", message: `Minimum income satisfied (${c.customerType.replace(/_/g, " ").toLowerCase()} ≥ ${fmtMoney(effMinSalary)}/mo)`, resultingValue: fmtMoney(effMinSalary) + "/mo", source: pd.bankId });
+    push({ code: "MIN-INCOME-OK", severity: "APPLIED", category: "eligibility", message: `Minimum income satisfied (${(msmKey ?? c.customerType).replace(/_/g, " ").toLowerCase()} ≥ ${fmtMoney(effMinSalary)}/mo)`, resultingValue: fmtMoney(effMinSalary) + "/mo", source: pd.bankId });
   }
 
   /* ---- credit group: bureau score floor ---- */

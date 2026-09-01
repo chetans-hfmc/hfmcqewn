@@ -720,6 +720,23 @@ export default function BankRulesView() {
                           <div><p className="text-[10.5px] text-ink-soft mb-1">…cap LTV at</p><NumInput disabled={!editable} value={e.multiPropertyRule?.ltv ?? 0} onChange={(n) => setElig({ multiPropertyRule: { minCount: e.multiPropertyRule?.minCount ?? 2, ltv: n } })} suffix="%" /></div>
                         </div>
                       </div>
+                      <div className="mt-3.5">
+                        <p className="text-[10.5px] font-display font-bold text-ink-soft mb-1.5 flex items-center gap-1.5">LTV by property value (bands) <Exec /></p>
+                        <p className="text-[11px] text-ink-soft mb-2">Lower of market value or purchase price is matched to the first band it fits. Leave employment as "All" for a universal band.</p>
+                        <div className="space-y-1.5 max-w-xl">
+                          {(e.ltvBands ?? []).map((b, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <span style={{ display: "inline-block", width: 150 }}><Select disabled={!editable} value={b.employment ?? ""} onChange={(v) => setElig({ ltvBands: (e.ltvBands ?? []).map((x, j) => j === i ? { ...x, employment: v || undefined } : x) })} options={[{ v: "", l: "All employment" }, { v: "SALARIED", l: "Salaried" }, { v: "SELF_EMPLOYED", l: "Self employed" }]} /></span>
+                              <span className="text-[11px] text-ink-soft">value ≤</span>
+                              <span style={{ display: "inline-block", width: 130 }}><NumInput disabled={!editable} value={b.upTo} onChange={(n) => setElig({ ltvBands: (e.ltvBands ?? []).map((x, j) => j === i ? { ...x, upTo: n } : x) })} suffix="AED" /></span>
+                              <span className="text-[11px] text-ink-soft">→</span>
+                              <span style={{ display: "inline-block", width: 80 }}><NumInput disabled={!editable} value={b.ltv} onChange={(n) => setElig({ ltvBands: (e.ltvBands ?? []).map((x, j) => j === i ? { ...x, ltv: n } : x) })} suffix="%" /></span>
+                              {editable && <button onClick={() => setElig({ ltvBands: (e.ltvBands ?? []).filter((_, j) => j !== i) })} className="focusable p-1 rounded text-ink-soft hover:text-rust-600"><Ic n="x" size={12} /></button>}
+                            </div>
+                          ))}
+                        </div>
+                        {editable && <Btn size="sm" variant="outline" className="mt-2" onClick={() => setElig({ ltvBands: [...(e.ltvBands ?? []), { upTo: 5000000, ltv: 75 }] })}><Ic n="plus" size={12} /> Add value band</Btn>}
+                      </div>
                       <div className="mt-3.5 max-w-md">
                         <p className="text-[10.5px] font-display font-bold text-ink-soft mb-1.5">Employer requirements</p>
                         <div className="grid grid-cols-2 gap-3">
@@ -865,6 +882,33 @@ export default function BankRulesView() {
                         </div>
                       </div>
                     </SectionCard>
+
+                    <SectionCard title="Conditional rate adjustments" icon="pulse" defaultOpen={false}
+                      hint="Surcharges or discounts applied when conditions match — e.g. refinance +10 bps, loan above 10M +75 bps. Positive bps = surcharge, negative = discount. All conditions must match.">
+                      <div className="space-y-2.5">
+                        {(f.rateAdjustments ?? []).map((a, ai) => {
+                          const upd = (p: Partial<NonNullable<ProductVersion["fees"]["rateAdjustments"]>[number]>) =>
+                            setFees({ rateAdjustments: (f.rateAdjustments ?? []).map((x, j) => (j === ai ? { ...x, ...p } : x)) });
+                          return (
+                            <div key={a.id} className="border border-mist rounded-md px-3 py-2.5 bg-paper/40 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="flex-1"><TextInput disabled={!editable} value={a.label} onChange={(e) => upd({ label: e.target.value })} placeholder="Label, e.g. Refinance" /></span>
+                                <span style={{ display: "inline-block", width: 100 }}><NumInput disabled={!editable} value={a.bps} onChange={(n) => upd({ bps: n })} suffix="bps" /></span>
+                                {editable && <RowActions onDel={() => setFees({ rateAdjustments: (f.rateAdjustments ?? []).filter((_, j) => j !== ai) })} />}
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div><p className="text-[10px] text-ink-soft mb-1">Transactions (comma-sep)</p><TextInput disabled={!editable} value={(a.txTypes ?? []).join(", ")} onChange={(e) => upd({ txTypes: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) as TxType[] })} placeholder="REFINANCE, TOPUP" /></div>
+                                <div><p className="text-[10px] text-ink-soft mb-1">Loan amount &gt;</p><NumInput disabled={!editable} value={a.loanGt ?? 0} onChange={(n) => upd({ loanGt: n || undefined })} suffix="AED" /></div>
+                                <div><p className="text-[10px] text-ink-soft mb-1">Loan amount &lt;</p><NumInput disabled={!editable} value={a.loanLt ?? 0} onChange={(n) => upd({ loanLt: n || undefined })} suffix="AED" /></div>
+                                <div><p className="text-[10px] text-ink-soft mb-1">LTV &gt;</p><NumInput disabled={!editable} value={a.ltvGt ?? 0} onChange={(n) => upd({ ltvGt: n || undefined })} suffix="%" /></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(f.rateAdjustments ?? []).length === 0 && <p className="text-[11.5px] text-ink-soft italic">None.</p>}
+                        {editable && <Btn size="sm" variant="outline" onClick={() => setFees({ rateAdjustments: [...(f.rateAdjustments ?? []), { id: "ra" + uid(), label: "", bps: 10 }] })}><Ic n="plus" size={12} /> Add adjustment</Btn>}
+                      </div>
+                    </SectionCard>
                   </>
                 )}
 
@@ -924,6 +968,7 @@ export default function BankRulesView() {
                   <SectionCard title="Tenure, max loan by nationality & notes" icon="clock">
                     <div className="grid grid-cols-2 gap-3 max-w-md">
                       <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Max tenure <Exec /></p><NumInput disabled={!editable} value={ver.tenure.maxMonths ?? 0} onChange={(n) => setTenure({ maxMonths: n || undefined })} suffix="mo" /></div>
+                      <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Min tenure <Exec /></p><NumInput disabled={!editable} value={ver.tenure.minMonths ?? 0} onChange={(n) => setTenure({ minMonths: n || undefined })} suffix="mo" /></div>
                     </div>
                     <div className="mt-4 max-w-md">
                       <p className="text-[10.5px] font-display font-bold text-ink-soft mb-1.5">Max loan by nationality</p>

@@ -347,6 +347,24 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     }
   }
 
+  /* ---- property-value-banded LTV (CBD revised parameters) ---- */
+  const valueBands = (pv.eligibility.ltvBands ?? []).filter((b) => !b.employment || b.employment === c.employment);
+  if (valueBands.length && eligibleValue > 0) {
+    const sorted = [...valueBands].sort((a, b) => a.upTo - b.upTo);
+    const hit = sorted.find((b) => eligibleValue <= b.upTo) ?? sorted[sorted.length - 1];
+    if (hit && ltvPct > hit.ltv) {
+      push({ code: "LTV-BAND", severity: "APPLIED", category: "financing", message: `Property-value LTV band applied${hit.employment ? ` (${hit.employment.replace(/_/g, " ").toLowerCase()})` : ""} — value ≤ ${fmtMoney(hit.upTo)}`, previousValue: `${ltvPct}%`, resultingValue: `${hit.ltv}%`, source: pd.bankId });
+      ltvPct = hit.ltv;
+    }
+  }
+
+  /* ---- emirate-conditional LTV (e.g. NR Dubai 60 / Abu Dhabi 50) ---- */
+  const byEmirate = pv.eligibility.ltvByEmirate?.[c.emirate];
+  if (byEmirate != null && ltvPct > byEmirate) {
+    push({ code: "LTV-EMIRATE", severity: "APPLIED", category: "financing", message: `Emirate-conditional LTV applied (${c.emirate})`, previousValue: `${ltvPct}%`, resultingValue: `${byEmirate}%`, source: pd.bankId });
+    ltvPct = byEmirate;
+  }
+
   /* ---- construction / off-plan finance LTV cap ---- */
   const isConstruction = c.propertyStatus === "UNDER_CONSTRUCTION" || c.propertyStatus === "OFF_PLAN";
   if (pv.eligibility.constructionLtv != null && isConstruction && ltvPct > pv.eligibility.constructionLtv) {
@@ -392,7 +410,11 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   }
   const maxByAge = retireAge == null ? Number.POSITIVE_INFINITY : Math.max(0, (retireAge - c.age) * 12);
   const capMonths = pv.tenure.maxMonths ?? 300;
-  const tenure = Math.min(capMonths, maxByAge);
+  let tenure = Math.min(capMonths, maxByAge);
+  if (pv.tenure.minMonths != null && tenure < pv.tenure.minMonths) {
+    push({ code: "MIN-TENOR", severity: "INFO", category: "tenure", message: `Tenure raised to product minimum of ${Math.round(pv.tenure.minMonths / 12)} years`, previousValue: `${Math.round(tenure / 12)} yrs`, resultingValue: `${Math.round(pv.tenure.minMonths / 12)} yrs`, source: pd.bankId });
+    tenure = Math.min(pv.tenure.minMonths, capMonths);
+  }
   if (retireAge != null && maxByAge < 12) {
     blocked = true;
     push({ code: "AGE", severity: "BLOCK", category: "tenure", message: `Age at maturity exceeds limit (retires at ${retireAge})`, explanation: `client is ${c.age}; tenure would end at ${c.age + 1}+`, source: pd.bankId });
@@ -490,6 +512,23 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       const before = ratePct;
       ratePct = Math.max(0, ratePct - hit.bps / 100);
       push({ code: "LTV-DISC", severity: "APPLIED", category: "pricing", message: `Low-LTV discount −${(hit.bps / 100).toFixed(2)}% (LTV ≤ ${hit.maxLtv}%)`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId });
+    }
+  }
+
+  /* ---- generic conditional rate adjustments (CBD: refinance +10, >10M +75, LTV>85%&<2M +30) ---- */
+  for (const adj of pv.fees.rateAdjustments ?? []) {
+    if (ratePct == null) break;
+    const conds: boolean[] = [];
+    if (adj.txTypes) conds.push(c.txType != null && adj.txTypes.includes(c.txType));
+    if (adj.employment) conds.push(c.employment === adj.employment);
+    if (adj.loanGt != null) conds.push(c.loanRequested > adj.loanGt);
+    if (adj.loanLt != null) conds.push(c.loanRequested < adj.loanLt);
+    if (adj.ltvGt != null) conds.push(ltvPct > adj.ltvGt);
+    if (conds.length && conds.every(Boolean)) {
+      const before = ratePct;
+      const sign = adj.bps >= 0 ? "+" : "−";
+      ratePct = Math.max(0, ratePct + adj.bps / 100);
+      push({ code: "RATE-ADJ", severity: "APPLIED", category: "pricing", message: `${adj.label}: ${sign}${(Math.abs(adj.bps) / 100).toFixed(2)}%`, previousValue: before.toFixed(2) + "%", resultingValue: ratePct.toFixed(2) + "%", source: pd.bankId });
     }
   }
 

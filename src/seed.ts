@@ -620,6 +620,168 @@ const PRODUCT_DEFS: ProductDef[] = [
       tat: { paDays: 3, valuationDays: 2, folDays: 2, totalDays: 12, paValidityDays: 60, folValidityDays: 30 },
     })],
   },
+  /* ---------------- CBD · Salaried (full sheet mapped — Islamic) ---------------- */
+  {
+    id: "pd-cbd-sal", bankId: "b-cbd", name: "Home Finance — Salaried", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "BUYOUT", "BUYOUT_EQUITY", "REFINANCE"],
+    axes: ["stl", "tenure", "propertyStatus", "employment", "transaction"],
+    tags: ["Salaried", "Islamic", "Revised LTV 31-Jul-2026"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "CBD salaried pricing card — effective 24 Aug 2026",
+      eligibility: {
+        minSalaryMatrix: { EXPAT: 12000, NATIONAL: 40000 },
+        minLoan: 250000, maxLoan: 15000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        /* Revised LTV parameters (31 Jul 2026): property-value bands, per employment. */
+        ltvBands: [
+          { employment: "SALARIED", upTo: 5000000, ltv: 75 },
+          { employment: "SALARIED", upTo: 7000000, ltv: 70 },
+          { employment: "SALARIED", upTo: 1000000000, ltv: 65 },
+          { employment: "SELF_EMPLOYED", upTo: 5000000, ltv: 70 },
+          { employment: "SELF_EMPLOYED", upTo: 1000000000, ltv: 60 },
+        ],
+        /* NR emirate caps (Dubai 60 / Abu Dhabi 50) are residency-scoped, so they are
+           documented as gate c3 for human confirmation rather than a universal emirate cap. */
+        maxAgeSalaried: 70,
+        minLosMonths: 3,
+        statementMonths: 3,
+        coApplicantRule: "Any first blood relation (siblings allowed)",
+        incomeRecognition: { bonusPct: 50, rentalPct: 83, commissionPct: 50 },
+        gates: [
+          { id: "c1", kind: "FLAG", label: "Salary-transfer pricing requires assignment letter + transfer to CBD within 60 days of disbursement, else NSTL pricing applies", hardStop: false },
+          { id: "c2", kind: "FLAG", label: "SE low-doc / non-resident segment capped at 60% LTV", hardStop: false },
+          { id: "c3", kind: "FLAG", label: "NR: 60% Dubai properties only (first property; second capped 60%) · 50% Abu Dhabi", hardStop: false },
+          { id: "c4", kind: "FLAG", label: "Refinance / top-up 60% for NTB · top-up 65% first mortgage / 60% subsequent", hardStop: false },
+          { id: "c5", kind: "FLAG", label: "New-to-UAE: AED 35k salary / 1 salary credit / down payment / previous experience + bank statement", hardStop: false },
+          { id: "c6", kind: "FLAG", label: "Rental income 83% — no cap; 50% share if jointly owned", hardStop: false },
+          { id: "c7", kind: "FLAG", label: "Commission up to 50% of last 6 months, capped at 75% of fixed income", hardStop: false },
+          { id: "c8", kind: "FLAG", label: "Aviation: Emirates & FlyDubai pilots accepted; flying allowance 80% of 6-month average", hardStop: false },
+          { id: "c9", kind: "FLAG", label: "Interest-only payment option available for first year on fixed or day-1 variable", hardStop: false },
+          { id: "c10", kind: "FLAG", label: "Dubai & Abu Dhabi only — no Al Ain properties", hardStop: false },
+        ],
+        notes: [
+          "Revised LTV bands (31 Jul 2026) apply to primary / secondary / buy-out / handover. Property value = lower of market value or purchase price.",
+          "Housing allowance: 100% if paid to landlord · 25% if company accommodation (Emirates) · 70% annual add-back otherwise.",
+          "Education allowance counted in full even if paid directly to school.",
+          "Company not listed → site visit required.",
+        ],
+      },
+      tenure: { maxMonths: 300, minMonths: 36 },
+      grid: { cells: [
+        /* Completed properties — STL */
+        { id: "cs1", key: { stl: "STL", propertyStatus: "READY", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.89, fixedMonths: 12, followOn: { margin: 1.79, index: "EIBOR_3M" } },
+        { id: "cs3", key: { stl: "STL", propertyStatus: "READY", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.79, index: "EIBOR_3M" } },
+        { id: "cs5", key: { stl: "STL", propertyStatus: "READY", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.19, fixedMonths: 60, followOn: { margin: 1.79, index: "EIBOR_3M" } },
+        /* Completed properties — NSTL */
+        { id: "cn1", key: { stl: "NSTL", propertyStatus: "READY", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.99, fixedMonths: 12, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "cn3", key: { stl: "NSTL", propertyStatus: "READY", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.24, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "cn5", key: { stl: "NSTL", propertyStatus: "READY", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 60, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        /* Self-employed / low-doc 3yr */
+        { id: "cse3", key: { employment: "SELF_EMPLOYED", propertyStatus: "READY", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.64, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" }, note: "SE / low-doc pricing" },
+        /* Off-plan / under-construction / land — STL & NSTL */
+        { id: "cu-s1", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 5.14, fixedMonths: 12, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        { id: "cu-s3", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        { id: "cu-s5", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.44, fixedMonths: 60, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        { id: "cu-n1", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 12, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        { id: "cu-n3", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        { id: "cu-n5", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.84, fixedMonths: 60, followOn: { margin: 1.94, index: "EIBOR_3M", floor: 4.99 } },
+        /* Day-1 variable — buyout / fresh / refinance */
+        { id: "dv1", key: { transaction: "BUYOUT", propertyStatus: "READY" }, structure: "VAR_DAY1", margin: 1.39, index: "EIBOR_3M", floor: 1.39, note: "Also fresh & refinance, completed" },
+        { id: "dv-uc", key: { propertyStatus: "UNDER_CONSTRUCTION" }, structure: "VAR_DAY1", margin: 1.64, index: "EIBOR_3M", floor: 4.99 },
+        { id: "dv-land", key: { propertyStatus: "LAND", stl: "STL" }, structure: "VAR_DAY1", margin: 1.99, index: "EIBOR_3M", floor: 4.99, note: "NSTL 2.19%" },
+      ]},
+      fees: {
+        processingPct: 0.25, processingMin: 3000, valuation: 3000, preApproval: 0, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500, whichever lower",
+        partialSettlement: "Up to 15% every year",
+        lifeInsurancePct: 0.01167, lifeInsuranceNote: "p.m. on loan outstanding",
+        propertyInsurancePct: 0.06, propertyInsuranceNote: "p.a.",
+        feeFinancing: { allowed: true, pct: 0.25, basis: "0.25% mortgage registration + AED 4,000 trustee + 4% DLD + 2% brokerage" },
+        processingFeeTiers: [
+          { label: "Non-resident (all transactions)", pct: 1 },
+          { label: "Low docs", pct: 0.5 },
+        ],
+        txOverrides: [
+          { txType: "BUYOUT", processingPct: 0, note: "Buyout 0%" },
+          { txType: "REFINANCE", processingPct: 1, note: "1% of incremental amount" },
+          { txType: "BUYOUT_EQUITY", processingPct: 1, note: "1% of equity release amount" },
+        ],
+        /* Conditional rate surcharges (introductory pricing only). */
+        rateAdjustments: [
+          { id: "cbd-refi", label: "Refinance", bps: 10, txTypes: ["REFINANCE"] },
+          { id: "cbd-10m", label: "Loan above AED 10M", bps: 75, loanGt: 10000000 },
+          { id: "cbd-ltv85", label: "LTV > 85% & loan < AED 2M", bps: 30, ltvGt: 85, loanLt: 2000000 },
+        ],
+        note: "Valuation AED 3,000 + VAT (50% discount on rack rates) · pre-approval waived",
+      },
+      affordability: { maxDBR: 50, rentalPct: 83, bonusPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (1 PDF)", required: true },
+        { name: "Application form + FTS form signed + letter of consent", required: true },
+        { name: "Salary certificate (within 30 days; Emirates salary ref no.)", required: true },
+        { name: "Payslips — 3 months (only if pay varies)", required: false },
+        { name: "Bank statements — 3 full months (+ FTS for 6 months)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "Salary assignment letter (for STL pricing)", required: false },
+      ],
+      tat: {
+        paDays: 5, valuationDays: 4, folDays: 10, totalDays: 27,
+        paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 45,
+        accountOpeningDays: 1, disbursalDays: 5, transferDays: 2,
+      },
+    })],
+  },
+  {
+    id: "pd-cbd-baf", bankId: "b-cbd", name: "BAF Loan — Individuals", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["EQUITY"],
+    axes: ["tenure"],
+    tags: ["BAF", "Equity against property"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "CBD BAF card",
+      eligibility: {
+        minSalaryMatrix: { EXPAT: 12000, NATIONAL: 40000 },
+        minLoan: 250000, maxLoan: 15000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        gates: [{ id: "b1", kind: "FLAG", label: "Processing 1% of equity release amount + VAT (buyout portion 0%)", hardStop: false }],
+        notes: ["BAF = finance against property for individuals; post-introductory 3M EIBOR + 2.19% (>50% LTV) / + 2.09% (≤50%)."],
+      },
+      tenure: { maxMonths: 300, minMonths: 36 },
+      grid: { cells: [
+        { id: "baf1", key: { tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 5.80, fixedMonths: 12, followOn: { margin: 2.19, index: "EIBOR_3M" } },
+        { id: "baf3", key: { tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 5.25, fixedMonths: 36, followOn: { margin: 2.19, index: "EIBOR_3M" } },
+      ]},
+      fees: { processingPct: 1, processingMin: 3000, valuation: 3000, preApproval: 0, vatPct: 5, lifeInsurancePct: 0.01167, propertyInsurancePct: 0.06, note: "1% of equity release amount + VAT" },
+      affordability: { maxDBR: 50 },
+      documents: [{ name: "Passport, Visa & EID (1 PDF)", required: true }, { name: "Title deed", required: true }, { name: "Bank statements — 3 months", required: true }],
+      tat: { paDays: 5, valuationDays: 4, folDays: 10, totalDays: 27, paValidityDays: 60, folValidityDays: 30 },
+    })],
+  },
+  {
+    id: "pd-cbd-equity", bankId: "b-cbd", name: "Equity Release — New Purchase / Renovation", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["EQUITY"],
+    axes: [],
+    tags: ["Equity release"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "CBD equity release card",
+      eligibility: {
+        minSalaryMatrix: { EXPAT: 12000, NATIONAL: 40000 },
+        minLoan: 250000,
+        gates: [
+          { id: "e1", kind: "FLAG", label: "LTV 60% for new purchase · 20% for renovation", hardStop: false },
+          { id: "e2", kind: "FLAG", label: "3rd-party payment if LTV > 20% (property purchase only); below 20% cash against renovation quotation", hardStop: false },
+        ],
+        notes: ["Equity for property renovation and new purchase.", "Processing 1% + VAT."],
+      },
+      tenure: { maxMonths: 300, minMonths: 36 },
+      grid: { cells: [
+        { id: "eq1", key: {}, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" }, note: "Indicative — confirm against equity grid" },
+      ]},
+      fees: { processingPct: 1, processingMin: 3000, valuation: 3000, preApproval: 0, vatPct: 5, lifeInsurancePct: 0.01167, propertyInsurancePct: 0.06, note: "Equity release 1% + VAT" },
+      affordability: { maxDBR: 50 },
+      documents: [{ name: "Passport, Visa & EID (1 PDF)", required: true }, { name: "Title deed", required: true }, { name: "Renovation quotation (if cash release)", required: false }],
+      tat: { paDays: 5, folDays: 10, totalDays: 27, paValidityDays: 60, folValidityDays: 30 },
+    })],
+  },
   /* ---------------- ADIB · Salaried (full sheet mapped — Islamic only) ---------------- */
   {
     id: "pd-adib-sal", bankId: "b-adib", name: "Home Finance — Salaried (Fixed schemes)", loanType: "ISLAMIC",
@@ -1180,6 +1342,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     client: { ...baseProfile, name: "Golden · Arab NSTL expat 22k", customerType: "EXPAT" as const, salaryTransfer: false, preferredFixedYears: 3, age: 34, monthlyIncome: 22000, monthlyLiabilities: 2000, propertyValue: 1500000, loanRequested: 900000 },
     expected: [{ productDefId: "pd-arab-sal", verdict: "NOT_ELIGIBLE" }],
     note: "Compound key NSTL:EXPAT = 25k minimum — 22k blocks.",
+  },
+  {
+    id: "golden-13", name: "CBD — salaried expat, 4M property hits 75% value band",
+    client: { ...baseProfile, name: "Golden · CBD 4M property", customerType: "EXPAT" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, preferredFixedYears: 3, age: 35, monthlyIncome: 40000, monthlyLiabilities: 3000, propertyValue: 4000000, loanRequested: 2800000 },
+    expected: [{ productDefId: "pd-cbd-sal", verdict: "ELIGIBLE" }],
+    note: "Salaried value band ≤5M → 75% LTV (AED 3.0M) covers the 2.8M request. STL 3yr 3.99%.",
+  },
+  {
+    id: "golden-14", name: "CBD — salaried expat, 8M property tightens to 65% band",
+    client: { ...baseProfile, name: "Golden · CBD 8M property", customerType: "EXPAT" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, preferredFixedYears: 3, age: 38, monthlyIncome: 60000, monthlyLiabilities: 4000, propertyValue: 8000000, loanRequested: 5000000 },
+    expected: [{ productDefId: "pd-cbd-sal", verdict: "ELIGIBLE" }],
+    note: "Value band >7M → 65% LTV (AED 5.2M) covers the 5.0M request — band tightened from base 80%.",
   },
 ];
 

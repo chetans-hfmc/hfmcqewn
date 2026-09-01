@@ -10,7 +10,7 @@ export interface User {
 
 export type CustomerType = "NATIONAL" | "EXPAT" | "NON_RESIDENT";
 export type Employment = "SALARIED" | "SELF_EMPLOYED";
-export type TxType = "PURCHASE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY";
+export type TxType = "PURCHASE" | "RESALE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY" | "REFINANCE" | "TOPUP";
 export type LeadStatus = "NEW" | "CONTACTED" | "APPOINTMENT" | "QUALIFIED" | "PROPOSAL" | "CONVERTED" | "LOST";
 
 /* Person — exhaustive client profile across the agreed field groups.
@@ -179,13 +179,18 @@ export interface ProductVersion {
     statementMonths?: number;                  /* required personal bank-statement months */
     multiPropertyRule?: { minCount: number; ltv: number }; /* > minCount properties (AECB/internal) → LTV cap */
     highRiskBands?: HighRiskBand[];            /* nationality/sector risk bands, strictest match wins */
+    /* Property-value-banded LTV (CBD: salaried ≤5M→75 / 5–7M→70 / >7M→65; SE ≤5M→70 / >5M→60).
+       Bands are evaluated low→high; the first band with eligibleValue ≤ upTo wins.
+       An optional employment scopes the band set to that employment type. */
+    ltvBands?: { employment?: string; upTo: number; ltv: number }[];
+    ltvByEmirate?: Record<string, number>;     /* emirate-conditional LTV (e.g. NR Dubai 60 / Abu Dhabi 50) */
 
     /* Income-recognition rules (% of each component counted) */
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
     variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
     salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
   };
-  tenure: { maxMonths?: number; note?: string };
+  tenure: { maxMonths?: number; minMonths?: number; note?: string };
   grid: { cells: RateCell[] };
   fees: {
     processingPct?: number; processingMin?: number; processingMax?: number; valuation?: number; preApproval?: number;
@@ -199,6 +204,9 @@ export interface ProductVersion {
     txOverrides?: { txType: TxType; processingPct?: number; valuationWaived?: boolean; note?: string }[];
     feeFinancing?: { allowed: boolean; pct?: number; basis?: string };  /* e.g. 6% DLD & broker fee */
     employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
+    /* Generic conditional rate adjustments — positive bps = surcharge, negative = discount.
+       All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
+    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number }[];
   };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
   documents: { name: string; required: boolean; note?: string }[];

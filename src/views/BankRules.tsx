@@ -145,8 +145,8 @@ function MatrixEditor({ data, onChange, suffix, keyPlaceholder, disabled, addLab
 }
 
 /* ---------- modal editors ---------- */
-function RateCellEditor({ open, onClose, axes, cell, onSave }: {
-  open: boolean; onClose: () => void; axes: AxisDef[]; cell: RateCell; onSave: (c: RateCell) => void;
+function RateCellEditor({ open, onClose, axes, cell, onSave, supportedTx }: {
+  open: boolean; onClose: () => void; axes: AxisDef[]; cell: RateCell; onSave: (c: RateCell) => void; supportedTx?: TxType[];
 }) {
   const [c, setC] = useState(cell);
   const setKey = (axisId: string, val: string) => {
@@ -166,12 +166,18 @@ function RateCellEditor({ open, onClose, axes, cell, onSave }: {
         <div>
           <p className="text-[10.5px] uppercase tracking-[0.1em] font-display font-bold text-ink-soft mb-1.5">Who does this rate apply to?</p>
           <div className="grid grid-cols-2 gap-2.5">
-            {axes.map((ax) => (
-              <Field key={ax.id} label={ax.name}>
-                <Select value={c.key[ax.id] ?? ""} onChange={(v) => setKey(ax.id, v)}
-                  options={[{ v: "", l: "Anyone" }, ...ax.values.map((v) => ({ v: v.v, l: v.l }))]} />
-              </Field>
-            ))}
+            {axes.map((ax) => {
+              /* For the transaction axis, only offer the types the product actually supports. */
+              const vals = ax.id === "transaction" && supportedTx
+                ? ax.values.filter((v) => supportedTx.includes(v.v as TxType))
+                : ax.values;
+              return (
+                <Field key={ax.id} label={ax.id === "transaction" ? `${ax.name} (from Supported transactions)` : ax.name}>
+                  <Select value={c.key[ax.id] ?? ""} onChange={(v) => setKey(ax.id, v)}
+                    options={[{ v: "", l: "Anyone" }, ...vals.map((v) => ({ v: v.v, l: v.l }))]} />
+                </Field>
+              );
+            })}
             {axes.length === 0 && <p className="text-[11.5px] text-ink-soft italic col-span-2">This product has no pricing axes — the cell applies to everyone.</p>}
           </div>
         </div>
@@ -452,6 +458,23 @@ export default function BankRulesView() {
   const setGrid = (cells: RateCell[]) => { const b = ensureDraft(); if (b) setDraftPv({ ...b, grid: { cells } }); };
   const setDocs = (docs: ProductVersion["documents"]) => { const b = ensureDraft(); if (b) setDraftPv({ ...b, documents: docs }); };
 
+  /* Consistency check: every axis/value a rate-grid row uses must be attached to the
+     product (axes) and, for transactions, be one of the product's supported types. */
+  const gridWarnings = useMemo(() => {
+    if (!prod || !ver) return [] as string[];
+    const out: string[] = [];
+    const axisName = (id: string) => state.axes.find((a) => a.id === id)?.name ?? id;
+    ver.grid.cells.forEach((cell, i) => {
+      Object.entries(cell.key).forEach(([axisId, val]) => {
+        if (!prod.axes.includes(axisId))
+          out.push(`Row ${i + 1} uses the “${axisName(axisId)}” axis, but it isn't attached to this product's pricing axes — add it above or remove it from the row.`);
+        else if (axisId === "transaction" && !prod.txTypes.includes(val as TxType))
+          out.push(`Row ${i + 1} prices “${axisName("transaction")}: ${val}”, but that type isn't in the product's Supported transactions — tick it above.`);
+      });
+    });
+    return [...new Set(out)];
+  }, [prod, ver, state.axes]);
+
   const saveDraft = () => {
     if (!prod || !draftPv) return;
     const isNew = !prod.versions.some((v) => v.version === draftPv.version);
@@ -552,16 +575,41 @@ export default function BankRulesView() {
                   <div className="flex-1 min-w-[240px]">
                     <p className="num text-[11px] font-bold text-pine-700">{state.banks.find((b) => b.id === prod.bankId)?.name} · {prod.loanType}</p>
                     <TextInput className="font-display font-bold text-[19px] tracking-tight mt-0.5 h-[34px]" value={prod.name} onChange={(ev) => saveProdMeta({ name: ev.target.value })} disabled={!isAdmin} />
-                    <div className="flex flex-wrap gap-1.5 mt-2">
+                    {/* loan type + customer class */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className="text-[9.5px] uppercase tracking-[0.1em] font-display font-bold text-ink-soft mr-1">Class</span>
                       <Select className="w-[130px] h-[28px] text-[11.5px]" value={prod.loanType} onChange={(v) => saveProdMeta({ loanType: v as ProductDef["loanType"] })} options={LOAN_TYPES} disabled={!isAdmin} />
                       {CLASSES.map((cl) => (
                         <button key={cl.v} onClick={() => isAdmin && saveProdMeta({ classes: prod.classes.includes(cl.v) ? prod.classes.filter((x) => x !== cl.v) : [...prod.classes, cl.v] })}
                           className={cx("focusable px-2 py-1 rounded-full border text-[10.5px] font-semibold transition-all", prod.classes.includes(cl.v) ? "bg-pine-700 text-paper border-pine-700" : "bg-card border-mist text-ink-soft", !isAdmin && "opacity-60 cursor-not-allowed")}>{cl.l}</button>
                       ))}
+                    </div>
+                    {/* supported transactions — the FULL list this product can handle */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className="tip tip-b text-[9.5px] uppercase tracking-[0.1em] font-display font-bold text-steel-600 mr-1 cursor-help"
+                        data-tip="Everything this product can finance. The rate grid (below) prices ONE of these per row.">Supported transactions</span>
                       {TX_TYPES.map((t) => (
                         <button key={t.v} onClick={() => isAdmin && saveProdMeta({ txTypes: prod.txTypes.includes(t.v) ? prod.txTypes.filter((x) => x !== t.v) : [...prod.txTypes, t.v] })}
                           className={cx("focusable px-2 py-1 rounded-full border text-[10.5px] font-semibold transition-all", prod.txTypes.includes(t.v) ? "bg-steel-600 text-paper border-steel-600" : "bg-card border-mist text-ink-soft", !isAdmin && "opacity-60 cursor-not-allowed")}>{t.l}</button>
                       ))}
+                    </div>
+                    {/* pricing axes attached to this product */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className="tip tip-b text-[9.5px] uppercase tracking-[0.1em] font-display font-bold text-amber-700 mr-1 cursor-help"
+                        data-tip="The ways this bank splits its pricing. Each becomes a dropdown on every rate-grid row.">Pricing axes</span>
+                      {prod.axes.length
+                        ? prod.axes.map((aid) => {
+                            const ax = state.axes.find((a) => a.id === aid);
+                            const attached = aid === "transaction";
+                            return (
+                              <span key={aid} className={cx("tip tip-b inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10.5px] font-semibold cursor-help",
+                                attached ? "border-steel-500/60 bg-steel-100 text-steel-700" : "border-amber-500/50 bg-amber-100 text-amber-700")}
+                                data-tip={attached ? "Same list as 'Supported transactions' above — a row picks ONE type from it." : `Splits pricing by ${ax?.name ?? aid}`}>
+                                <Ic n={attached ? "link" : "sliders"} size={10} />{ax?.name ?? aid}
+                              </span>
+                            );
+                          })
+                        : <span className="text-[10.5px] text-ink-soft italic">none — one flat rate for everyone</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -608,8 +656,14 @@ export default function BankRulesView() {
                 {/* ===== RATE GRID ===== */}
                 {tab === "grid" && (
                   <SectionCard title="Rate Grid" icon="calc" defaultOpen
-                    hint="Each row is a rate for a type of client. The engine picks the row that best matches the client, then works out the actual rate from the EIBOR recipe."
+                    hint="Each row prices ONE client segment. If a row names a transaction type, that rate applies only to that type — it must be one of the product's Supported transactions above. The engine picks the best-matching row, then works out the actual rate from the EIBOR recipe."
                     right={editable ? <AddBtn label="Add rate" onClick={() => setCellModal({ cell: { id: "rc" + uid(), key: {}, structure: "FIXED_THEN_VAR", fixedRate: 4, fixedMonths: 36, followOn: { margin: 2, index: "EIBOR_3M" } }, idx: -1 })} /> : undefined}>
+                    {gridWarnings.length > 0 && (
+                      <div className="mb-3 rounded-md border border-amber-500/50 bg-amber-100/50 px-3.5 py-2.5 anim-tick">
+                        <p className="text-[11.5px] font-bold text-amber-700 flex items-center gap-1.5"><Ic n="alert" size={13} /> {gridWarnings.length} row{gridWarnings.length > 1 ? "s" : ""} won't price correctly</p>
+                        <ul className="mt-1.5 space-y-1">{gridWarnings.map((w, i) => <li key={i} className="text-[11px] text-amber-700/90 leading-snug">• {w}</li>)}</ul>
+                      </div>
+                    )}
                     <div className="overflow-x-auto">
                       <table className="w-full text-[12px] min-w-[720px]">
                         <thead><tr className="text-left text-[10px] uppercase tracking-[0.09em] font-display text-ink-soft border-b border-mist bg-paper/70">
@@ -624,7 +678,19 @@ export default function BankRulesView() {
                               <tr key={cell.id} className="border-b border-mist/60 last:border-0 hover:bg-pine-50/40 transition-colors">
                                 <td className="px-3 py-2.5">
                                   {Object.keys(cell.key).length
-                                    ? Object.entries(cell.key).map(([k, v]) => <span key={k} className="inline-block mr-1 mb-0.5 rounded bg-steel-100 text-steel-700 px-1.5 py-[2px] text-[10.5px] font-semibold">{axisLabel(state.axes, k, v)}</span>)
+                                    ? Object.entries(cell.key).map(([k, v]) => {
+                                        const isTx = k === "transaction";
+                                        const supported = !isTx || prod.txTypes.includes(v as TxType);
+                                        const attached = prod.axes.includes(k);
+                                        const bad = !attached || !supported;
+                                        return (
+                                          <span key={k} data-tip={isTx ? "One of the product's Supported transactions" : `Split by ${axisLabel(state.axes, k, k)}`}
+                                            className={cx("tip tip-b inline-flex items-center gap-1 mr-1 mb-0.5 rounded px-1.5 py-[2px] text-[10.5px] font-semibold cursor-help",
+                                              bad ? "bg-rust-100 text-rust-700" : isTx ? "bg-steel-600 text-paper" : "bg-steel-100 text-steel-700")}>
+                                            {isTx && <Ic n="link" size={9} />}{axisLabel(state.axes, k, v)}{bad && <Ic n="alert" size={9} />}
+                                          </span>
+                                        );
+                                      })
                                     : <span className="text-ink-soft italic">Everyone</span>}
                                 </td>
                                 <td className="px-3 py-2.5"><Pill tone={cell.structure === "FIXED" ? "pine" : cell.structure === "MARGIN_INDEX" ? "steel" : "amber"}>{STRUCTURES.find((s) => s.v === cell.structure)?.l ?? cell.structure}</Pill></td>
@@ -996,7 +1062,7 @@ export default function BankRulesView() {
       </div>
 
       {/* ===== modals ===== */}
-      {cellModal && prod && <RateCellEditor open onClose={() => setCellModal(null)} axes={prodAxes} cell={cellModal.cell}
+      {cellModal && prod && <RateCellEditor open onClose={() => setCellModal(null)} axes={prodAxes} cell={cellModal.cell} supportedTx={prod.txTypes}
         onSave={(c) => { const cells = [...ver!.grid.cells]; if (cellModal.idx >= 0) cells[cellModal.idx] = c; else cells.push(c); setGrid(cells); setCellModal(null); }} />}
       {gateModal && e && <GateEditor open onClose={() => setGateModal(null)} gate={gateModal.gate}
         onSave={(g) => { const gates = [...e.gates]; if (gateModal.idx >= 0) gates[gateModal.idx] = g; else gates.push(g); setElig({ gates }); setGateModal(null); }} />}

@@ -81,6 +81,7 @@ const P: Record<string, React.ReactNode> = {
   alert: <><path d="M12 4 2.5 20h19L12 4Z" /><path d="M12 10v4.5M12 17.5h.01" /></>,
   spark: <><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.2l-1.8-5.6-5.7-1.8L10.2 9 12 3.5Z" /><path d="M18.5 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" /></>,
   target: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" /></>,
+  link: <><path d="M9.5 14.5 14.5 9.5" /><path d="m11 6.5 1.8-1.8a3.6 3.6 0 0 1 5.1 5.1L16.1 11.6" /><path d="M13 17.5 11.2 19.3a3.6 3.6 0 0 1-5.1-5.1L7.9 12.4" /></>,
   scale: <><path d="M12 4v16M7 20h10M12 6.5 6 8m6-1.5L18 8" /><path d="M3.5 13.5 6 8l2.5 5.5a2.7 2.7 0 0 1-5 0ZM15.5 13.5 18 8l2.5 5.5a2.7 2.7 0 0 1-5 0Z" /></>,
 };
 export function Ic({ n, size = 16, className }: { n: string; size?: number; className?: string }) {

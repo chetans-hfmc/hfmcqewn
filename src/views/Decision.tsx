@@ -148,6 +148,7 @@ export default function DecisionView() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Use"><Select value={profile.propertyUse ?? "OWNER_OCCUPIED"} onChange={(v) => setProfile({ ...profile, propertyUse: v as ClientProfile["propertyUse"] })} options={[{ v: "OWNER_OCCUPIED", l: "Owner-occupied" }, { v: "INVESTMENT", l: "Investment" }]} /></Field>
               <Field label="Status"><Select value={profile.propertyStatus ?? "READY"} onChange={(v) => setProfile({ ...profile, propertyStatus: v as ClientProfile["propertyStatus"] })} options={[{ v: "READY", l: "Ready" }, { v: "OFF_PLAN", l: "Off plan" }, { v: "UNDER_CONSTRUCTION", l: "Under construction" }, { v: "LAND", l: "Land" }]} /></Field>
+              <Field label="Tenure"><Select value={profile.propertyTenure ?? "FREEHOLD"} onChange={(v) => setProfile({ ...profile, propertyTenure: v as ClientProfile["propertyTenure"] })} options={[{ v: "FREEHOLD", l: "Freehold" }, { v: "LEASEHOLD", l: "Leasehold" }]} /></Field>
               <Field label="Valuation"><NumInput value={profile.valuation ?? 0} onChange={(n) => setProfile({ ...profile, valuation: n || undefined })} suffix="AED" /></Field>
               <Field label="Transaction"><Select value={profile.txType ?? "PURCHASE"} onChange={(v) => setProfile({ ...profile, txType: v as ClientProfile["txType"] })} options={[{ v: "PURCHASE", l: "Purchase" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + equity" }, { v: "EQUITY", l: "Equity release" }]} /></Field>
             </div>

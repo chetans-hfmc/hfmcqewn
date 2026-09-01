@@ -38,6 +38,7 @@ const STAGES: StageDef[] = [
 
 const BANKS: Bank[] = [
   { id: "b-dib", name: "Dubai Islamic Bank", short: "DIB" }, { id: "b-adib", name: "Abu Dhabi Islamic Bank", short: "ADIB" },
+  { id: "b-ei", name: "Emirates Islamic", short: "EI" },
   { id: "b-enbd", name: "Emirates NBD", short: "ENBD" }, { id: "b-hsbc", name: "HSBC", short: "HSBC" },
   { id: "b-mashreq", name: "Mashreq", short: "Mashreq" }, { id: "b-cbd", name: "Commercial Bank of Dubai", short: "CBD" },
   { id: "b-fab", name: "First Abu Dhabi Bank", short: "FAB" }, { id: "b-rak", name: "RAKBANK", short: "RAK" },
@@ -64,7 +65,7 @@ const AXES: AxisDef[] = [
   { id: "amountBand", name: "Loan amount band", values: [{ v: "LT2M", l: "Below 2M" }, { v: "2TO35M", l: "2M – 3.49M" }, { v: "GE35M", l: "3.5M+" }] },
   { id: "emirate", name: "Emirate", values: [{ v: "ALL", l: "All Emirates" }, { v: "DUBAI", l: "Dubai" }, { v: "ABU_DHABI", l: "Abu Dhabi" }, { v: "AJMAN", l: "Ajman" }] },
   { id: "relationship", name: "Relationship", values: [{ v: "ETB", l: "ETB" }, { v: "NTB", l: "NTB" }] },
-  { id: "ftvBand", name: "FTV / LTV band", values: [{ v: "LE50", l: "≤ 50%" }, { v: "LE60", l: "≤ 60%" }, { v: "GT60", l: "> 60%" }] },
+  { id: "ftvBand", name: "FTV / LTV band", values: [{ v: "LE50", l: "≤ 50%" }, { v: "LE60", l: "≤ 60%" }, { v: "LE75", l: "≤ 75%" }, { v: "GT60", l: "> 60%" }, { v: "GT75", l: "> 75%" }] },
   { id: "tenureType", name: "Property tenure", values: [{ v: "FREEHOLD", l: "Freehold" }, { v: "LEASEHOLD", l: "Leasehold" }] },
   { id: "channel", name: "Channel", values: [{ v: "DIRECT", l: "Direct" }, { v: "HUSPY", l: "Huspy" }] },
 ];
@@ -875,6 +876,155 @@ const PRODUCT_DEFS: ProductDef[] = [
       tat: { paDays: 5, folDays: 10, totalDays: 27, paValidityDays: 60, folValidityDays: 30 },
     })],
   },
+  /* ---------------- Emirates Islamic · Salaried (Islamic only, leasehold excluded) ---------------- */
+  {
+    id: "pd-ei-sal", bankId: "b-ei", name: "Home Finance — Salaried (Islamic)", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "BUYOUT_EQUITY"],
+    axes: ["stl", "tenure", "ftvBand", "employment", "propertyStatus"],
+    tags: ["Salaried", "Islamic", "Leasehold excluded"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Emirates Islamic salaried pricing card",
+      eligibility: {
+        minSalaryMatrix: { NATIONAL: 8000, EXPAT: 20000 },
+        minLoan: 200000, maxLoan: 5000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        maxAgeSalaried: 70, maxAgeSelfEmp: 70,
+        minLosMonths: 6,
+        leaseholdAllowed: false,
+        commercialLtv: 62,
+        restrictedSectors: ["Aviation (commercial airlines — service industry)"],
+        gates: [
+          { id: "g1", kind: "FLAG", label: "Listed-company expats: min salary 15k (vs 20k standard)", when: "SALARIED", hardStop: false },
+          { id: "g2", kind: "FLAG", label: "Previous experience letter required (6 months LOS)", hardStop: false },
+          { id: "g3", kind: "FLAG", label: "Bonus: 50% of average of last 3 years", hardStop: false },
+          { id: "g4", kind: "FLAG", label: "Rental income: 75% counted, capped at 75% of salary", hardStop: false },
+          { id: "g5", kind: "FLAG", label: "Variable pay / commission: 50% of average sales commission", hardStop: false },
+          { id: "g6", kind: "FLAG", label: "Nationality: exception basis on customer profile", hardStop: false },
+          { id: "g7", kind: "FLAG", label: "Labour card copy required (bank focused on local nationality)", hardStop: false },
+          { id: "g8", kind: "FLAG", label: "Fixed-rate pricing: total tenor incl. variable period must be ≥ 1 year", hardStop: false },
+        ],
+        notes: [
+          "Min rate: 3M EIBOR less 10bps OR fixed floor, whichever is lower.",
+          "Option 1: fixed profit rate followed by variable. Option 2: developer-based handover ready properties, NIL processing (1% on cash release).",
+          "Additional 25bps for cash release >300k, 50bps for >500k (on stabilized rates).",
+          "Emirates: Dubai & Sharjah; RAK also for locals.",
+        ],
+      },
+      tenure: { maxMonths: 300, minMonths: 12 },
+      grid: { cells: [
+        /* Residential — Option 1: fixed profit then variable */
+        { id: "f-s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED", fixedRate: 3.99, fixedMonths: 36, note: "STL 3yr fixed, then variable" },
+        { id: "f-s5", key: { stl: "STL", tenure: "5" }, structure: "FIXED", fixedRate: 4.39, fixedMonths: 60, note: "STL 5yr fixed, then variable" },
+        { id: "f-n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED", fixedRate: 4.19, fixedMonths: 36, note: "NSTL 3yr fixed, then variable" },
+        { id: "f-n5", key: { stl: "NSTL", tenure: "5" }, structure: "FIXED", fixedRate: 4.59, fixedMonths: 60, note: "NSTL 5yr fixed, then variable" },
+        /* Commercial & land finance */
+        { id: "c-comm", key: { propertyStatus: "LAND" }, structure: "FIXED", fixedRate: 5.0, fixedMonths: 24, note: "Commercial & land — STL/NSTL/SE up to 2 years" },
+        /* Under construction */
+        { id: "uc-s", key: { stl: "STL", propertyStatus: "UNDER_CONSTRUCTION" }, structure: "MARGIN_INDEX", margin: 1.99, index: "EIBOR_3M", note: "UC — STL any FTV; min 3M EIBOR−10bps or 1.99%" },
+        { id: "uc-n-le", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", ftvBand: "LE75" }, structure: "MARGIN_INDEX", margin: 2.24, index: "EIBOR_3M", note: "UC — NSTL/SE FTV ≤75%" },
+        { id: "uc-n-gt", key: { stl: "NSTL", propertyStatus: "UNDER_CONSTRUCTION", ftvBand: "GT75" }, structure: "MARGIN_INDEX", margin: 2.49, index: "EIBOR_3M", note: "UC — NSTL/SE FTV >75%" },
+        /* Fully variable day 1 (residential) */
+        { id: "v-s-le", key: { stl: "STL", ftvBand: "LE75" }, structure: "VAR_DAY1", margin: 1.74, index: "EIBOR_3M", note: "Day-1 variable — STL FTV ≤75%" },
+        { id: "v-s-gt", key: { stl: "STL", ftvBand: "GT75" }, structure: "VAR_DAY1", margin: 1.95, index: "EIBOR_3M", note: "Day-1 variable — STL FTV >75%" },
+        { id: "v-n-le", key: { stl: "NSTL", ftvBand: "LE75" }, structure: "VAR_DAY1", margin: 2.24, index: "EIBOR_3M", note: "Day-1 variable — NSTL FTV ≤75%" },
+        { id: "v-n-gt", key: { stl: "NSTL", ftvBand: "GT75" }, structure: "VAR_DAY1", margin: 2.49, index: "EIBOR_3M", note: "Day-1 variable — NSTL FTV >75%" },
+      ]},
+      fees: {
+        processingPct: 0.5, valuation: 0, preApproval: 0, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "1% or AED 10,000 — whichever lower",
+        lifeInsurancePct: 0.12204, lifeInsuranceBasis: "PA", lifeInsuranceNote: "Life Takaful p.a. of finance amount (reducing basis)",
+        propertyInsurancePct: 0.0525, propertyInsuranceBasis: "PA", propertyInsuranceNote: "Property Takaful p.a. of property value (flat basis)",
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Buyout 0%" }, { txType: "EQUITY", processingPct: 1, note: "Equity release 1%" }],
+        feeFinancing: { allowed: true, pct: 6, basis: "DLD & broker fee + trustee" },
+        note: "Valuation NIL for UAE Nationals on ready properties & developer handover. Zero pre-approval fees for ready properties (till 31 May 2026).",
+      },
+      affordability: { maxDBR: 50, ccPct: 5, rentalPct: 75, bonusPct: 50, stressAddPct: 2 },
+      documents: [
+        { name: "Passport, Visa & EID (colour PDF)", required: true },
+        { name: "Proof of residence", required: true },
+        { name: "Application form + coversheet + BV form + FTS", required: true },
+        { name: "Salary Certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (if pay varies)", required: false },
+        { name: "Bank Statements — 6 months (countersigned)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "Labour card copy", required: false },
+        { name: "Last 3 yrs employment history", required: true },
+      ],
+      tat: {
+        paDays: 3, valuationDays: 3, folDays: 2, totalDays: 17,
+        paValidityDays: 60, folValidityDays: 60, valuationValidityDays: 60,
+        accountOpeningDays: 1, disbursalDays: 5, transferDays: 2,
+      },
+    })],
+  },
+  {
+    id: "pd-ei-buyout", bankId: "b-ei", name: "Buyout — Salaried (Islamic)", loanType: "ISLAMIC",
+    classes: ["SALARIED"], txTypes: ["BUYOUT"], axes: ["stl", "ftvBand"],
+    tags: ["Buyout", "Islamic"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Emirates Islamic buyout card",
+      eligibility: {
+        minSalaryMatrix: { NATIONAL: 8000, EXPAT: 20000 },
+        minLoan: 200000, maxLoan: 5000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        maxAgeSalaried: 70, minLosMonths: 6, leaseholdAllowed: false,
+        gates: [{ id: "b1", kind: "FLAG", label: "All other terms same as home finance", hardStop: false }],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "bo-s-le", key: { stl: "STL", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 1.849, index: "EIBOR_3M", note: "Buyout STL FTV ≤60%" },
+        { id: "bo-n-le", key: { stl: "NSTL", ftvBand: "LE60" }, structure: "MARGIN_INDEX", margin: 1.849, index: "EIBOR_3M", note: "Buyout NSTL FTV ≤60%" },
+        { id: "bo-s-gt", key: { stl: "STL", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 1.849, index: "EIBOR_3M", note: "Buyout STL FTV >60%" },
+        { id: "bo-n-gt", key: { stl: "NSTL", ftvBand: "GT60" }, structure: "MARGIN_INDEX", margin: 2.149, index: "EIBOR_3M", note: "Buyout NSTL FTV >60%" },
+      ]},
+      fees: {
+        processingPct: 0, valuation: 0, preApproval: 0, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        lifeInsurancePct: 0.12204, lifeInsuranceBasis: "PA",
+        propertyInsurancePct: 0.0525, propertyInsuranceBasis: "PA",
+        note: "Buyout processing fee 0%",
+      },
+      affordability: { maxDBR: 50, ccPct: 5, stressAddPct: 2 },
+      documents: [{ name: "Passport, Visa & EID", required: true }, { name: "Salary Certificate", required: true }, { name: "Bank Statements — 6 months", required: true }, { name: "Existing loan statement", required: true }],
+      tat: { paDays: 3, valuationDays: 3, folDays: 2, totalDays: 17, paValidityDays: 60, folValidityDays: 60 },
+    })],
+  },
+  {
+    id: "pd-ei-equity", bankId: "b-ei", name: "Equity Release — Salaried (Islamic)", loanType: "ISLAMIC",
+    classes: ["SALARIED"], txTypes: ["EQUITY"], axes: ["stl"],
+    tags: ["Equity", "Islamic", "Renovation up to 300k"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "Emirates Islamic equity card",
+      eligibility: {
+        minSalaryMatrix: { NATIONAL: 8000, EXPAT: 20000 },
+        minLoan: 200000, maxLoan: 5000000,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        maxAgeSalaried: 70, leaseholdAllowed: false,
+        gates: [
+          { id: "e1", kind: "FLAG", label: "Gifted properties only for Abu Dhabi", hardStop: false },
+          { id: "e2", kind: "FLAG", label: "NHL to be closed if property has a loan", hardStop: false },
+          { id: "e3", kind: "FLAG", label: "Proof of end use required; cash paid to client's account", hardStop: false },
+          { id: "e4", kind: "FLAG", label: "Renovation loan up to AED 300k", hardStop: false },
+        ],
+        notes: ["Equity to purchase new property or for renovation."],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "eq-s", key: { stl: "STL" }, structure: "MARGIN_INDEX", margin: 1.99, index: "EIBOR_3M", note: "Equity release STL" },
+        { id: "eq-n", key: { stl: "NSTL" }, structure: "MARGIN_INDEX", margin: 2.24, index: "EIBOR_3M", note: "Equity release NSTL" },
+      ]},
+      fees: {
+        processingPct: 1, valuation: 0, preApproval: 0, vatPct: 5,
+        lifeInsurancePct: 0.12204, lifeInsuranceBasis: "PA",
+        propertyInsurancePct: 0.0525, propertyInsuranceBasis: "PA",
+        note: "Equity processing fee 1%",
+      },
+      affordability: { maxDBR: 50, ccPct: 5, stressAddPct: 2 },
+      documents: [{ name: "Passport, Visa & EID", required: true }, { name: "Title deed", required: true }, { name: "Salary Certificate", required: true }, { name: "Bank Statements — 6 months", required: true }],
+      tat: { paDays: 3, valuationDays: 3, folDays: 2, totalDays: 17, paValidityDays: 60 },
+    })],
+  },
   /* ---------------- ADIB · Salaried (full sheet mapped — Islamic only) ---------------- */
   {
     id: "pd-adib-sal", bankId: "b-adib", name: "Home Finance — Salaried (Fixed schemes)", loanType: "ISLAMIC",
@@ -1462,6 +1612,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     client: { ...baseProfile, name: "Golden · DIB commercial", customerType: "EXPAT" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyType: "COMMERCIAL" as const, propertyStatus: "READY" as const, preferredFixedYears: 3, age: 40, monthlyIncome: 50000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1200000 },
     expected: [{ productDefId: "pd-dib-sal", verdict: "ELIGIBLE" }],
     note: "Commercial LTV cap 62% (AED 1.24M) tightens the base 80% — covers the 1.2M request.",
+  },
+  {
+    id: "golden-17", name: "Emirates Islamic — local STL 3yr fixed (freehold)",
+    client: { ...baseProfile, name: "Golden · EI STL 3yr", customerType: "NATIONAL" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, propertyTenure: "FREEHOLD" as const, preferredFixedYears: 3, age: 32, monthlyIncome: 30000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1600000 },
+    expected: [{ productDefId: "pd-ei-sal", verdict: "ELIGIBLE" }],
+    note: "Local STL → 85% LTV (AED 1.7M) covers the 1.6M request. STL 3yr 3.99% fixed-then-variable; min salary local 8k satisfied.",
+  },
+  {
+    id: "golden-18", name: "Emirates Islamic — leasehold property is blocked",
+    client: { ...baseProfile, name: "Golden · EI leasehold", customerType: "NATIONAL" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, propertyTenure: "LEASEHOLD" as const, preferredFixedYears: 3, age: 32, monthlyIncome: 30000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1600000 },
+    expected: [{ productDefId: "pd-ei-sal", verdict: "NOT_ELIGIBLE" }],
+    note: "Emirates Islamic cannot finance leasehold property — hard block.",
   },
 ];
 

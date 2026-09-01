@@ -402,6 +402,12 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     ltvPct = pv.eligibility.commercialLtv;
   }
 
+  /* ---- leasehold restriction (e.g. Emirates Islamic cannot finance leasehold) ---- */
+  if (pv.eligibility.leaseholdAllowed === false && c.propertyTenure === "LEASEHOLD") {
+    blocked = true;
+    push({ code: "LEASEHOLD", severity: "BLOCK", category: "eligibility", message: `Bank cannot finance leasehold property`, explanation: `${pd.bankId} policy: leasehold not eligible`, source: pd.bankId });
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */

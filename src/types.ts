@@ -190,6 +190,7 @@ export interface ProductVersion {
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
     variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
     salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
+    leaseholdAllowed?: boolean;                /* false → bank cannot finance leasehold (e.g. Emirates Islamic) */
   };
   tenure: { maxMonths?: number; minMonths?: number; note?: string };
   grid: { cells: RateCell[] };
@@ -268,6 +269,7 @@ export interface ClientProfile {
   monthlyIncome: number; otherIncome: number; monthlyLiabilities: number; creditCardLimits: number;
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
+  propertyTenure?: "FREEHOLD" | "LEASEHOLD";
   propertiesOwned?: number; developer?: string;
   segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
   employer?: string;                 /* drives employer-based rate discounts */

@@ -29,6 +29,7 @@ export interface Person {
   countryOfBirth?: string; goldenVisa?: boolean;
   propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
   existingLoanRate?: number;                      /* customer's current loan rate — top-up pricing scenarios */
+  relationship?: "ETB" | "NTB";                   /* existing-to-bank vs new-to-bank */
 
   /* Contact */
   altMobile?: string; whatsapp?: string;
@@ -275,6 +276,7 @@ export interface ClientProfile {
   employer?: string;                 /* drives employer-based rate discounts */
   preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
   existingLoanRate?: number;         /* for top-up pricing scenarios (customer's current rate) */
+  relationship?: "ETB" | "NTB";      /* existing-to-bank vs new-to-bank (ENBD pricing dimension) */
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;

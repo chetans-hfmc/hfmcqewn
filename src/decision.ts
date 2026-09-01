@@ -75,6 +75,7 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "stl": return c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
     case "propertyStatus": return c.propertyStatus ?? null;
     case "transaction": return c.txType ?? null;
+    case "relationship": return c.relationship ?? null;
     case "ftvBand": {
       /* Bands are matched inclusively in pickCell (a “≤60%” cell also serves a 45% client),
          so we report the client's actual band here for display/scoring. */
@@ -703,7 +704,7 @@ export function personToProfile(p: {
   emirate?: string; uaeResident?: boolean;
   basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
   propertiesOwned?: number; developer?: string;
-  segment?: string; employer?: string; preferredFixedYears?: number; existingLoanRate?: number;
+  segment?: string; employer?: string; preferredFixedYears?: number; existingLoanRate?: number; relationship?: "ETB" | "NTB";
 }, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
   propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
   const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
@@ -719,7 +720,7 @@ export function personToProfile(p: {
     yearsEmployed: p.yearsEmployed ?? 2,
     propertiesOwned: p.propertiesOwned, developer: p.developer,
     segment: p.segment, employer: p.employer, preferredFixedYears: p.preferredFixedYears,
-    existingLoanRate: p.existingLoanRate,
+    existingLoanRate: p.existingLoanRate, relationship: p.relationship,
     /* credit group */
     aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
     homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,

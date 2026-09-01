@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 24;
+export const SEED_VERSION = 25;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -55,7 +55,12 @@ const AXES: AxisDef[] = [
   { id: "customerType", name: "Customer type", values: [{ v: "NATIONAL", l: "UAE National" }, { v: "EXPAT", l: "Expat" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
   { id: "propertyStatus", name: "Property status", values: [{ v: "READY", l: "Completed / Ready" }, { v: "UNDER_CONSTRUCTION", l: "Under Construction" }, { v: "OFF_PLAN", l: "Off Plan" }, { v: "LAND", l: "Land" }] },
   { id: "transaction", name: "Transaction", values: [{ v: "PURCHASE", l: "New Purchase" }, { v: "RESALE", l: "Resale" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + Equity" }, { v: "EQUITY", l: "Equity Release" }, { v: "REFINANCE", l: "Refinance" }] },
-  { id: "tenure", name: "Fixed tenure", values: [{ v: "1", l: "1 yr" }, { v: "2", l: "2–3 yr" }, { v: "4", l: "4 yr" }, { v: "5", l: "5 yr" }, { v: "7", l: "7 yr" }, { v: "10", l: "8–10 yr" }, { v: "15", l: "11–15 yr" }, { v: "20", l: "16–20 yr" }] },
+  /* Individual years only — no bands. A cell prices exactly one tenor, so the
+     engine matches precisely (e.g. a client choosing "3 years" hits the "3" cell). */
+  { id: "tenure", name: "Fixed tenure", values: [
+    { v: "1", l: "1 yr" }, { v: "2", l: "2 yrs" }, { v: "3", l: "3 yrs" }, { v: "4", l: "4 yrs" },
+    { v: "5", l: "5 yrs" }, { v: "7", l: "7 yrs" }, { v: "10", l: "10 yrs" }, { v: "15", l: "15 yrs" }, { v: "20", l: "20 yrs" },
+  ] },
   { id: "amountBand", name: "Loan amount band", values: [{ v: "LT2M", l: "Below 2M" }, { v: "2TO35M", l: "2M – 3.49M" }, { v: "GE35M", l: "3.5M+" }] },
   { id: "emirate", name: "Emirate", values: [{ v: "ALL", l: "All Emirates" }, { v: "DUBAI", l: "Dubai" }, { v: "ABU_DHABI", l: "Abu Dhabi" }, { v: "AJMAN", l: "Ajman" }] },
   { id: "relationship", name: "Relationship", values: [{ v: "ETB", l: "ETB" }, { v: "NTB", l: "NTB" }] },

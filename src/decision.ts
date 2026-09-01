@@ -486,9 +486,11 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
      which reduces the EMI headroom available for the loan. */
   const lifePct = pv.fees.lifeInsurancePct;
   if (pv.affordability.dbrIncludesInsurance && lifePct != null && c.loanRequested > 0) {
-    const monthlyIns = c.loanRequested * (lifePct / 100);
+    /* Basis-aware: a per-annum premium is spread over 12 months. */
+    const isPA = pv.fees.lifeInsuranceBasis === "PA";
+    const monthlyIns = (c.loanRequested * (lifePct / 100)) / (isPA ? 12 : 1);
     availForEmi = Math.max(0, availForEmi - monthlyIns);
-    push({ code: "DBR-INS", severity: "INFO", category: "affordability", message: `Life insurance (${fmtMoney(monthlyIns)}/mo) counted inside the DBR, reducing EMI headroom`, resultingValue: fmtMoney(availForEmi) + "/mo available", source: pd.bankId });
+    push({ code: "DBR-INS", severity: "INFO", category: "affordability", message: `Life insurance (${fmtMoney(monthlyIns)}/mo${isPA ? ", p.a. basis ÷12" : ""}) counted inside the DBR, reducing EMI headroom`, resultingValue: fmtMoney(availForEmi) + "/mo available", source: pd.bankId });
   }
   const dbrNow = income > 0 ? (existingOblig / income) * 100 : 0;
   push({ code: "DBR", severity: "APPLIED", category: "affordability", message: `DBR ceiling ${dbrCap}%${dbrRes ? ` (${dbrRes.winner.refLabel})` : ""}`, resultingValue: `${dbrCap}%`, ruleId: dbrRes?.winner.refId, ruleVersion: dbrRes?.winner.version });
@@ -518,6 +520,9 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
       if (cell.stressRate != null)
         push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Bank-published stress rate ${cell.stressRate.toFixed(2)}% applies for DSR`, resultingValue: `${cell.stressRate.toFixed(2)}%`, source: pd.bankId });
+      else if (pv.affordability.stressAddPct != null && ratePct != null)
+        /* Formula-based stress (e.g. Emirates Islamic "current rate plus 2%"). */
+        push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Stress rate = indicative rate + ${pv.affordability.stressAddPct}% = ${(ratePct + pv.affordability.stressAddPct).toFixed(2)}% for DSR`, resultingValue: `${(ratePct + pv.affordability.stressAddPct).toFixed(2)}%`, source: pd.bankId });
       for (const p of promos) {
         push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
       }

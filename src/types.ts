@@ -199,6 +199,8 @@ export interface ProductVersion {
     ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
     valuationByEmirate?: Record<string, number>;   /* e.g. AJMAN: 3500 vs default 3000 */
     lifeAssignmentFee?: number;                    /* one-time life-insurance assignment fee */
+    /* Insurance basis: banks quote per-month (PM) or per-annum (PA). Matters for EMI/DBR math. */
+    lifeInsuranceBasis?: "PM" | "PA"; propertyInsuranceBasis?: "PM" | "PA";
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
     processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
@@ -211,6 +213,7 @@ export interface ProductVersion {
   };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
     dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */
+    stressAddPct?: number;           /* formula-based stress: stress = indicative rate + X (e.g. Emirates Islamic "+2%") */
   };
   documents: { name: string; required: boolean; note?: string }[];
   tat: {

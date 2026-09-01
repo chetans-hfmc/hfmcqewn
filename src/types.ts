@@ -10,7 +10,7 @@ export interface User {
 
 export type CustomerType = "NATIONAL" | "EXPAT" | "NON_RESIDENT";
 export type Employment = "SALARIED" | "SELF_EMPLOYED";
-export type TxType = "PURCHASE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY";
+export type TxType = "PURCHASE" | "RESALE" | "BUYOUT" | "BUYOUT_EQUITY" | "EQUITY" | "REFINANCE" | "TOPUP";
 export type LeadStatus = "NEW" | "CONTACTED" | "APPOINTMENT" | "QUALIFIED" | "PROPOSAL" | "CONVERTED" | "LOST";
 
 /* Person — exhaustive client profile across the agreed field groups.
@@ -28,6 +28,7 @@ export interface Person {
   preferredName?: string; gender?: string; maritalStatus?: string; dependants?: number;
   countryOfBirth?: string; goldenVisa?: boolean;
   propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
+  existingLoanRate?: number;                      /* customer's current loan rate — top-up pricing scenarios */
 
   /* Contact */
   altMobile?: string; whatsapp?: string;
@@ -127,7 +128,9 @@ export type RateStructure = "FIXED" | "MARGIN_INDEX" | "FIXED_THEN_VAR" | "VAR_D
 export interface RateCell {
   id: string; key: Record<string, string>; structure: RateStructure;
   fixedRate?: number; fixedMonths?: number; margin?: number; index?: RateIndex; floor?: number;
-  followOn?: { margin: number; index: RateIndex; floor?: number }; note?: string;
+  followOn?: { margin: number; index: RateIndex; floor?: number };
+  stressRate?: number;   /* bank-published stress rate for DSR (e.g. Arab Bank per-cell stress grid) */
+  note?: string;
 }
 export interface EligGate {
   id: string; kind: "NATIONALITY_ALLOW" | "NATIONALITY_BLOCK" | "FLAG" | "EMPLOYMENT_BLOCK";
@@ -176,24 +179,34 @@ export interface ProductVersion {
     statementMonths?: number;                  /* required personal bank-statement months */
     multiPropertyRule?: { minCount: number; ltv: number }; /* > minCount properties (AECB/internal) → LTV cap */
     highRiskBands?: HighRiskBand[];            /* nationality/sector risk bands, strictest match wins */
+    /* Property-value-banded LTV (CBD: salaried ≤5M→75 / 5–7M→70 / >7M→65; SE ≤5M→70 / >5M→60).
+       Bands are evaluated low→high; the first band with eligibleValue ≤ upTo wins.
+       An optional employment scopes the band set to that employment type. */
+    ltvBands?: { employment?: string; upTo: number; ltv: number }[];
+    ltvByEmirate?: Record<string, number>;     /* emirate-conditional LTV (e.g. NR Dubai 60 / Abu Dhabi 50) */
 
     /* Income-recognition rules (% of each component counted) */
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
     variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
     salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
   };
-  tenure: { maxMonths?: number; note?: string };
+  tenure: { maxMonths?: number; minMonths?: number; note?: string };
   grid: { cells: RateCell[] };
   fees: {
     processingPct?: number; processingMin?: number; processingMax?: number; valuation?: number; preApproval?: number;
     earlySettlement?: string; note?: string;
     ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
+    valuationByEmirate?: Record<string, number>;   /* e.g. AJMAN: 3500 vs default 3000 */
+    lifeAssignmentFee?: number;                    /* one-time life-insurance assignment fee */
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
     processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
     txOverrides?: { txType: TxType; processingPct?: number; valuationWaived?: boolean; note?: string }[];
     feeFinancing?: { allowed: boolean; pct?: number; basis?: string };  /* e.g. 6% DLD & broker fee */
     employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
+    /* Generic conditional rate adjustments — positive bps = surcharge, negative = discount.
+       All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
+    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number }[];
   };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
   documents: { name: string; required: boolean; note?: string }[];
@@ -253,6 +266,7 @@ export interface ClientProfile {
   segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
   employer?: string;                 /* drives employer-based rate discounts */
   preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
+  existingLoanRate?: number;         /* for top-up pricing scenarios (customer's current rate) */
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;

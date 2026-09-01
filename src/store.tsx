@@ -43,7 +43,8 @@ export type Action =
   | { t: "DELETE_PRODUCT_DEF"; id: string; reason: string }
   | { t: "SAVE_PROMO"; promo: Promo; isNew?: boolean }
   | { t: "DELETE_PROMO"; id: string }
-  | { t: "SAVE_AXIS"; axis: AxisDef };
+  | { t: "SAVE_AXIS"; axis: AxisDef }
+  | { t: "DELETE_AXIS"; id: string };
 
 /* ---------- permissions (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
@@ -359,6 +360,13 @@ function reducer(state: AppState, a: Action): AppState {
       const exists = state.axes.some((x) => x.id === a.axis.id);
       return log({ ...state, axes: exists ? state.axes.map((x) => (x.id === a.axis.id ? a.axis : x)) : [...state.axes, a.axis] },
         { module: "AXIS", action: exists ? "Axis updated" : "Axis created", target: a.axis.name });
+    }
+    case "DELETE_AXIS": {
+      const ax = state.axes.find((x) => x.id === a.id);
+      const inUse = state.productDefs.some((p) => p.axes.includes(a.id));
+      if (inUse) return state; // guard: never delete an axis a product still references
+      return log({ ...state, axes: state.axes.filter((x) => x.id !== a.id) },
+        { module: "AXIS", action: "Axis deleted", target: ax?.name ?? a.id });
     }
 
     default: return state;

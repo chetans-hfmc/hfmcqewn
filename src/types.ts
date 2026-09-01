@@ -29,6 +29,7 @@ export interface Person {
   countryOfBirth?: string; goldenVisa?: boolean;
   propertiesOwned?: number; developer?: string;   /* for high-risk / top-developer rules */
   existingLoanRate?: number;                      /* customer's current loan rate — top-up pricing scenarios */
+  relationship?: "ETB" | "NTB";                   /* existing-to-bank vs new-to-bank */
 
   /* Contact */
   altMobile?: string; whatsapp?: string;
@@ -157,6 +158,7 @@ export interface ProductVersion {
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
     constructionLtv?: number;                  /* LTV cap for under-construction / off-plan finance */
     landLtv?: number;                          /* LTV cap for land purchase */
+    commercialLtv?: number;                    /* LTV cap for commercial property (e.g. DIB shops 62%) */
     maxUnits?: number;                         /* max loan = amount cap OR n units, whichever lower */
     paymentHoliday?: string;                   /* e.g. "STL up to 6 months · NSTL up to 3 months" */
     coApplicantRule?: string;                  /* e.g. "1 blood relation (no siblings)" */
@@ -189,6 +191,7 @@ export interface ProductVersion {
     incomeRecognition?: { basicPct?: number; allowancePct?: number; commissionPct?: number; bonusPct?: number; rentalPct?: number; businessPct?: number };
     variableIncomeCapPct?: number;             /* variable income may not exceed fixed income */
     salaryTransferRequired?: boolean;          /* must client transfer salary to the bank? */
+    leaseholdAllowed?: boolean;                /* false → bank cannot finance leasehold (e.g. Emirates Islamic) */
   };
   tenure: { maxMonths?: number; minMonths?: number; note?: string };
   grid: { cells: RateCell[] };
@@ -198,6 +201,8 @@ export interface ProductVersion {
     ltvDiscounts?: { maxLtv: number; bps: number; label?: string }[];   /* rate discount when LTV at/below threshold */
     valuationByEmirate?: Record<string, number>;   /* e.g. AJMAN: 3500 vs default 3000 */
     lifeAssignmentFee?: number;                    /* one-time life-insurance assignment fee */
+    /* Insurance basis: banks quote per-month (PM) or per-annum (PA). Matters for EMI/DBR math. */
+    lifeInsuranceBasis?: "PM" | "PA"; propertyInsuranceBasis?: "PM" | "PA";
     vatPct?: number; arrangementFee?: string; partialSettlement?: string;
     lifeInsurancePct?: number; lifeInsuranceNote?: string; propertyInsurancePct?: number; propertyInsuranceNote?: string;
     processingFeeTiers?: { label: string; pct: number }[];          /* segment/visa-based tiers */
@@ -208,7 +213,11 @@ export interface ProductVersion {
        All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
     rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number }[];
   };
-  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
+  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
+    dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */
+    stressAddPct?: number;           /* formula-based stress: stress = indicative rate + X (e.g. Emirates Islamic "+2%") */
+    stressRecipe?: { margin: number; index: RateIndex };  /* margin-based stress: stress = margin + index (e.g. ENBD "1.79% + 1M EIBOR") */
+  };
   documents: { name: string; required: boolean; note?: string }[];
   tat: {
     paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number;
@@ -262,11 +271,13 @@ export interface ClientProfile {
   monthlyIncome: number; otherIncome: number; monthlyLiabilities: number; creditCardLimits: number;
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
+  propertyTenure?: "FREEHOLD" | "LEASEHOLD";
   propertiesOwned?: number; developer?: string;
   segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
   employer?: string;                 /* drives employer-based rate discounts */
   preferredFixedYears?: number;      /* 1 / 2 / 3 / 5 — selects the fixed-rate cell */
   existingLoanRate?: number;         /* for top-up pricing scenarios (customer's current rate) */
+  relationship?: "ETB" | "NTB";      /* existing-to-bank vs new-to-bank (ENBD pricing dimension) */
 
   /* Credit group */
   aecbScore?: number; negativeBureau?: boolean; homeCountryLiabilitiesMonthly?: number;
@@ -279,7 +290,9 @@ export interface ClientProfile {
 
   /* Property group */
   propertyUse?: "OWNER_OCCUPIED" | "INVESTMENT";
-  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND";
+  /* ENBD-style property purposes: LAP (loan-against-property), BLDG (building finance),
+     SELF_CONST (self construction), RENTAL (rental-income property) join the standard set. */
+  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND" | "LAP" | "BLDG" | "SELF_CONST" | "RENTAL";
   valuation?: number;
 
   /* Transaction / Finance group */

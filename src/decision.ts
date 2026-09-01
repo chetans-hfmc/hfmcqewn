@@ -75,7 +75,10 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "stl": return c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
     case "propertyStatus": return c.propertyStatus ?? null;
     case "transaction": return c.txType ?? null;
+    case "relationship": return c.relationship ?? null;
     case "ftvBand": {
+      /* Bands are matched inclusively in pickCell (a “≤60%” cell also serves a 45% client),
+         so we report the client's actual band here for display/scoring. */
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
       return ftv <= 50 ? "LE50" : ftv <= 60 ? "LE60" : "GT60";
@@ -84,11 +87,27 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
   }
 }
 function pickCell(cells: RateCell[], c: ClientProfile): RateCell | null {
+  const ftv = c.propertyValue ? (c.loanRequested / c.propertyValue) * 100 : null;
+  /* FTV bands match inclusively: a “≤60%” cell also serves a 45% client, and a
+     “>60%” cell serves 65%. Tighter bands out-score wider ones. */
+  const bandHit = (cellVal: string): { ok: boolean; pts: number } => {
+    if (ftv == null) return { ok: false, pts: 0 };
+    const m = /^(LE|GT)(\d+)$/.exec(cellVal);
+    if (!m) return { ok: false, pts: 0 };
+    const n = Number(m[2]);
+    if (m[1] === "LE") return ftv <= n ? { ok: true, pts: n <= 50 ? 3 : 2 } : { ok: false, pts: 0 };
+    return ftv > n ? { ok: true, pts: 2 } : { ok: false, pts: 0 };
+  };
   let best: RateCell | null = null;
   let bestScore = -1;
   for (const cell of cells) {
     let score = 0; let ok = true;
     for (const [axis, val] of Object.entries(cell.key)) {
+      if (axis === "ftvBand") {
+        const r = bandHit(val);
+        if (!r.ok) { ok = false; break; }
+        score += r.pts; continue;
+      }
       const cv = clientAxisValue(axis, c);
       if (cv == null) continue;
       if (cv === val) score += 1; else { ok = false; break; }
@@ -378,6 +397,18 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     ltvPct = pv.eligibility.landLtv;
   }
 
+  /* ---- commercial property LTV cap (e.g. DIB shops 62%) ---- */
+  if (pv.eligibility.commercialLtv != null && c.propertyType === "COMMERCIAL" && ltvPct > pv.eligibility.commercialLtv) {
+    push({ code: "LTV-COMM", severity: "APPLIED", category: "financing", message: `Commercial property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.commercialLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.commercialLtv;
+  }
+
+  /* ---- leasehold restriction (e.g. Emirates Islamic cannot finance leasehold) ---- */
+  if (pv.eligibility.leaseholdAllowed === false && c.propertyTenure === "LEASEHOLD") {
+    blocked = true;
+    push({ code: "LEASEHOLD", severity: "BLOCK", category: "eligibility", message: `Bank cannot finance leasehold property`, explanation: `${pd.bankId} policy: leasehold not eligible`, source: pd.bankId });
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
@@ -457,7 +488,17 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   const ccPct = pv.affordability.ccPct ?? 5;
   const existingOblig = c.monthlyLiabilities + c.creditCardLimits * (ccPct / 100);
   const income = recognizedIncome;
-  const availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
+  let availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
+  /* DIB-style: the life-insurance premium is added to the EMI inside the DBR calc,
+     which reduces the EMI headroom available for the loan. */
+  const lifePct = pv.fees.lifeInsurancePct;
+  if (pv.affordability.dbrIncludesInsurance && lifePct != null && c.loanRequested > 0) {
+    /* Basis-aware: a per-annum premium is spread over 12 months. */
+    const isPA = pv.fees.lifeInsuranceBasis === "PA";
+    const monthlyIns = (c.loanRequested * (lifePct / 100)) / (isPA ? 12 : 1);
+    availForEmi = Math.max(0, availForEmi - monthlyIns);
+    push({ code: "DBR-INS", severity: "INFO", category: "affordability", message: `Life insurance (${fmtMoney(monthlyIns)}/mo${isPA ? ", p.a. basis ÷12" : ""}) counted inside the DBR, reducing EMI headroom`, resultingValue: fmtMoney(availForEmi) + "/mo available", source: pd.bankId });
+  }
   const dbrNow = income > 0 ? (existingOblig / income) * 100 : 0;
   push({ code: "DBR", severity: "APPLIED", category: "affordability", message: `DBR ceiling ${dbrCap}%${dbrRes ? ` (${dbrRes.winner.refLabel})` : ""}`, resultingValue: `${dbrCap}%`, ruleId: dbrRes?.winner.refId, ruleVersion: dbrRes?.winner.version });
   if (dbrNow >= dbrCap) {
@@ -486,6 +527,18 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
       if (cell.stressRate != null)
         push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Bank-published stress rate ${cell.stressRate.toFixed(2)}% applies for DSR`, resultingValue: `${cell.stressRate.toFixed(2)}%`, source: pd.bankId });
+      else if (pv.affordability.stressAddPct != null && ratePct != null)
+        /* Formula-based stress (e.g. Emirates Islamic "current rate plus 2%"). */
+        push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Stress rate = indicative rate + ${pv.affordability.stressAddPct}% = ${(ratePct + pv.affordability.stressAddPct).toFixed(2)}% for DSR`, resultingValue: `${(ratePct + pv.affordability.stressAddPct).toFixed(2)}%`, source: pd.bankId });
+      else if (pv.affordability.stressRecipe != null) {
+        /* Margin-based stress (e.g. ENBD "post-fixed margin 1.79% + 1M EIBOR"). */
+        const sr = pv.affordability.stressRecipe;
+        const idxVal = ctx.eibor ? (sr.index === "EIBOR_1M" ? ctx.eibor.m1 : sr.index === "EIBOR_3M" ? ctx.eibor.m3 : sr.index === "EIBOR_6M" ? ctx.eibor.m6 : ctx.eibor.y1) : null;
+        if (idxVal != null)
+          push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Stress rate = ${sr.margin}% + ${sr.index.replace("_", " ")} (${idxVal}%) = ${(sr.margin + idxVal).toFixed(2)}% for DSR`, resultingValue: `${(sr.margin + idxVal).toFixed(2)}%`, source: pd.bankId });
+        else
+          push({ code: "STRESS-UNKNOWN", severity: "WARN", category: "affordability", message: `Stress recipe ${sr.margin}% + ${sr.index} cannot be confirmed — EIBOR fix unavailable`, source: pd.bankId });
+      }
       for (const p of promos) {
         push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
       }
@@ -660,7 +713,7 @@ export function personToProfile(p: {
   emirate?: string; uaeResident?: boolean;
   basicSalary?: number; allowances?: number; commission?: number; bonus?: number; rentalIncome?: number; businessIncome?: number;
   propertiesOwned?: number; developer?: string;
-  segment?: string; employer?: string; preferredFixedYears?: number; existingLoanRate?: number;
+  segment?: string; employer?: string; preferredFixedYears?: number; existingLoanRate?: number; relationship?: "ETB" | "NTB";
 }, propertyValue: number, loanRequested: number, age: number, txType?: ClientProfile["txType"],
   propertyUse?: ClientProfile["propertyUse"], propertyStatus?: ClientProfile["propertyStatus"], valuation?: number): ClientProfile {
   const liabilities = p.liabilities.reduce((s, l) => s + l.monthly, 0) + (p.homeCountryLiabilitiesMonthly ?? 0);
@@ -676,7 +729,7 @@ export function personToProfile(p: {
     yearsEmployed: p.yearsEmployed ?? 2,
     propertiesOwned: p.propertiesOwned, developer: p.developer,
     segment: p.segment, employer: p.employer, preferredFixedYears: p.preferredFixedYears,
-    existingLoanRate: p.existingLoanRate,
+    existingLoanRate: p.existingLoanRate, relationship: p.relationship,
     /* credit group */
     aecbScore: p.aecbScore, negativeBureau: p.negativeBureau,
     homeCountryLiabilitiesMonthly: p.homeCountryLiabilitiesMonthly,

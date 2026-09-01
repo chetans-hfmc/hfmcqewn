@@ -153,10 +153,14 @@ export function buildProposal(def: ProductDef, decision: ProductDecision, c: Cli
     ],
     vat, totalUpfront: total,
     lifeInsurance: lifePct != null && finance > 0
-      ? `Monthly ${lifePct}% of outstanding (${fmtAED(finance * (lifePct / 100))})${pv.fees.lifeInsuranceNote ? " — " + pv.fees.lifeInsuranceNote : ""}`
-      : (lifePct != null ? `Monthly ${lifePct}% of outstanding` : "As per bank"),
+      ? (pv.fees.lifeInsuranceBasis === "PA"
+          ? `Yearly ${lifePct}% of finance (${fmtAED(finance * (lifePct / 100))}/yr ≈ ${fmtAED(finance * (lifePct / 100) / 12)}/mo)${pv.fees.lifeInsuranceNote ? " — " + pv.fees.lifeInsuranceNote : ""}`
+          : `Monthly ${lifePct}% of outstanding (${fmtAED(finance * (lifePct / 100))})${pv.fees.lifeInsuranceNote ? " — " + pv.fees.lifeInsuranceNote : ""}`)
+      : (lifePct != null ? `${pv.fees.lifeInsuranceBasis === "PA" ? "Yearly" : "Monthly"} ${lifePct}% ${pv.fees.lifeInsuranceBasis === "PA" ? "of finance" : "of outstanding"}` : "As per bank"),
     propertyInsurance: propPct != null && c.propertyValue > 0
-      ? `Yearly ${propPct}% of property value (${fmtAED(c.propertyValue * (propPct / 100))})${pv.fees.propertyInsuranceNote ? " — " + pv.fees.propertyInsuranceNote : ""}`
+      ? (pv.fees.propertyInsuranceBasis === "PM"
+          ? `Monthly ${propPct}% of property value (${fmtAED(c.propertyValue * (propPct / 100))}/mo)${pv.fees.propertyInsuranceNote ? " — " + pv.fees.propertyInsuranceNote : ""}`
+          : `Yearly ${propPct}% of property value (${fmtAED(c.propertyValue * (propPct / 100))})${pv.fees.propertyInsuranceNote ? " — " + pv.fees.propertyInsuranceNote : ""}`)
       : (propPct != null ? `Yearly ${propPct}% of property value` : "As per bank"),
     salaryTransferRequired: pv.eligibility.salaryTransferRequired ?? false,
     blockReason: !eligible && blockFinding ? `${blockFinding.message}${blockFinding.explanation ? " — " + blockFinding.explanation : ""}` : undefined,

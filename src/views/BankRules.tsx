@@ -723,6 +723,7 @@ export default function BankRulesView() {
                         <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1">Max units</p><NumInput disabled={!editable} value={e.maxUnits ?? 0} onChange={(n) => setElig({ maxUnits: n || undefined })} /></div>
                         <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Construction LTV <Exec /></p><NumInput disabled={!editable} value={e.constructionLtv ?? 0} onChange={(n) => setElig({ constructionLtv: n || undefined })} suffix="%" /></div>
                         <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Land LTV <Exec /></p><NumInput disabled={!editable} value={e.landLtv ?? 0} onChange={(n) => setElig({ landLtv: n || undefined })} suffix="%" /></div>
+                        <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Commercial LTV <Exec /></p><NumInput disabled={!editable} value={e.commercialLtv ?? 0} onChange={(n) => setElig({ commercialLtv: n || undefined })} suffix="%" /></div>
                         <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Investment LTV <Exec /></p><NumInput disabled={!editable} value={e.investmentLtv ?? 0} onChange={(n) => setElig({ investmentLtv: n || undefined })} suffix="%" /></div>
                         <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">2nd-property LTV <Exec /></p><NumInput disabled={!editable} value={e.secondPropertyLtv ?? 0} onChange={(n) => setElig({ secondPropertyLtv: n || undefined })} suffix="%" /></div>
                       </div>
@@ -985,6 +986,13 @@ export default function BankRulesView() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Max DBR <Exec /></p><NumInput disabled={!editable} value={ver.affordability.maxDBR ?? 0} onChange={(n) => setAfford({ maxDBR: n || undefined })} suffix="%" /></div>
                       <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1 flex items-center gap-1.5">Credit card % <Exec /></p><NumInput disabled={!editable} value={ver.affordability.ccPct ?? 0} onChange={(n) => setAfford({ ccPct: n || undefined })} suffix="%" /></div>
+                      <div className="col-span-2 flex items-center gap-3 pt-4">
+                        <Toggle value={ver.affordability.dbrIncludesInsurance ?? false} onChange={(v) => setAfford({ dbrIncludesInsurance: v || undefined })} disabled={!editable} />
+                        <div>
+                          <p className="text-[11.5px] font-display font-bold text-ink flex items-center gap-1.5">Insurance counted inside DBR <Exec /></p>
+                          <p className="text-[10.5px] text-ink-soft">e.g. DIB adds the life-insurance premium to the EMI when testing affordability.</p>
+                        </div>
+                      </div>
                       <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1">Rental counted</p><NumInput disabled={!editable} value={ver.affordability.rentalPct ?? 0} onChange={(n) => setAfford({ rentalPct: n || undefined })} suffix="%" /></div>
                       <div><p className="text-[10.5px] font-display font-bold text-ink-soft mb-1">Bonus counted</p><NumInput disabled={!editable} value={ver.affordability.bonusPct ?? 0} onChange={(n) => setAfford({ bonusPct: n || undefined })} suffix="%" /></div>
                     </div>

@@ -76,6 +76,8 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "propertyStatus": return c.propertyStatus ?? null;
     case "transaction": return c.txType ?? null;
     case "ftvBand": {
+      /* Bands are matched inclusively in pickCell (a “≤60%” cell also serves a 45% client),
+         so we report the client's actual band here for display/scoring. */
       if (!c.propertyValue) return null;
       const ftv = (c.loanRequested / c.propertyValue) * 100;
       return ftv <= 50 ? "LE50" : ftv <= 60 ? "LE60" : "GT60";
@@ -84,11 +86,27 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
   }
 }
 function pickCell(cells: RateCell[], c: ClientProfile): RateCell | null {
+  const ftv = c.propertyValue ? (c.loanRequested / c.propertyValue) * 100 : null;
+  /* FTV bands match inclusively: a “≤60%” cell also serves a 45% client, and a
+     “>60%” cell serves 65%. Tighter bands out-score wider ones. */
+  const bandHit = (cellVal: string): { ok: boolean; pts: number } => {
+    if (ftv == null) return { ok: false, pts: 0 };
+    const m = /^(LE|GT)(\d+)$/.exec(cellVal);
+    if (!m) return { ok: false, pts: 0 };
+    const n = Number(m[2]);
+    if (m[1] === "LE") return ftv <= n ? { ok: true, pts: n <= 50 ? 3 : 2 } : { ok: false, pts: 0 };
+    return ftv > n ? { ok: true, pts: 2 } : { ok: false, pts: 0 };
+  };
   let best: RateCell | null = null;
   let bestScore = -1;
   for (const cell of cells) {
     let score = 0; let ok = true;
     for (const [axis, val] of Object.entries(cell.key)) {
+      if (axis === "ftvBand") {
+        const r = bandHit(val);
+        if (!r.ok) { ok = false; break; }
+        score += r.pts; continue;
+      }
       const cv = clientAxisValue(axis, c);
       if (cv == null) continue;
       if (cv === val) score += 1; else { ok = false; break; }
@@ -378,6 +396,12 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     ltvPct = pv.eligibility.landLtv;
   }
 
+  /* ---- commercial property LTV cap (e.g. DIB shops 62%) ---- */
+  if (pv.eligibility.commercialLtv != null && c.propertyType === "COMMERCIAL" && ltvPct > pv.eligibility.commercialLtv) {
+    push({ code: "LTV-COMM", severity: "APPLIED", category: "financing", message: `Commercial property LTV cap applied`, previousValue: `${ltvPct}%`, resultingValue: `${pv.eligibility.commercialLtv}%`, source: pd.bankId });
+    ltvPct = pv.eligibility.commercialLtv;
+  }
+
   const maxByLtv = ltvPct > 0 && eligibleValue > 0 ? Math.floor((eligibleValue * ltvPct) / 100) : 0;
 
   /* ---- max loan cap ---- */
@@ -457,7 +481,15 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   const ccPct = pv.affordability.ccPct ?? 5;
   const existingOblig = c.monthlyLiabilities + c.creditCardLimits * (ccPct / 100);
   const income = recognizedIncome;
-  const availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
+  let availForEmi = Math.max(0, income * (dbrCap / 100) - existingOblig);
+  /* DIB-style: the life-insurance premium is added to the EMI inside the DBR calc,
+     which reduces the EMI headroom available for the loan. */
+  const lifePct = pv.fees.lifeInsurancePct;
+  if (pv.affordability.dbrIncludesInsurance && lifePct != null && c.loanRequested > 0) {
+    const monthlyIns = c.loanRequested * (lifePct / 100);
+    availForEmi = Math.max(0, availForEmi - monthlyIns);
+    push({ code: "DBR-INS", severity: "INFO", category: "affordability", message: `Life insurance (${fmtMoney(monthlyIns)}/mo) counted inside the DBR, reducing EMI headroom`, resultingValue: fmtMoney(availForEmi) + "/mo available", source: pd.bankId });
+  }
   const dbrNow = income > 0 ? (existingOblig / income) * 100 : 0;
   push({ code: "DBR", severity: "APPLIED", category: "affordability", message: `DBR ceiling ${dbrCap}%${dbrRes ? ` (${dbrRes.winner.refLabel})` : ""}`, resultingValue: `${dbrCap}%`, ruleId: dbrRes?.winner.refId, ruleVersion: dbrRes?.winner.version });
   if (dbrNow >= dbrCap) {

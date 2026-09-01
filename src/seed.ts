@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 25;
+export const SEED_VERSION = 26;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -183,6 +183,94 @@ const PRODUCT_DEFS: ProductDef[] = [
       affordability: { maxDBR: 50, ccPct: 5, rentalPct: 70 },
       documents: [{ name: "Salary Certificate", required: true }, { name: "Bank Statements — 6 months", required: true }, { name: "EID + Passport + Visa", required: true }],
       tat: { paDays: 4, valuationDays: 3, folDays: 5, totalDays: 22, paValidityDays: 60 },
+    })],
+  },
+  /* ---------------- DIB · Home Finance — Salaried (full sheet, Conventional) ---------------- */
+  {
+    id: "pd-dib-sal", bankId: "b-dib", name: "Home Finance — Salaried", loanType: "CONVENTIONAL",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "BUYOUT_EQUITY", "EQUITY"],
+    axes: ["stl", "tenure", "ftvBand", "transaction", "propertyStatus"],
+    tags: ["Salaried", "FTV-banded"], createdAt: ts(-60), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: "2025-06-12", source: "DIB salaried policy sheet — pricing effective 12 Jun 2025, disbursals till 31 Jul 2025",
+      eligibility: {
+        minSalaryMatrix: { "STL": 20000 }, minSalary: 10000, minLoan: 250000, maxLoan: 6000000,
+        maxAgeSalaried: 70, minLosMonths: 3,
+        ltvMatrix: { "NATIONAL": 85, "EXPAT": 80 },
+        landLtv: 70, commercialLtv: 62,
+        coApplicantRule: "1 blood relation (siblings allowed) — Expats & Locals",
+        employerRequirements: { minYearsEstablished: 1, minEmployees: 20, note: "Non-ALE: LOS 1yr, 20 UAE + 100 global (or <20 UAE + 300 global), STL mandatory if salary < 25k, company visit mandatory" },
+        restrictedSectors: ["Law firm", "Real estate", "Construction"],
+        incomeRecognition: { bonusPct: 50, rentalPct: 83 },
+        gates: [
+          { id: "d1", kind: "FLAG", label: "STL not mandatory (conditioned for weak cases); waive if 12 consecutive salary credits sighted", hardStop: false },
+          { id: "d2", kind: "FLAG", label: "Rental income 83% — cannot exceed 50% of fixed salary/pension", hardStop: false },
+          { id: "d3", kind: "FLAG", label: "Variable add-back capped at 50% of fixed; total variable ≤ 60% of fixed; cash-in-hand ≥ 20% of fixed", hardStop: false },
+          { id: "d4", kind: "FLAG", label: "Credit cards: 2% of limit in DBR (other banks) + 3% for DIB cards", hardStop: false },
+          { id: "d5", kind: "FLAG", label: "Max loan 6M — exception required for larger amounts", hardStop: false },
+          { id: "d6", kind: "FLAG", label: "SZHP cases must take Sukoon Life Takaful (Central Bank direction)", hardStop: false },
+        ],
+        notes: [
+          "DIB adds insurance cost to EMI in the DBR calc (see Affordability).",
+          "Property transfer charges financeable up to 80%: DXB trustee 4,000 + agent 2% + DLD 4%; AUH agent 2% + municipality 2%.",
+          "Life insurance assignable from empaneled companies; opt-out via delegation/undertaking letter.",
+          "Commercial shops financed at 62% LTV.",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* Fixed schemes — Resale / Direct / Buyout+Equity / Equity Release */
+        { id: "f-s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.95, fixedMonths: 36, followOn: { margin: 1.00, index: "EIBOR_3M", floor: 1.00 }, stressRate: 4.62496, note: "GCEO intro — thereafter 1% + 3M EIBOR, floor 1%" },
+        { id: "f-s5", key: { stl: "STL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.50, fixedMonths: 60, followOn: { margin: 1.00, index: "EIBOR_3M", floor: 1.00 } },
+        { id: "f-n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.10, fixedMonths: 36, followOn: { margin: 1.50, index: "EIBOR_3M", floor: 1.50 }, stressRate: 5.12496, note: "GCEO intro — thereafter 1.5% + 3M EIBOR, floor 1.5%" },
+        { id: "f-n5", key: { stl: "NSTL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.70, fixedMonths: 60, followOn: { margin: 1.50, index: "EIBOR_3M", floor: 1.50 } },
+        /* Fully variable Day-1 — Direct / Resale / Buyout */
+        { id: "v-s-le60", key: { stl: "STL", ftvBand: "LE60", transaction: "PURCHASE" }, structure: "MARGIN_INDEX", margin: 1.24814, index: "EIBOR_3M", floor: 1.00, note: "5.52% @ EIBOR 4.27" },
+        { id: "v-s-gt60", key: { stl: "STL", ftvBand: "GT60", transaction: "PURCHASE" }, structure: "MARGIN_INDEX", margin: 1.49814, index: "EIBOR_3M", floor: 1.00 },
+        { id: "v-n-le60", key: { stl: "NSTL", ftvBand: "LE60", transaction: "PURCHASE" }, structure: "MARGIN_INDEX", margin: 1.49814, index: "EIBOR_3M", floor: 1.50 },
+        { id: "v-n-gt60", key: { stl: "NSTL", ftvBand: "GT60", transaction: "PURCHASE" }, structure: "MARGIN_INDEX", margin: 1.74814, index: "EIBOR_3M", floor: 1.50 },
+        /* Fully variable Day-1 — Equity Release */
+        { id: "ve-s-le60", key: { stl: "STL", ftvBand: "LE60", transaction: "EQUITY" }, structure: "MARGIN_INDEX", margin: 2.49814, index: "EIBOR_3M", floor: 1.00, note: "6.77%" },
+        { id: "ve-s-gt60", key: { stl: "STL", ftvBand: "GT60", transaction: "EQUITY" }, structure: "MARGIN_INDEX", margin: 2.74814, index: "EIBOR_3M", floor: 1.00 },
+        { id: "ve-n-le60", key: { stl: "NSTL", ftvBand: "LE60", transaction: "EQUITY" }, structure: "MARGIN_INDEX", margin: 2.74814, index: "EIBOR_3M", floor: 1.50 },
+        { id: "ve-n-gt60", key: { stl: "NSTL", ftvBand: "GT60", transaction: "EQUITY" }, structure: "MARGIN_INDEX", margin: 2.98814, index: "EIBOR_3M", floor: 1.50 },
+        /* Fully variable Day-1 — Buyout + Equity / Final payment w/ equity */
+        { id: "vb-s-le60", key: { stl: "STL", ftvBand: "LE60", transaction: "BUYOUT_EQUITY" }, structure: "MARGIN_INDEX", margin: 1.74814, index: "EIBOR_3M", floor: 1.00, note: "6.02%" },
+        { id: "vb-s-gt60", key: { stl: "STL", ftvBand: "GT60", transaction: "BUYOUT_EQUITY" }, structure: "MARGIN_INDEX", margin: 1.99814, index: "EIBOR_3M", floor: 1.00 },
+        { id: "vb-n-le60", key: { stl: "NSTL", ftvBand: "LE60", transaction: "BUYOUT_EQUITY" }, structure: "MARGIN_INDEX", margin: 1.99814, index: "EIBOR_3M", floor: 1.50 },
+        { id: "vb-n-gt60", key: { stl: "NSTL", ftvBand: "GT60", transaction: "BUYOUT_EQUITY" }, structure: "MARGIN_INDEX", margin: 2.24814, index: "EIBOR_3M", floor: 1.50 },
+      ]},
+      fees: {
+        processingPct: 0.5, valuation: 2500, preApproval: 0, vatPct: 5,
+        valuationByEmirate: { "OTHER": 3000 },
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower; NIL if submitted with full docs in offer period & disbursed within 60 days",
+        partialSettlement: "1.05% of outstanding, max AED 10,500 (incl. 5% VAT)",
+        lifeInsurancePct: 0.01849, lifeInsuranceNote: "per million; 1yr free Property Takaful with Salama; SZHP Sukoon 0.01899; opt-out 0.01850",
+        propertyInsurancePct: 0.03325, propertyInsuranceNote: "per annum of property value",
+        processingFeeTiers: [{ label: "STL", pct: 0 }, { label: "NSTL (resident)", pct: 0.5 }],
+        txOverrides: [
+          { txType: "EQUITY", processingPct: 1, note: "Equity Release 1% (both STL & NSTL, from 13-Jan-2026)" },
+          { txType: "BUYOUT", processingPct: 0, note: "Pure buyout 0%; equity component 0.5% + VAT; DD&Doc fees nil till 31 Aug 2026" },
+        ],
+        feeFinancing: { allowed: true, pct: 6, basis: "DLD & broker fee + trustee fee (incl. VAT)" },
+        rateAdjustments: [
+          { id: "ra1", label: "Fully variable +25bps — NR, LAP, Off-Plan, Self-Construction, Commercial, SE", bps: 25 },
+          { id: "ra2", label: "Building finance (Commercial) +100bps", bps: 100 },
+        ],
+        note: "Valuation 2,500 incl. VAT (DXB & AUH), 3,000 other emirates — collected & refunded after booking",
+      },
+      affordability: { maxDBR: 50, ccPct: 2, rentalPct: 83, bonusPct: 50, dbrIncludesInsurance: true },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true },
+        { name: "Application Form (filled, not signed)", required: true },
+        { name: "Consent Form", required: true },
+        { name: "Salary Certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (if pay varies)", required: false },
+        { name: "Bank Statements — 6 months (E-statements / FTS)", required: true },
+        { name: "Latest CC statement / liability statements", required: true },
+        { name: "Proof of Residence (optional)", required: false },
+      ],
+      tat: { paDays: 3, valuationDays: 3, folDays: 3, totalDays: 17, paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 60, accountOpeningDays: 1, disbursalDays: 5, transferDays: 2 },
     })],
   },
   {
@@ -1015,6 +1103,9 @@ const PROMOS: Promo[] = [
   { id: "promo-2", bankId: "b-cbd", name: "Aug–Sep pricing window", from: "2026-08-24", to: "2026-09-30", summary: "CBD updated mortgage pricing for applications in window.", createdBy: "hfmm-15", createdAt: ts(-60) },
   { id: "promo-3", bankId: "b-dib", name: "AUH Developers — Q window", from: d(-90), to: d(45), summary: "NSTL 3.95% fixed 3yr, zero processing fee.", createdBy: "hfmm-15", createdAt: ts(-60) },
   { id: "promo-adib-buyout", bankId: "b-adib", name: "ADIB Buyout Campaign — extended to 30 Aug 2026", from: d(-200), to: "2026-08-30", summary: "STL/NSTL 3.99% fixed 2yr with AED 2,500 cashback option (or valuation-fee refund + early-closure-fee refund post title deed favoring ADIB). Applies to Buyout & Buyout+Equity. Pre-approval + valuation must be instructed by 30 Aug 2026.", createdBy: "hfmm-15", createdAt: ts(-60) },
+  { id: "promo-dib-q1payout", bankId: "b-dib", name: "DIB Q1 2026 promotional payout slabs", from: "2026-01-01", to: "2026-03-31", summary: "Payout slabs: 0–9.99% → 0.90%; 9.99–24.99% → 1.10%; >25mn → 1.25% (Q1 2026). Informational — payout commission, not client rate.", createdBy: "hfmm-15", createdAt: ts(-60) },
+  { id: "promo-dib-dddoc", bankId: "b-dib", name: "DIB nil Due-Diligence & Documentation fees — Buyout & Equity", from: "2026-01-13", to: "2026-08-31", summary: "Nil DD&Doc fees for both Buyout and Equity-release portions, all segments, till 31 Aug 2026.", createdBy: "hfmm-15", createdAt: ts(-60) },
+  { id: "promo-dib-heroes", bankId: "b-dib", name: "DIB UAE Frontline Heroes — nil DD&Doc fees", from: "2025-07-01", to: "2026-06-30", summary: "No Due-Diligence & Documentation fee for UAE Frontline Hero staff, till 30 Jun 2026.", createdBy: "hfmm-15", createdAt: ts(-60) },
 ];
 
 /* ---------- global rules (versioned, TO VERIFY) ---------- */
@@ -1360,6 +1451,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-cbd-sal", verdict: "ELIGIBLE" }],
     note: "Value band >7M → 65% LTV (AED 5.2M) covers the 5.0M request — band tightened from base 80%.",
   },
+  {
+    id: "golden-15", name: "DIB — salaried expat STL 3yr fixed, 80% LTV",
+    client: { ...baseProfile, name: "Golden · DIB STL 3yr", customerType: "EXPAT" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, preferredFixedYears: 3, age: 34, monthlyIncome: 45000, monthlyLiabilities: 4000, propertyValue: 3000000, loanRequested: 2400000 },
+    expected: [{ productDefId: "pd-dib-sal", verdict: "ELIGIBLE" }],
+    note: "Expat STL → 80% LTV (AED 2.4M) covers the 2.4M request. STL 3yr 3.95% fixed; min salary STL 20k satisfied. Insurance counted inside DBR.",
+  },
+  {
+    id: "golden-16", name: "DIB — commercial (shops) property capped at 62% LTV",
+    client: { ...baseProfile, name: "Golden · DIB commercial", customerType: "EXPAT" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyType: "COMMERCIAL" as const, propertyStatus: "READY" as const, preferredFixedYears: 3, age: 40, monthlyIncome: 50000, monthlyLiabilities: 4000, propertyValue: 2000000, loanRequested: 1200000 },
+    expected: [{ productDefId: "pd-dib-sal", verdict: "ELIGIBLE" }],
+    note: "Commercial LTV cap 62% (AED 1.24M) tightens the base 80% — covers the 1.2M request.",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -1416,6 +1519,7 @@ export function buildSeed(): AppState {
       { id: "a-adcb", at: ts(-0.02), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADCB · Home Finance — Salaried (pd-adcb-sal v1)", detail: "Segment pricing (Priv/Aspire/Home Saver) + fixed-term grid, employer discount −0.25%, fee tiers, 9-field TAT" },
       { id: "a-adib", at: ts(-0.01), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADIB · Home Finance — Salaried (pd-adib-sal/var/equity v1)", detail: "STL/NSTL/UC/NR grids across 2–20yr tenors, LTV ≤60% −0.25% discount, STL 10k/NSTL 15k min, land 60% LTV, buyout campaign promo to 30 Aug 2026" },
       { id: "a-cbd", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "CBD · Home Finance — Salaried (pd-cbd-sal/var/baf v1)", detail: "Property-value-banded LTV (75/70/65 salaried, 70/60 SE), emirate & segment caps, conditional rate surcharges (refi +10bps, >10M +75bps, LTV>85%&<2M +30bps), min tenor 3yr, fee finance, promo 24 Aug–30 Sep 2026" },
+      { id: "a-dib", at: ts(-0.004), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "DIB · Home Finance — Salaried (pd-dib-sal v1)", detail: "STL/NSTL 3–5yr fixed + 12-cell FTV-banded day-1 variable grid, floors 1.0/1.5/1.75, Q1 stress 4.62/5.12, max loan 6M, land 70% & commercial 62% LTV, insurance-in-DBR, fee finance 6% DLD&broker, valuation 2,500/3,000, 3 promos" },
       { id: "a-arab", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Arab Bank · Home Finance — Salaried (pd-arab-sal/buyout/equity v1)", detail: "STL/NSTL × 2–3yr grids + ER & buyout-cashout rows, published stress rates, compound min-salary keys (STL 20k / NSTL:EXPAT 25k / NSTL:NATIONAL 15k), Ajman valuation 3,500, life assignment fee 5,000, TAT 12d" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },

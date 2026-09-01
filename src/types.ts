@@ -157,6 +157,7 @@ export interface ProductVersion {
     ltvMatrix?: Record<string, number>; restrictedSectors?: string[]; gates: EligGate[]; notes?: string[];
     constructionLtv?: number;                  /* LTV cap for under-construction / off-plan finance */
     landLtv?: number;                          /* LTV cap for land purchase */
+    commercialLtv?: number;                    /* LTV cap for commercial property (e.g. DIB shops 62%) */
     maxUnits?: number;                         /* max loan = amount cap OR n units, whichever lower */
     paymentHoliday?: string;                   /* e.g. "STL up to 6 months · NSTL up to 3 months" */
     coApplicantRule?: string;                  /* e.g. "1 blood relation (no siblings)" */
@@ -208,7 +209,9 @@ export interface ProductVersion {
        All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
     rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number }[];
   };
-  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number };
+  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
+    dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */
+  };
   documents: { name: string; required: boolean; note?: string }[];
   tat: {
     paDays?: number; valuationDays?: number; folDays?: number; totalDays?: number;

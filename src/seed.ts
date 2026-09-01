@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 26;
+export const SEED_VERSION = 27;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -1682,6 +1682,7 @@ export function buildSeed(): AppState {
       { id: "a-adib", at: ts(-0.01), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "ADIB · Home Finance — Salaried (pd-adib-sal/var/equity v1)", detail: "STL/NSTL/UC/NR grids across 2–20yr tenors, LTV ≤60% −0.25% discount, STL 10k/NSTL 15k min, land 60% LTV, buyout campaign promo to 30 Aug 2026" },
       { id: "a-cbd", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "CBD · Home Finance — Salaried (pd-cbd-sal/var/baf v1)", detail: "Property-value-banded LTV (75/70/65 salaried, 70/60 SE), emirate & segment caps, conditional rate surcharges (refi +10bps, >10M +75bps, LTV>85%&<2M +30bps), min tenor 3yr, fee finance, promo 24 Aug–30 Sep 2026" },
       { id: "a-dib", at: ts(-0.004), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "DIB · Home Finance — Salaried (pd-dib-sal v1)", detail: "STL/NSTL 3–5yr fixed + 12-cell FTV-banded day-1 variable grid, floors 1.0/1.5/1.75, Q1 stress 4.62/5.12, max loan 6M, land 70% & commercial 62% LTV, insurance-in-DBR, fee finance 6% DLD&broker, valuation 2,500/3,000, 3 promos" },
+      { id: "a-ei", at: ts(-0.003), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Emirates Islamic · Home Finance — Salaried (pd-ei-opt1/opt2/buyout-equity v1)", detail: "Option 1 STL/NSTL 3–5yr fixed + FTV-banded under-construction/commercial/land rows · Option 2 variable-only floors · day-1 variable · formula stress (+2%) · Takaful PA-basis insurance · leasehold hard-stop · max loan 5M · min salary local 8k/expat 20k (listed 15k)" },
       { id: "a-arab", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Arab Bank · Home Finance — Salaried (pd-arab-sal/buyout/equity v1)", detail: "STL/NSTL × 2–3yr grids + ER & buyout-cashout rows, published stress rates, compound min-salary keys (STL 20k / NSTL:EXPAT 25k / NSTL:NATIONAL 15k), Ajman valuation 3,500, life assignment fee 5,000, TAT 12d" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },

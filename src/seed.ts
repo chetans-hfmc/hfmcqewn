@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 27;
+export const SEED_VERSION = 28;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -54,7 +54,7 @@ const AXES: AxisDef[] = [
   { id: "employment", name: "Employment", values: [{ v: "SALARIED", l: "Salaried" }, { v: "SELF_EMPLOYED", l: "Self Employed" }] },
   { id: "residency", name: "Residency", values: [{ v: "RESIDENT", l: "UAE Resident" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
   { id: "customerType", name: "Customer type", values: [{ v: "NATIONAL", l: "UAE National" }, { v: "EXPAT", l: "Expat" }, { v: "NON_RESIDENT", l: "Non Resident" }] },
-  { id: "propertyStatus", name: "Property status", values: [{ v: "READY", l: "Completed / Ready" }, { v: "UNDER_CONSTRUCTION", l: "Under Construction" }, { v: "OFF_PLAN", l: "Off Plan" }, { v: "LAND", l: "Land" }] },
+  { id: "propertyStatus", name: "Property status", values: [{ v: "READY", l: "Completed / Ready" }, { v: "UNDER_CONSTRUCTION", l: "Under Construction" }, { v: "OFF_PLAN", l: "Off Plan" }, { v: "LAND", l: "Land" }, { v: "LAP", l: "Loan Against Property" }, { v: "BLDG", l: "Building Finance" }, { v: "SELF_CONST", l: "Self Construction" }, { v: "RENTAL", l: "Rental Income" }] },
   { id: "transaction", name: "Transaction", values: [{ v: "PURCHASE", l: "New Purchase" }, { v: "RESALE", l: "Resale" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + Equity" }, { v: "EQUITY", l: "Equity Release" }, { v: "REFINANCE", l: "Refinance" }] },
   /* Individual years only — no bands. A cell prices exactly one tenor, so the
      engine matches precisely (e.g. a client choosing "3 years" hits the "3" cell). */
@@ -299,25 +299,90 @@ const PRODUCT_DEFS: ProductDef[] = [
     })],
   },
   {
-    id: "pd-enbd-res", bankId: "b-enbd", name: "Home Loan — Residential", loanType: "CONVENTIONAL",
-    classes: ["SALARIED"], txTypes: ["PURCHASE", "BUYOUT"], axes: ["employment", "tenure", "stl"],
-    tags: ["Residential", "Salaried only"], createdAt: ts(-60), createdBy: "hfmm-15",
+    id: "pd-enbd-sal", bankId: "b-enbd", name: "Home Loan — Salaried", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT"],
+    axes: ["employment", "tenure", "stl", "relationship", "propertyStatus"],
+    tags: ["Salaried", "SZHP", "ETB/NTB"], createdAt: ts(-60), createdBy: "hfmm-15",
     versions: [pv({
-      version: 1, status: "ACTIVE", effectiveFrom: d(-60), source: "ENBD pricing card",
+      version: 1, status: "ACTIVE", effectiveFrom: "2026-08-17", source: "ENBD salaried pricing — logins from 17 Aug 2026",
       eligibility: {
         minSalary: 15000, minLoan: 250000, maxLoan: 15000000, maxAgeSalaried: 65,
         ltvMatrix: { "NATIONAL:1": 85, "EXPAT:1": 80, "EXPAT:2": 65 },
-        gates: [{ id: "g1", kind: "EMPLOYMENT_BLOCK", label: "Self-employed not accepted on this product", values: ["SELF_EMPLOYED"], hardStop: true }],
+        minLosMonths: 12,
+        incomeRecognition: { rentalPct: 60, bonusPct: 50, commissionPct: 50 },
+        gates: [
+          { id: "g1", kind: "FLAG", label: "Joint applicants: AED 25k combined, main applicant min AED 15k", hardStop: false },
+          { id: "g2", kind: "FLAG", label: "Non-ALE employer or salary < AED 25k — STL mandatory", hardStop: false },
+          { id: "g3", kind: "FLAG", label: "LOS 1 yr (must prove up to 3 yrs employment); listed company 6 months; employment gap needs deviation approval", hardStop: false },
+          { id: "g4", kind: "FLAG", label: "Bonus: 50% of lowest of last 3 years (min AED 20k salary)", hardStop: false },
+          { id: "g5", kind: "FLAG", label: "Rental: 60% pure rental (min AED 1M); secondary 75% capped at 75% of primary fixed income", hardStop: false },
+          { id: "g6", kind: "FLAG", label: "Variable: 50% avg last 3 months; Doctors & Airline 100% (last 6 months avg)", hardStop: false },
+          { id: "g7", kind: "NATIONALITY_BLOCK", label: "Iranians — non-ENBD banking clients; STL mandatory", values: ["IRAN"], hardStop: false },
+          { id: "g8", kind: "FLAG", label: "Restricted job segment: Real Estate employees", hardStop: false },
+          { id: "g9", kind: "FLAG", label: "Non-ALE employer: LOS 1 yr, 20 employees UAE/100 global (or <20 UAE/300 global), STL mandatory if <25k, company visit mandatory", hardStop: false },
+          { id: "g10", kind: "FLAG", label: "Max loan AED 30M by exception (standard cap 15M)", hardStop: false },
+        ],
+        notes: [
+          "Fixed & variable intro rate not applicable for under-construction — variable only.",
+          "Buyout promo: refund of valuation fee (up to AED 3,000/property) + early settlement fee refund (up to AED 10,000) after disbursal.",
+          "STL not mandatory if salary credits sighted in ENBD repayment account for past 12 consecutive months (STL clause still on FOL).",
+          "ESF on loan top-up: 0.50% or AED 10,000 (whichever lower) + VAT.",
+          "Life insurance: 0.0171%/month standard (pilot & air crew 0.0138%); joint = primary + additional applicant rates.",
+          "Land & Building Finance priced same for salaried and self-employed.",
+          "Emirates: DXB, AUH (all UAE for UAE Nationals).",
+        ],
       },
       tenure: { maxMonths: 300 },
       grid: { cells: [
-        { id: "c1", key: { employment: "SALARIED", tenure: "3" }, structure: "MARGIN_INDEX", margin: 2.05, index: "EIBOR_3M", floor: 4.39 },
-        { id: "c2", key: { employment: "SALARIED", tenure: "5" }, structure: "MARGIN_INDEX", margin: 2.15, index: "EIBOR_3M", floor: 4.59 },
+        /* Standard residential — fixed then 1M EIBOR + 1.49% (AUH 3yr +1.99%) */
+        { id: "e1", key: { employment: "SALARIED", tenure: "1", stl: "STL", propertyStatus: "READY" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 12, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "1yr — residential ready only" },
+        { id: "e2", key: { employment: "SALARIED", tenure: "2", stl: "STL" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 24, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "2yr STL / STL AUH" },
+        { id: "e3", key: { employment: "SALARIED", tenure: "2", stl: "NSTL" }, structure: "FIXED_THEN_VAR", fixedRate: 4.39, fixedMonths: 24, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "2yr NSTL / NSTL AUH" },
+        { id: "e4", key: { employment: "SALARIED", tenure: "2", stl: "NSTL", relationship: "ETB" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 24, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "2yr NSTL ETB" },
+        { id: "e5", key: { employment: "SALARIED", tenure: "2", stl: "NSTL", relationship: "NTB" }, structure: "FIXED_THEN_VAR", fixedRate: 4.64, fixedMonths: 24, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "2yr NSTL NTB" },
+        { id: "e6", key: { employment: "SALARIED", tenure: "3", stl: "STL" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "3yr STL / STL AUH" },
+        { id: "e7", key: { employment: "SALARIED", tenure: "3", stl: "NSTL" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_1M" }, note: "3yr non-STL / NSTL AUH" },
+        { id: "e8", key: { employment: "SALARIED", tenure: "5", stl: "STL" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 60, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "5yr STL" },
+        { id: "e9", key: { employment: "SALARIED", tenure: "5", stl: "NSTL" }, structure: "FIXED_THEN_VAR", fixedRate: 4.79, fixedMonths: 60, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "5yr non-STL" },
+        { id: "e10", key: { employment: "SELF_EMPLOYED", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.09, fixedMonths: 60, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "5yr self-employed" },
+        /* Property-purpose rows (3yr) */
+        { id: "e11", key: { employment: "SALARIED", tenure: "3", stl: "STL", propertyStatus: "LAP" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "LAP 3yr STL" },
+        { id: "e12", key: { employment: "SALARIED", tenure: "3", stl: "NSTL", propertyStatus: "LAP" }, structure: "FIXED_THEN_VAR", fixedRate: 5.09, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "LAP 3yr NSTL" },
+        { id: "e13", key: { tenure: "3", propertyStatus: "LAND" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Land finance 3yr (sal & SE)" },
+        { id: "e14", key: { tenure: "3", propertyStatus: "BLDG" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Building finance 3yr (sal & SE)" },
+        { id: "e15", key: { employment: "SALARIED", tenure: "3", stl: "STL", propertyStatus: "SELF_CONST" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Self construction 3yr STL" },
+        { id: "e16", key: { employment: "SALARIED", tenure: "3", stl: "STL", propertyStatus: "OFF_PLAN" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Off plan 3yr salaried STL" },
+        { id: "e17", key: { tenure: "3", propertyStatus: "SELF_CONST", stl: "NSTL" }, structure: "FIXED_THEN_VAR", fixedRate: 5.09, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Self const 3yr NSTL/SE" },
+        { id: "e18", key: { tenure: "3", propertyStatus: "OFF_PLAN", stl: "NSTL" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Off plan 3yr NSTL/SE" },
+        { id: "e19", key: { employment: "SALARIED", tenure: "3", propertyStatus: "RENTAL" }, structure: "FIXED_THEN_VAR", fixedRate: 4.79, fixedMonths: 36, followOn: { margin: 1.49, index: "EIBOR_1M" }, note: "Rental income 3yr" },
+        /* Fully variable day-1 & SZHP */
+        { id: "e20", key: { employment: "SALARIED" }, structure: "VAR_DAY1", margin: 1.49, index: "EIBOR_3M", note: "Fully variable salaried — 3M EIBOR + 1.49%" },
+        { id: "e21", key: { employment: "SALARIED", propertyStatus: "READY" }, structure: "VAR_DAY1", margin: 1.99, index: "EIBOR_1M", note: "Option 1 day-1 variable — 1M EIBOR + 1.99% (STL/NSTL/all segments/LAP)" },
       ]},
-      fees: { processingPct: 1, processingMin: 2500, valuation: 3150, preApproval: 0, earlySettlement: "1% or 10k, whichever lower" },
-      affordability: { maxDBR: 50, ccPct: 5 },
-      documents: [{ name: "Salary Certificate", required: true }, { name: "Bank Statements — 3 months", required: true }],
-      tat: { paDays: 5, valuationDays: 3, folDays: 2, totalDays: 29 },
+      fees: {
+        processingPct: 0.25, processingMin: 0, valuation: 3150, preApproval: 0, vatPct: 5,
+        earlySettlement: "1% of outstanding (incl. VAT) or AED 10,000 — whichever lower",
+        partialSettlement: "Free partial up to 20% (variable & fixed)",
+        lifeInsurancePct: 0.0171, lifeInsuranceBasis: "PM", lifeInsuranceNote: "0.0171%/month standard (pilot/air crew 0.0138%); SZHP_Zero 0.350%, SZHP_INT 0.2052%",
+        propertyInsurancePct: 0.12, propertyInsuranceBasis: "PA", propertyInsuranceNote: "0.12% p.a. (variable & fixed); SZHP 0.12%",
+        processingFeeTiers: [
+          { label: "Fixed 2/3yr STL", pct: 0.25 }, { label: "Fixed 2/3yr NSTL", pct: 0.50 },
+          { label: "STL/NSTL AUH", pct: 0 }, { label: "Buyout STL/NSTL AUH", pct: 0 },
+          { label: "LAP/Land/Bldg/Self-Const/Off-Plan NSTL/SE", pct: 0.50 }, { label: "SZHP_Zero / SZHP_INT", pct: 0 },
+        ],
+        feeFinancing: { allowed: true, pct: 4, basis: "Up to 80% of 4% DLD + 2% broker fee" },
+        note: "Valuation AED 3,150 (self construction AED 21,000 incl. VAT; SZHP_Zero AED 6,000; AUH refunded after TD issued)",
+      },
+      affordability: { maxDBR: 50, ccPct: 5, rentalPct: 60, bonusPct: 50, stressRecipe: { margin: 1.79, index: "EIBOR_1M" } },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true }, { name: "Proof of residence — DEWA bill", required: true },
+        { name: "Application form (e-sign at AIP)", required: true }, { name: "Consent form (signed)", required: true },
+        { name: "Salary certificate (within 30 days)", required: true }, { name: "Payslips — 6 months (if pay varies)", required: false },
+        { name: "Bank statements — 6 months (e-statements)", required: true }, { name: "Latest CC / liability statements", required: true },
+        { name: "HR email ID", required: true }, { name: "2 liability letters (attested to bank & ENBD)", required: false },
+        { name: "Title deed copy", required: false },
+      ],
+      tat: { paDays: 3, valuationDays: 3, folDays: 3, totalDays: 17, paValidityDays: 60, folValidityDays: 30, valuationValidityDays: 60, accountOpeningDays: 1, disbursalDays: 5, transferDays: 2 },
     })],
   },
   {
@@ -1516,18 +1581,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [
       { productDefId: "pd-dib-res", verdict: "ELIGIBLE" },
       { productDefId: "pd-cbd-res", verdict: "ELIGIBLE" },
-      { productDefId: "pd-enbd-res", verdict: "ELIGIBLE" },
+      { productDefId: "pd-enbd-sal", verdict: "ELIGIBLE" },
     ],
     note: "Clean profile — should pass residential products.",
   },
   {
-    id: "golden-2", name: "Self-employed — ENBD refers (product gate)",
+    id: "golden-2", name: "Self-employed — ENBD & DIB both accept (Aug 2026 sheet)",
     client: { ...baseProfile, name: "Golden · Self-employed", employment: "SELF_EMPLOYED" as const, age: 38, monthlyIncome: 55000, monthlyLiabilities: 5000, propertyValue: 2000000, loanRequested: 1400000 },
     expected: [
-      { productDefId: "pd-enbd-res", verdict: "NOT_ELIGIBLE" },
+      { productDefId: "pd-enbd-sal", verdict: "ELIGIBLE" },
       { productDefId: "pd-dib-res", verdict: "ELIGIBLE" },
     ],
-    note: "ENBD residential is salaried-only → gate blocks SE.",
+    note: "ENBD salaried product accepts SE per Aug 2026 sheet (5yr SE 5.09%, off-plan/self-const SE rows).",
   },
   {
     id: "golden-3", name: "Over-leveraged — DBR ceiling bites",
@@ -1624,6 +1689,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     client: { ...baseProfile, name: "Golden · EI leasehold", customerType: "NATIONAL" as const, employment: "SALARIED" as const, salaryTransfer: true, propertyStatus: "READY" as const, propertyTenure: "LEASEHOLD" as const, preferredFixedYears: 3, age: 32, monthlyIncome: 30000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1600000 },
     expected: [{ productDefId: "pd-ei-sal", verdict: "NOT_ELIGIBLE" }],
     note: "Emirates Islamic cannot finance leasehold property — hard block.",
+  },
+  {
+    id: "golden-19", name: "ENBD — Iranian national is referred (non-client, STL mandatory)",
+    client: { ...baseProfile, name: "Golden · ENBD Iranian", nationality: "Iran", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 3, age: 35, monthlyIncome: 40000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1400000 },
+    expected: [{ productDefId: "pd-enbd-sal", verdict: "REFER" }],
+    note: "ENBD gate g7: Iranians (non-ENBD banking clients) — soft block → REFER for senior review.",
+  },
+  {
+    id: "golden-20", name: "ENBD — Land finance matches property-purpose row",
+    client: { ...baseProfile, name: "Golden · ENBD land", customerType: "EXPAT" as const, salaryTransfer: true, propertyStatus: "LAND" as const, preferredFixedYears: 3, age: 38, monthlyIncome: 45000, monthlyLiabilities: 3000, propertyValue: 2500000, loanRequested: 1500000 },
+    expected: [{ productDefId: "pd-enbd-sal", verdict: "ELIGIBLE" }],
+    note: "Land finance 3yr row (5.49%, sal & SE) matches on propertyStatus=LAND; 80% expat LTV covers 60% request.",
   },
 ];
 

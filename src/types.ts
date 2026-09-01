@@ -216,6 +216,7 @@ export interface ProductVersion {
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
     dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */
     stressAddPct?: number;           /* formula-based stress: stress = indicative rate + X (e.g. Emirates Islamic "+2%") */
+    stressRecipe?: { margin: number; index: RateIndex };  /* margin-based stress: stress = margin + index (e.g. ENBD "1.79% + 1M EIBOR") */
   };
   documents: { name: string; required: boolean; note?: string }[];
   tat: {
@@ -289,7 +290,9 @@ export interface ClientProfile {
 
   /* Property group */
   propertyUse?: "OWNER_OCCUPIED" | "INVESTMENT";
-  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND";
+  /* ENBD-style property purposes: LAP (loan-against-property), BLDG (building finance),
+     SELF_CONST (self construction), RENTAL (rental-income property) join the standard set. */
+  propertyStatus?: "READY" | "OFF_PLAN" | "UNDER_CONSTRUCTION" | "LAND" | "LAP" | "BLDG" | "SELF_CONST" | "RENTAL";
   valuation?: number;
 
   /* Transaction / Finance group */

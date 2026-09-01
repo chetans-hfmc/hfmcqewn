@@ -530,6 +530,15 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
       else if (pv.affordability.stressAddPct != null && ratePct != null)
         /* Formula-based stress (e.g. Emirates Islamic "current rate plus 2%"). */
         push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Stress rate = indicative rate + ${pv.affordability.stressAddPct}% = ${(ratePct + pv.affordability.stressAddPct).toFixed(2)}% for DSR`, resultingValue: `${(ratePct + pv.affordability.stressAddPct).toFixed(2)}%`, source: pd.bankId });
+      else if (pv.affordability.stressRecipe != null) {
+        /* Margin-based stress (e.g. ENBD "post-fixed margin 1.79% + 1M EIBOR"). */
+        const sr = pv.affordability.stressRecipe;
+        const idxVal = ctx.eibor ? (sr.index === "EIBOR_1M" ? ctx.eibor.m1 : sr.index === "EIBOR_3M" ? ctx.eibor.m3 : sr.index === "EIBOR_6M" ? ctx.eibor.m6 : ctx.eibor.y1) : null;
+        if (idxVal != null)
+          push({ code: "STRESS", severity: "INFO", category: "affordability", message: `Stress rate = ${sr.margin}% + ${sr.index.replace("_", " ")} (${idxVal}%) = ${(sr.margin + idxVal).toFixed(2)}% for DSR`, resultingValue: `${(sr.margin + idxVal).toFixed(2)}%`, source: pd.bankId });
+        else
+          push({ code: "STRESS-UNKNOWN", severity: "WARN", category: "affordability", message: `Stress recipe ${sr.margin}% + ${sr.index} cannot be confirmed — EIBOR fix unavailable`, source: pd.bankId });
+      }
       for (const p of promos) {
         push({ code: "PROMO", severity: "INFO", category: "pricing", message: `Live promo: ${p.name}`, explanation: p.summary, source: "PROMO" });
       }

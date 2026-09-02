@@ -26,6 +26,7 @@ const STRUCTURES: { v: RateStructure; l: string; d: string }[] = [
 const INDICES: { v: RateIndex; l: string }[] = [
   { v: "EIBOR_1M", l: "1-month EIBOR" }, { v: "EIBOR_3M", l: "3-month EIBOR" },
   { v: "EIBOR_6M", l: "6-month EIBOR" }, { v: "EIBOR_1Y", l: "1-year EIBOR" },
+  { v: "SCBLR", l: "SCBLR (SCB internal)" },
 ];
 const LOAN_TYPES = [{ v: "ISLAMIC", l: "Islamic" }, { v: "CONVENTIONAL", l: "Conventional" }, { v: "BOTH", l: "Both" }];
 const CLASSES = [{ v: "SALARIED", l: "Salaried" }, { v: "SELF_EMPLOYED", l: "Self Employed" }];
@@ -409,6 +410,9 @@ export default function BankRulesView() {
   const [tab, setTab] = useState("grid");
   const [showHelp, setShowHelp] = useState(true);
   const [draftPv, setDraftPv] = useState<ProductVersion | null>(null);
+  /* Read-only by default: an admin must click "Edit" before any field unlocks, so an
+     accidental click on a dropdown while browsing can never silently start a change. */
+  const [editMode, setEditMode] = useState(false);
   const [delDef, setDelDef] = useState<ProductDef | null>(null);
   const [delAxis, setDelAxis] = useState<AxisDef | null>(null);
   const [newProd, setNewProd] = useState(false);
@@ -433,7 +437,26 @@ export default function BankRulesView() {
   const prod = state.productDefs.find((p) => p.id === selDef) ?? defs[0] ?? null;
   const activeVer = prod ? prod.versions.find((v) => v.status === "ACTIVE") ?? [...prod.versions].sort((a, b) => b.version - a.version)[0] : null;
   const ver = draftPv ?? (prod ? (selVer != null ? prod.versions.find((v) => v.version === selVer) ?? activeVer : activeVer) : null);
-  const editable = isAdmin && ver != null;
+  const editable = isAdmin && ver != null && editMode;
+
+  /* Dirty detection: the Save button should only ever appear once a *real* change has
+     been made. Compare the draft against the version it was forked from, ignoring the
+     bookkeeping fields (version number, status, effective date, created time) that
+     ensureDraft() legitimately bumps when forking an ACTIVE/RETIRED version. */
+  const stripMeta = (p: ProductVersion) => {
+    const { version: _v, status: _s, effectiveFrom: _e, createdAt: _c, ...rest } = p;
+    return rest;
+  };
+  const baselineVer = prod
+    ? (draftPv
+        ? (prod.versions.find((v) => v.version === draftPv.version) ??
+           prod.versions.find((v) => v.version === draftPv.version - 1) ?? activeVer)
+        : (selVer != null ? prod.versions.find((v) => v.version === selVer) ?? activeVer : activeVer))
+    : null;
+  const isDirty = useMemo(() => {
+    if (!draftPv || !baselineVer) return false;
+    return JSON.stringify(stripMeta(draftPv)) !== JSON.stringify(stripMeta(baselineVer));
+  }, [draftPv, baselineVer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* start / continue editing the current version as a draft */
   const ensureDraft = (): ProductVersion | null => {
@@ -630,12 +653,28 @@ export default function BankRulesView() {
                   </div>
                 </div>
                 {ver.source && <p className="text-[10.5px] text-ink-soft mt-2 num">source: {ver.source}{ver.effectiveFrom ? ` · effective ${fmtDate(ver.effectiveFrom)}` : ""}</p>}
-                {draftPv && (
-                  <div className="flex items-center justify-between mt-3 bg-amber-100/50 border border-amber-500/40 rounded-md px-3.5 py-2.5 anim-tick">
-                    <p className="text-[11.5px] text-amber-700 font-medium flex items-center gap-2"><Ic n="edit" size={13} /> You're editing a private draft — nothing is live until you Save then Activate.</p>
+
+                {/* Edit gate + change-aware save bar.
+                    Read-only until "Edit" is pressed, so browsing can't accidentally change
+                    anything; the Save button only appears once a real change exists. */}
+                {isAdmin && !editMode && (
+                  <div className="flex items-center justify-between mt-3 bg-paper/60 border border-mist rounded-md px-3.5 py-2.5 anim-tick">
+                    <p className="text-[11.5px] text-ink-soft flex items-center gap-2"><Ic n="lock" size={13} /> Read-only — press Edit to unlock. Nothing you click here will change the rule.</p>
+                    <Btn size="sm" variant="dark" onClick={() => setEditMode(true)}><Ic n="edit" size={12} /> Edit</Btn>
+                  </div>
+                )}
+                {isAdmin && editMode && !isDirty && (
+                  <div className="flex items-center justify-between mt-3 bg-steel-100/50 border border-steel-500/40 rounded-md px-3.5 py-2.5 anim-tick">
+                    <p className="text-[11.5px] text-steel-700 font-medium flex items-center gap-2"><Ic n="edit" size={13} /> Editing — no changes yet. The Save button appears once you change something.</p>
+                    <Btn size="sm" variant="ghost" onClick={() => { discardDraft(); setEditMode(false); }}>Done</Btn>
+                  </div>
+                )}
+                {isAdmin && editMode && isDirty && (
+                  <div className="flex items-center justify-between mt-3 bg-amber-100/60 border border-amber-500/50 rounded-md px-3.5 py-2.5 anim-tick">
+                    <p className="text-[11.5px] text-amber-700 font-semibold flex items-center gap-2"><Ic n="alert" size={13} /> Unsaved changes — nothing is live until you Save draft, then Activate.</p>
                     <div className="flex gap-2">
-                      <Btn size="sm" variant="ghost" onClick={discardDraft}>Discard</Btn>
-                      <Btn size="sm" variant="dark" onClick={saveDraft}><Ic n="check" size={12} /> Save draft</Btn>
+                      <Btn size="sm" variant="ghost" onClick={() => { discardDraft(); }}>Discard</Btn>
+                      <Btn size="sm" variant="dark" onClick={() => { saveDraft(); setEditMode(false); }}><Ic n="check" size={12} /> Save draft</Btn>
                     </div>
                   </div>
                 )}

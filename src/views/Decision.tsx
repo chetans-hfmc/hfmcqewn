@@ -139,6 +139,8 @@ export default function DecisionView() {
                   <Field label="Business age (LOB)"><NumInput value={profile.lobYears ?? 0} onChange={(n) => setProfile({ ...profile, lobYears: n || undefined })} suffix="yrs" /></Field>
                   <Field label="Service (LOS)"><NumInput value={profile.losMonths ?? 0} onChange={(n) => setProfile({ ...profile, losMonths: n || undefined })} suffix="mo" /></Field>
                   <Field label="Low doc?"><Select value={profile.lowDoc ? "1" : "0"} onChange={(v) => setProfile({ ...profile, lowDoc: v === "1" || undefined })} options={[{ v: "0", l: "Full doc" }, { v: "1", l: "Low doc" }]} /></Field>
+                  <Field label="Salary transfer"><Select value={profile.salaryTransfer == null ? "" : profile.salaryTransfer ? "STL" : "NSTL"} onChange={(v) => setProfile({ ...profile, salaryTransfer: v === "" ? undefined : v === "STL" })} options={[{ v: "", l: "Not decided" }, { v: "STL", l: "STL — transfers to bank" }, { v: "NSTL", l: "NSTL — no transfer" }]} /></Field>
+                  <Field label="Home insurance (RAK)"><Select value={profile.hio == null ? "" : profile.hio ? "HIO" : "NON_HIO"} onChange={(v) => setProfile({ ...profile, hio: v === "" ? undefined : v === "HIO" })} options={[{ v: "", l: "Not applicable" }, { v: "NON_HIO", l: "Non-HIO" }, { v: "HIO", l: "HIO" }]} /></Field>
                 </div>
               </div>
             )}
@@ -147,8 +149,9 @@ export default function DecisionView() {
             <p className="text-[10px] uppercase tracking-[0.12em] font-display font-bold text-ink-soft mt-4 mb-2">Property & transaction</p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Use"><Select value={profile.propertyUse ?? "OWNER_OCCUPIED"} onChange={(v) => setProfile({ ...profile, propertyUse: v as ClientProfile["propertyUse"] })} options={[{ v: "OWNER_OCCUPIED", l: "Owner-occupied" }, { v: "INVESTMENT", l: "Investment" }]} /></Field>
-              <Field label="Status"><Select value={profile.propertyStatus ?? "READY"} onChange={(v) => setProfile({ ...profile, propertyStatus: v as ClientProfile["propertyStatus"] })} options={[{ v: "READY", l: "Ready" }, { v: "OFF_PLAN", l: "Off plan" }, { v: "UNDER_CONSTRUCTION", l: "Under construction" }, { v: "LAND", l: "Land" }]} /></Field>
+              <Field label="Status"><Select value={profile.propertyStatus ?? "READY"} onChange={(v) => setProfile({ ...profile, propertyStatus: v as ClientProfile["propertyStatus"] })} options={[{ v: "READY", l: "Ready" }, { v: "OFF_PLAN", l: "Off plan" }, { v: "UNDER_CONSTRUCTION", l: "Under construction" }, { v: "LAND", l: "Land" }, { v: "LAP", l: "Loan against property" }, { v: "BLDG", l: "Building finance" }, { v: "SELF_CONST", l: "Self construction" }, { v: "RENTAL", l: "Rental income" }]} /></Field>
               <Field label="Tenure"><Select value={profile.propertyTenure ?? "FREEHOLD"} onChange={(v) => setProfile({ ...profile, propertyTenure: v as ClientProfile["propertyTenure"] })} options={[{ v: "FREEHOLD", l: "Freehold" }, { v: "LEASEHOLD", l: "Leasehold" }]} /></Field>
+              <Field label="Bank relationship"><Select value={profile.relationship ?? ""} onChange={(v) => setProfile({ ...profile, relationship: (v || undefined) as ClientProfile["relationship"] })} options={[{ v: "", l: "Not specified" }, { v: "ETB", l: "Existing to bank (ETB)" }, { v: "NTB", l: "New to bank (NTB)" }]} /></Field>
               <Field label="Valuation"><NumInput value={profile.valuation ?? 0} onChange={(n) => setProfile({ ...profile, valuation: n || undefined })} suffix="AED" /></Field>
               <Field label="Transaction"><Select value={profile.txType ?? "PURCHASE"} onChange={(v) => setProfile({ ...profile, txType: v as ClientProfile["txType"] })} options={[{ v: "PURCHASE", l: "Purchase" }, { v: "BUYOUT", l: "Buyout" }, { v: "BUYOUT_EQUITY", l: "Buyout + equity" }, { v: "EQUITY", l: "Equity release" }]} /></Field>
             </div>
@@ -331,7 +334,7 @@ function FragmentRow({ d, bankShort, open, onToggle }: { d: ProductDecision; ban
             <div className="grid lg:grid-cols-3 gap-4 anim-tick">
               {/* why / why not */}
               <div className="bg-card border border-mist rounded-lg p-3.5">
-                <p className="font-display font-bold text-[12.5px] mb-2 flex items-center gap-1.5"><Ic n={m.icon} size={14} /> {d.verdict === "NOT_ELIGIBLE" || d.verdict === "REFER" ? "Why not eligible" : "Why eligible"}</p>
+                <p className="font-display font-bold text-[12.5px] mb-2 flex items-center gap-1.5"><Ic n={m.icon} size={14} /> {d.verdict === "NOT_ELIGIBLE" || d.verdict === "REFER" ? "Why not eligible" : d.verdict === "UNKNOWN" ? "What needs attention" : "Why eligible"}</p>
                 <div className="space-y-2">
                   {(d.headlineFindings.length ? d.headlineFindings : d.findings.slice(0, 3)).map((f, i) => (
                     <div key={i} className="border-l-2 pl-2.5 py-0.5" style={{ borderColor: f.severity === "BLOCK" ? "var(--color-rust-500)" : f.severity === "WARN" ? "var(--color-amber-500)" : "var(--color-pine-500)" }}>

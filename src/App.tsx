@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { Component, useEffect } from "react";
 import type { View } from "./types";
 import { NavProvider, ROLE_LABEL, ROLE_MODULES, StoreProvider, useMe, useNav, useStore } from "./store";
 import { Avatar, Ic, cx, fmtDate, todayISO } from "./ui";

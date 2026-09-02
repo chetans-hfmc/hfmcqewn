@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 28;
+export const SEED_VERSION = 29;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -65,6 +65,8 @@ const AXES: AxisDef[] = [
   { id: "amountBand", name: "Loan amount band", values: [{ v: "LT2M", l: "Below 2M" }, { v: "2TO35M", l: "2M – 3.49M" }, { v: "GE35M", l: "3.5M+" }] },
   { id: "emirate", name: "Emirate", values: [{ v: "ALL", l: "All Emirates" }, { v: "DUBAI", l: "Dubai" }, { v: "ABU_DHABI", l: "Abu Dhabi" }, { v: "AJMAN", l: "Ajman" }] },
   { id: "relationship", name: "Relationship", values: [{ v: "ETB", l: "ETB" }, { v: "NTB", l: "NTB" }] },
+  { id: "hio", name: "Home insurance (RAK)", values: [{ v: "NON_HIO", l: "Non-HIO" }, { v: "HIO", l: "HIO" }] },
+  { id: "docProgram", name: "Doc program", values: [{ v: "STANDARD", l: "Standard / Full doc" }, { v: "LOW_DOC", l: "Low doc (AIP)" }] },
   { id: "ftvBand", name: "FTV / LTV band", values: [{ v: "LE50", l: "≤ 50%" }, { v: "LE60", l: "≤ 60%" }, { v: "LE75", l: "≤ 75%" }, { v: "GT60", l: "> 60%" }, { v: "GT75", l: "> 75%" }] },
   { id: "tenureType", name: "Property tenure", values: [{ v: "FREEHOLD", l: "Freehold" }, { v: "LEASEHOLD", l: "Leasehold" }] },
   { id: "channel", name: "Channel", values: [{ v: "DIRECT", l: "Direct" }, { v: "HUSPY", l: "Huspy" }] },
@@ -1565,6 +1567,307 @@ const PRODUCT_DEFS: ProductDef[] = [
       tat: { paDays: 3, valuationDays: 4, folDays: 6, totalDays: 25, paValidityDays: 60 },
     })],
   },
+
+  /* ---------------- RAKBANK · Salaried (W.E.F 16 Jul 2026 — Elite/Non-Elite × HIO) ---------------- */
+  {
+    id: "pd-rak-sal", bankId: "b-rak", name: "Home Loan — Salaried", loanType: "BOTH",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "EQUITY"],
+    axes: ["segment", "stl", "tenure", "hio", "docProgram", "transaction"],
+    tags: ["Salaried", "Elite/Non-Elite", "HIO"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: "2026-07-16", source: "RAKBANK salaried pricing W.E.F 16 Jul 2026",
+      eligibility: {
+        minSalary: 15000, minLoan: 200000, maxLoan: 18000000,
+        maxLoanIncomeMultiple: { NATIONAL: 8, EXPAT: 7 },
+        maxAgeSalaried: 70,
+        ltvMatrix: { NATIONAL: 80, EXPAT: 75, NON_RESIDENT: 50 },
+        investmentLtv: 60, secondPropertyLtv: 60,
+        incomeRecognition: { rentalPct: 82, bonusPct: 50, commissionPct: 70 },
+        gates: [
+          { id: "r1", kind: "FLAG", label: "AECB bands: bureau 651+ → self-use up to 70%; 541–650 → 80% (SE 60% for 1–2 yrs)", hardStop: false },
+          { id: "r2", kind: "FLAG", label: "Salary < AED 30k → LTV 75% (80% only at ≥30k, 1st property self-use)", hardStop: false },
+          { id: "r3", kind: "FLAG", label: "Non-resident: 50% LTV, Islamic financing only", when: "NON_RESIDENT", hardStop: false },
+          { id: "r4", kind: "FLAG", label: "Residual financing NOT permitted on mortgage loans", hardStop: false },
+          { id: "r5", kind: "FLAG", label: "Down-payment source: statement credit balance > DP (excl. PL/CC disbursed in last 6 months; no pipeline cases <30 days)", hardStop: false },
+          { id: "r6", kind: "FLAG", label: "Airline: salary incl. variable ≥15k; 30% of basic as accommodation allowance; 70% avg variable (3m); secondary income ≤ primary", hardStop: false },
+          { id: "r7", kind: "NATIONALITY_BLOCK", label: "Iranian — non-banking clients only", values: ["Iran"], hardStop: false },
+          { id: "r8", kind: "FLAG", label: "AML-restricted/sanctioned nationalities: approval basis account opening upfront; compliance clearance (World Check)", hardStop: false },
+          { id: "r9", kind: "FLAG", label: "Abu Dhabi properties: RAK has resumed approvals", hardStop: false },
+        ],
+        notes: [
+          "Affordability ratio (AR) ≤ 100%; stressed DBR ≤ 50% (fixed rate + 2%).",
+          "All active AECB liabilities (incl. unutilized cards/ODs) count for DBR.",
+          "Buyout campaign: all buyouts (STL/NSTL/Elite/Non-Elite) 3.89% fixed 3yr; valuation refund AED 3,000 on disbursement.",
+          "Equity: +0.5% over normal pricing; proof above AED 250k or 20% of value (whichever lower); AED 500k-to-account stopped — direct contractor payments only; bundle (CC + savings) required.",
+          "Co-applicants: blood relatives only (father, mother, children, spouse, siblings).",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* 3-year W.E.F 16 Jul 2026 */
+        { id: "k-e-s-n", key: { segment: "ELITE", stl: "STL", tenure: "3", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Elite STL non-HIO" },
+        { id: "k-e-s-h", key: { segment: "ELITE", stl: "STL", tenure: "3", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Elite STL HIO" },
+        { id: "k-e-n-n", key: { segment: "ELITE", stl: "NSTL", tenure: "3", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.09, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Elite NSTL non-HIO" },
+        { id: "k-e-n-h", key: { segment: "ELITE", stl: "NSTL", tenure: "3", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.09, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Elite NSTL HIO" },
+        { id: "k-s-s-n", key: { segment: "STANDARD", stl: "STL", tenure: "3", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Non-elite STL non-HIO" },
+        { id: "k-s-s-h", key: { segment: "STANDARD", stl: "STL", tenure: "3", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Non-elite STL HIO" },
+        { id: "k-s-n-n", key: { segment: "STANDARD", stl: "NSTL", tenure: "3", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.19, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Non-elite NSTL non-HIO" },
+        { id: "k-s-n-h", key: { segment: "STANDARD", stl: "NSTL", tenure: "3", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.19, fixedMonths: 36, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Non-elite NSTL HIO" },
+        /* 2-year non-HIO */
+        { id: "k2-e-s", key: { segment: "ELITE", stl: "STL", tenure: "2", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.94, fixedMonths: 24, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Elite STL (+CC 3.89%)" },
+        { id: "k2-e-n", key: { segment: "ELITE", stl: "NSTL", tenure: "2", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 24, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Elite NSTL" },
+        { id: "k2-s-s", key: { segment: "STANDARD", stl: "STL", tenure: "2", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 24, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Non-elite STL (+CC 3.99%)" },
+        { id: "k2-s-n", key: { segment: "STANDARD", stl: "NSTL", tenure: "2", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.10, fixedMonths: 24, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Non-elite NSTL" },
+        { id: "k2-ld", key: { docProgram: "LOW_DOC", tenure: "2", hio: "NON_HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.74, fixedMonths: 24, followOn: { margin: 1.99, index: "EIBOR_3M" }, note: "Alternate Income Program (low doc)" },
+        /* 2-year HIO */
+        { id: "k2h-e-s", key: { segment: "ELITE", stl: "STL", tenure: "2", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 24, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Elite STL HIO (+CC 4.39%)" },
+        { id: "k2h-e-n", key: { segment: "ELITE", stl: "NSTL", tenure: "2", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 24, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Elite NSTL HIO" },
+        { id: "k2h-s-s", key: { segment: "STANDARD", stl: "STL", tenure: "2", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.60, fixedMonths: 24, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Non-elite STL HIO (+CC 4.49%)" },
+        { id: "k2h-s-n", key: { segment: "STANDARD", stl: "NSTL", tenure: "2", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 4.60, fixedMonths: 24, followOn: { margin: 1.94, index: "EIBOR_3M" }, note: "Non-elite NSTL HIO" },
+        { id: "k2h-ld", key: { docProgram: "LOW_DOC", tenure: "2", hio: "HIO" }, structure: "FIXED_THEN_VAR", fixedRate: 5.24, fixedMonths: 24, followOn: { margin: 2.24, index: "EIBOR_3M" }, note: "AIP low doc HIO" },
+        /* Day-1 variable */
+        { id: "kv-n", key: { hio: "NON_HIO" }, structure: "VAR_DAY1", margin: 0.99, index: "EIBOR_3M", floor: 2.49, note: "Day-1 non-HIO (RAKelite & specific segments)" },
+        { id: "kv-h", key: { hio: "HIO" }, structure: "VAR_DAY1", margin: 1.04, index: "EIBOR_3M", floor: 2.49, note: "Day-1 HIO (non-RAKelite 1.54%)" },
+        { id: "kv-ld-n", key: { docProgram: "LOW_DOC", hio: "NON_HIO" }, structure: "VAR_DAY1", margin: 1.84, index: "EIBOR_3M", floor: 3.49, note: "AIP low doc day-1 non-HIO" },
+        { id: "kv-ld-h", key: { docProgram: "LOW_DOC", hio: "HIO" }, structure: "VAR_DAY1", margin: 1.79, index: "EIBOR_3M", floor: 3.49, note: "AIP low doc day-1 HIO" },
+        /* Buyout campaign */
+        { id: "kb3", key: { transaction: "BUYOUT", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M" }, note: "Buyout campaign — all salaried buyouts" },
+      ]},
+      fees: {
+        processingPct: 0, valuation: 2625, preApproval: 0,
+        processingFeeTiers: [
+          { label: "All salaried cases", pct: 0 },
+          { label: "Non-resident & AIP cases", pct: 1 },
+          { label: "Equity-release component", pct: 0.5 },
+        ],
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "Up to 20% every year after fixed period (Elite: 25%)",
+        lifeInsurancePct: 0.0159, lifeInsuranceBasis: "PM", lifeInsuranceNote: "0.0159%/month reducing balance (joint = ×2); 0.19% p.a. per life",
+        propertyInsurancePct: 0.0531, propertyInsuranceBasis: "PA", propertyInsuranceNote: "Conventional; free Property Takaful for Saadiq (Islamic)",
+        rateAdjustments: [
+          { id: "rak-eq", label: "Equity release (+0.5% over normal pricing)", bps: 50, txTypes: ["EQUITY"] },
+        ],
+        note: "Processing fee collected prior to disbursal; IPA 0% across all sourcing",
+      },
+      affordability: { maxDBR: 50, ccPct: 5, stressAddPct: 2, rentalPct: 82, bonusPct: 50, commissionPct: 70 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true }, { name: "Proof of residence — DEWA / tenancy", required: true },
+        { name: "Application form — physical (no e-signature)", required: true },
+        { name: "Salary certificate — govt 30 days / others 60 days", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months (e-statements)", required: true },
+        { name: "Latest CC / liability statements", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 2, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
+
+  /* ---------------- SCB · Standard Chartered — Standard pricing (effective 6 Apr 2026) ---------------- */
+  {
+    id: "pd-scb-std", bankId: "b-scb", name: "Home Finance — Standard", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "BUYOUT_EQUITY", "TOPUP", "EQUITY"],
+    axes: ["tenure", "transaction"],
+    tags: ["Salaried", "MOA available"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: "2026-04-06", source: "SCB standard mortgage pricing — effective 6 Apr 2026",
+      eligibility: {
+        minSalary: 10000, minLoan: 300000, maxLoan: 15000000,
+        maxAgeSalaried: 65, maxAgeSelfEmp: 70,
+        minLosMonths: 6,
+        ltvMatrix: { NATIONAL: 78, EXPAT: 75 },
+        incomeRecognition: { rentalPct: 83, bonusPct: 70, commissionPct: 50 },
+        gates: [
+          { id: "c1", kind: "NATIONALITY_ALLOW", label: "Only Indian, GCC & UAE nationals financed", values: ["India", "United Arab Emirates", "UAE", "Emirati", "Saudi", "Kuwait", "Bahrain", "Oman", "Qatar"], hardStop: true },
+          { id: "c2", kind: "FLAG", label: "Joint applicants: AED 10k each; 12 salary credits witnessed; eligibility on last 6-month average", hardStop: false },
+          { id: "c3", kind: "FLAG", label: "2 years continuous UAE residence visa (6 months confirmed in present employment + previous experience letter)", hardStop: false },
+          { id: "c4", kind: "FLAG", label: "Buyout + equity release: LTV up to 80% (first property only)", hardStop: false },
+          { id: "c5", kind: "FLAG", label: "Age at maturity cannot exceed 75 years; life insurance mandatory above standard age", hardStop: false },
+          { id: "c6", kind: "FLAG", label: "2nd mortgage (non-AUM): +0.05% on base pricing", hardStop: false },
+          { id: "c7", kind: "FLAG", label: "Handover & resale priced differently; processing fee waived for handover", hardStop: false },
+        ],
+        notes: [
+          "LTV 75–78%; STL not required.",
+          "Rates differ for handover vs resale properties.",
+          "MortgageOne available up to 50% offset (≤25% zero annual fee; 25–50% at 0.40%).",
+          "Saadiq booking: +0.05% on base pricing (use MortgageOne/SaadiqOne product).",
+          "Reference rates: EIBOR / SCBLR / SCBMR — SCBLR is SCB's internal cost of funds, repriced on last working day before repricing date.",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "sc1", key: { tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.29, fixedMonths: 12, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "sc2", key: { tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 24, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "sc3", key: { tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "sc5", key: { tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.79, fixedMonths: 60, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        /* Top-up / equity release */
+        { id: "st1", key: { transaction: "TOPUP", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.54, fixedMonths: 12, followOn: { margin: 1.10, index: "SCBLR" } },
+        { id: "st2", key: { transaction: "TOPUP", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.84, fixedMonths: 24, followOn: { margin: 1.10, index: "SCBLR" } },
+        { id: "st3", key: { transaction: "TOPUP", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.94, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" } },
+        { id: "st5", key: { transaction: "TOPUP", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.04, fixedMonths: 60, followOn: { margin: 1.10, index: "SCBLR" } },
+        { id: "se3", key: { transaction: "EQUITY", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.94, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" }, note: "Top-up/equity pricing" },
+        /* Buyout */
+        { id: "sb1", key: { transaction: "BUYOUT", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 2.12, fixedMonths: 12, followOn: { margin: 1.10, index: "SCBLR" }, note: "Buyout campaign" },
+        { id: "sb3", key: { transaction: "BUYOUT", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 2.59, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" }, note: "Buyout campaign" },
+        /* Day-1 variable */
+        { id: "sv", key: {}, structure: "VAR_DAY1", margin: 0.70, index: "EIBOR_3M", floor: 2.75, note: "Standard day-1 variable" },
+        { id: "svt", key: { transaction: "TOPUP" }, structure: "VAR_DAY1", margin: 0.95, index: "EIBOR_3M", floor: 2.75, note: "Top-up/equity day-1 variable" },
+      ]},
+      fees: {
+        processingPct: 0.25, vatPct: 5, valuation: 3150,
+        preApproval: 3150,
+        txOverrides: [
+          { txType: "BUYOUT", processingPct: 0, note: "Buyout — free" },
+          { txType: "BUYOUT_EQUITY", processingPct: 0.525, note: "0.525% (incl. VAT) on cash-out amount only" },
+        ],
+        feeFinancing: { allowed: true, basis: "Personal loan @9% for 4 years to cover costs" },
+        earlySettlement: "0.525% or AED 10,500 whichever lower — first 5 years, free after (MOA/SOA: 1.05%); buyout 1.05%",
+        partialSettlement: "Free up to 30% of outstanding per calendar year",
+        lifeInsuranceNote: "Optional",
+        propertyInsurancePct: 0.06, propertyInsuranceBasis: "PA",
+        rateAdjustments: [
+          { id: "sc-2nd", label: "2nd property (+0.125%)", bps: 12.5, financeCount: 2 },
+          { id: "sc-big", label: "Loan ≥ AED 18M (+0.25%)", bps: 25, loanGt: 18000000 },
+          { id: "sc-small", label: "Loan < AED 1M (+0.25%)", bps: 25, loanLt: 1000000 },
+          { id: "sc-age", label: "Age above standard offering (+0.25%)", bps: 25, ageGt: 65 },
+        ],
+        note: "Pre-approval fee AED 3,150 (50% discount; adjusted towards processing fee; buyout 1%); valuation refund not offered on standard",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 2.99, index: "EIBOR_3M" }, rentalPct: 83, bonusPct: 70, commissionPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true }, { name: "Proof of residence — best-effort basis", required: false },
+        { name: "Application form (original signatures upon FOL)", required: true },
+        { name: "Salary certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months (e-statements)", required: true },
+        { name: "Title deed & Ejari (rental income)", required: false },
+      ],
+      tat: { paDays: 3, paValidityDays: 45, valuationDays: 3, valuationValidityDays: 90, accountOpeningDays: 1, folDays: 3, folValidityDays: 30, disbursalDays: 3, transferDays: 2, totalDays: 17 },
+    })],
+  },
+
+  /* ---------------- SCB · MortgageOne / SaadiqOne ---------------- */
+  {
+    id: "pd-scb-moa", bankId: "b-scb", name: "MortgageOne / SaadiqOne", loanType: "BOTH",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "TOPUP", "EQUITY"],
+    axes: ["tenure", "transaction"],
+    tags: ["Offset account", "Saadiq +0.05%"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: "2026-04-06", source: "SCB MOA/SOA pricing — effective 6 Apr 2026",
+      eligibility: {
+        minSalary: 10000, minLoan: 300000, maxLoan: 15000000, maxAgeSalaried: 65, maxAgeSelfEmp: 70,
+        ltvMatrix: { NATIONAL: 78, EXPAT: 75 },
+        gates: [
+          { id: "m1", kind: "NATIONALITY_ALLOW", label: "Only Indian, GCC & UAE nationals financed", values: ["India", "United Arab Emirates", "UAE", "Emirati", "Saudi", "Kuwait", "Bahrain", "Oman", "Qatar"], hardStop: true },
+          { id: "m2", kind: "FLAG", label: "Offset up to 50% (≤25% zero annual fee; 25–50% at 0.40% of balance onboarding + annually)", hardStop: false },
+          { id: "m3", kind: "FLAG", label: "Conversion MOA/SOA ↔ standard: 0.525% of outstanding", hardStop: false },
+        ],
+        notes: ["Saadiq (Islamic) booking: +0.05% added to base pricing.", "Same nationality, age & LTV framework as SCB standard."],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "m1y", key: { tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 4.39, fixedMonths: 12, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "m2y", key: { tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.69, fixedMonths: 24, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "m3y", key: { tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.79, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "m5y", key: { tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.89, fixedMonths: 60, followOn: { margin: 1.10, index: "SCBLR" }, note: "Min rate 2.75%" },
+        { id: "mt3", key: { transaction: "TOPUP", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 5.04, fixedMonths: 36, followOn: { margin: 1.10, index: "SCBLR" }, note: "Top-up/equity" },
+        { id: "mt5", key: { transaction: "TOPUP", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.14, fixedMonths: 60, followOn: { margin: 1.10, index: "SCBLR" }, note: "Top-up/equity" },
+        { id: "mv", key: {}, structure: "VAR_DAY1", margin: 0.80, index: "EIBOR_3M", floor: 2.75, note: "MOA/SOA day-1 variable" },
+        { id: "mvt", key: { transaction: "TOPUP" }, structure: "VAR_DAY1", margin: 1.05, index: "EIBOR_3M", floor: 2.75, note: "MOA/SOA top-up/equity day-1" },
+      ]},
+      fees: {
+        processingPct: 0.25, vatPct: 5, valuation: 3150, preApproval: 3150,
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Buyout — free" }],
+        earlySettlement: "1.05% or AED 10,500 whichever lower — first 5 years, free after",
+        partialSettlement: "Free up to 30% of outstanding per calendar year",
+        lifeInsuranceNote: "Optional", propertyInsurancePct: 0.06, propertyInsuranceBasis: "PA",
+        note: "Offset fee 0.40% applies on balances above 25% of outstanding",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 2.99, index: "EIBOR_3M" }, rentalPct: 83, bonusPct: 70 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true }, { name: "Application form (original signatures upon FOL)", required: true },
+        { name: "Salary certificate (within 30 days)", required: true }, { name: "Bank statements — 6 months", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 45, valuationDays: 3, folDays: 3, folValidityDays: 30, disbursalDays: 3, transferDays: 2, totalDays: 17 },
+    })],
+  },
+
+  /* ---------------- UAB · United Arab Bank — Salaried & SE (revised 31 Jul 2026) ---------------- */
+  {
+    id: "pd-uab-sal", bankId: "b-uab", name: "Home Finance — Salaried & Self-Employed", loanType: "ISLAMIC",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "EQUITY"],
+    axes: ["employment", "stl", "tenure", "docProgram"],
+    tags: ["Islamic", "Low-doc SE"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: "2026-07-31", source: "UAB revised rates — dated 31 Jul 2026",
+      eligibility: {
+        minSalary: 20000, minLoan: 500000, maxLoan: 60000000,
+        maxAgeSalaried: 70, maxAgeSelfEmp: 70,
+        minLosMonths: 6,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        incomeRecognition: { rentalPct: 80, bonusPct: 30, commissionPct: 50 },
+        gates: [
+          { id: "u1", kind: "FLAG", label: "Min salary deviation to AED 15k on exception", hardStop: false },
+          { id: "u2", kind: "FLAG", label: "LOS: local 3 months + confirmation; expat 6 months + confirmation (previous employment if less)", hardStop: false },
+          { id: "u3", kind: "NATIONALITY_BLOCK", label: "Iranian — can be done with deviation", values: ["Iran"], hardStop: false },
+          { id: "u4", kind: "FLAG", label: "Restricted sectors: real estate, audit firms", hardStop: false },
+          { id: "u5", kind: "FLAG", label: "All Emirates except Fujairah & UAQ; no gifted properties; some Ajman properties are RT", hardStop: false },
+          { id: "u6", kind: "FLAG", label: "Indian nationals: PAN card mandatory", hardStop: false },
+          { id: "u7", kind: "FLAG", label: "No payments to POA holder; personal loan availed prior to 2 months", hardStop: false },
+          { id: "u8", kind: "FLAG", label: "HR verification mandatory (company listing not required)", hardStop: false },
+        ],
+        notes: [
+          "Tenor up to age 70 for both salaried and self-employed.",
+          "Bonus: fixed 1-year bonus, 30% of salary.",
+          "Rental 80% — Ejari, rental credit & cheque copies required.",
+          "Variable: 50% average of other income over last 2 years.",
+          "Equity: STL 0.25% / non-STL 0.5% processing; 3rd-party payment for renovation & purchase — proof required.",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* Salaried — revised 31 Jul 2026 */
+        { id: "us1", key: { employment: "SALARIED", stl: "STL", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 12, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "STL 1/2 yr band" },
+        { id: "us2", key: { employment: "SALARIED", stl: "STL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 3.89, fixedMonths: 24, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "STL 1/2 yr band" },
+        { id: "us3", key: { employment: "SALARIED", stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.19, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "us5", key: { employment: "SALARIED", stl: "STL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        { id: "un1", key: { employment: "SALARIED", stl: "NSTL", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 12, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "NSTL 1/2 yr band" },
+        { id: "un2", key: { employment: "SALARIED", stl: "NSTL", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 24, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "NSTL 1/2 yr band" },
+        { id: "un3", key: { employment: "SALARIED", stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.39, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "un5", key: { employment: "SALARIED", stl: "NSTL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        /* SE full documentation */
+        { id: "uf2", key: { employment: "SELF_EMPLOYED", docProgram: "STANDARD", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 4.59, fixedMonths: 24, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "SE full doc 1/2 yr" },
+        { id: "uf3", key: { employment: "SELF_EMPLOYED", docProgram: "STANDARD", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "uf5", key: { employment: "SELF_EMPLOYED", docProgram: "STANDARD", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.79, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        /* SE low documentation */
+        { id: "ul2", key: { employment: "SELF_EMPLOYED", docProgram: "LOW_DOC", tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 5.34, fixedMonths: 24, followOn: { margin: 1.79, index: "EIBOR_3M" }, note: "SE low doc 1/2 yr" },
+        { id: "ul3", key: { employment: "SELF_EMPLOYED", docProgram: "LOW_DOC", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 5.49, fixedMonths: 36, followOn: { margin: 1.89, index: "EIBOR_3M" } },
+        { id: "ul5", key: { employment: "SELF_EMPLOYED", docProgram: "LOW_DOC", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 5.99, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M" } },
+        /* Day-1 variable */
+        { id: "uv-s", key: { stl: "STL" }, structure: "VAR_DAY1", margin: 0.89, index: "EIBOR_3M", floor: 2.75 },
+        { id: "uv-n", key: { stl: "NSTL" }, structure: "VAR_DAY1", margin: 0.99, index: "EIBOR_3M", floor: 2.75 },
+      ]},
+      fees: {
+        processingPct: 0.5, valuation: 2625, preApproval: 2100,
+        txOverrides: [{ txType: "EQUITY", processingPct: 0.5, note: "Non-STL / credit card; STL 0.25%" }],
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "No free partial settlement — 1.05% penalty on every early settlement (incl. 5% VAT)",
+        lifeInsurancePct: 0.18, lifeInsuranceBasis: "PA",
+        propertyInsuranceNote: "Assigned in favour of bank up to loan amount or property value, whichever higher",
+        note: "Pre-approval fee AED 2,100 (incl. VAT) — adjusted in processing fee; buyout pure-buyout only",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 4.25, index: "EIBOR_3M" }, rentalPct: 80, bonusPct: 30, commissionPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true }, { name: "Proof of residence — DEWA / tenancy", required: true },
+        { name: "Application form — client visits branch (no e-signature)", required: true },
+        { name: "Salary certificate (30-day validity)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months", required: true },
+        { name: "PAN card (Indian nationals)", required: false },
+        { name: "Ejari + rental credits + cheque copies (rental income)", required: false },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
 ];
 
 const PROMOS: Promo[] = [
@@ -1979,6 +2282,24 @@ const GOLDEN_CASES: GoldenCase[] = [
     client: { ...baseProfile, name: "Golden · Mashreq Premium", customerType: "EXPAT" as const, segment: "PREMIER", salaryTransfer: true, preferredFixedYears: 2, age: 36, monthlyIncome: 55000, monthlyLiabilities: 3000, propertyValue: 5000000, loanRequested: 3600000 },
     expected: [{ productDefId: "pd-mash-campaign", verdict: "ELIGIBLE" }],
     note: "Premium STL 2yr 3.99% (salary ≥50k & loan ≥3.5M); 80% expat LTV covers 72% request.",
+  },
+  {
+    id: "golden-25", name: "RAK — Elite STL non-HIO 3yr priced at 3.89%",
+    client: { ...baseProfile, name: "Golden · RAK Elite", customerType: "EXPAT" as const, segment: "ELITE", salaryTransfer: true, hio: false, preferredFixedYears: 3, age: 36, monthlyIncome: 40000, monthlyLiabilities: 2500, propertyValue: 2000000, loanRequested: 1400000 },
+    expected: [{ productDefId: "pd-rak-sal", verdict: "ELIGIBLE" }],
+    note: "Elite STL non-HIO 3yr 3.89% (follow-on 1.69% + 3M EIBOR); 75% expat LTV covers 70% request; max loan also capped at 7× income.",
+  },
+  {
+    id: "golden-26", name: "SCB — non-India/GCC/UAE nationality is blocked",
+    client: { ...baseProfile, name: "Golden · SCB Jordanian", nationality: "Jordan", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 3, age: 38, monthlyIncome: 40000, monthlyLiabilities: 2000, propertyValue: 2000000, loanRequested: 1200000 },
+    expected: [{ productDefId: "pd-scb-std", verdict: "NOT_ELIGIBLE" }],
+    note: "NATIONALITY_ALLOW gate — SCB finances only Indian, GCC & UAE nationals.",
+  },
+  {
+    id: "golden-27", name: "UAB — SE low-doc 5yr priced at 5.99%",
+    client: { ...baseProfile, name: "Golden · UAB SE low-doc", customerType: "EXPAT" as const, employment: "SELF_EMPLOYED" as const, lowDoc: true, preferredFixedYears: 5, age: 40, monthlyIncome: 60000, monthlyLiabilities: 3000, propertyValue: 3000000, loanRequested: 2000000 },
+    expected: [{ productDefId: "pd-uab-sal", verdict: "ELIGIBLE" }],
+    note: "SE low-doc 5yr 5.99% row matches via docProgram=LOW_DOC; 80% expat LTV covers ~67% request.",
   },
 ];
 

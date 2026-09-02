@@ -76,6 +76,8 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "propertyStatus": return c.propertyStatus ?? null;
     case "transaction": return c.txType ?? null;
     case "relationship": return c.relationship ?? null;
+    case "hio": return c.hio == null ? null : c.hio ? "HIO" : "NON_HIO";
+    case "docProgram": return c.lowDoc ? "LOW_DOC" : "STANDARD";
     case "ftvBand": {
       /* Bands are matched inclusively in pickCell (a “≤60%” cell also serves a 45% client),
          so we report the client's actual band here for display/scoring. */
@@ -122,6 +124,7 @@ function pickCell(cells: RateCell[], c: ClientProfile): RateCell | null {
 export function cellRate(cell: Pick<RateCell, "structure" | "fixedRate" | "margin" | "index" | "floor">, fix: EiborFix | null): number | null {
   if (cell.structure === "FIXED" || cell.structure === "FIXED_THEN_VAR") return cell.fixedRate ?? null;
   if (cell.margin == null) return null;
+  if (cell.index === "SCBLR") return null; /* SCBLR is SCB's internal benchmark — never published, never invented */
   if (!fix) return null; /* index-based pricing is unconfirmable without a published fix */
   const idx = cell.index === "EIBOR_1M" ? fix.m1 : cell.index === "EIBOR_6M" ? fix.m6 : cell.index === "EIBOR_1Y" ? fix.y1 : fix.m3;
   const raw = cell.margin + idx;
@@ -415,6 +418,15 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
   let maxLoanCap = pv.eligibility.maxLoan ?? Infinity;
   const byNat = pv.eligibility.maxLoanByNationality?.[c.nationality];
   if (byNat != null) maxLoanCap = Math.min(maxLoanCap, byNat);
+  /* RAKBANK-style income multiple: up to N × annual income, capped by the product ceiling. */
+  const mult = pv.eligibility.maxLoanIncomeMultiple?.[c.customerType];
+  if (mult != null) {
+    const byIncome = Math.floor((c.monthlyIncome + c.otherIncome) * 12 * mult);
+    if (byIncome < maxLoanCap) {
+      maxLoanCap = byIncome;
+      push({ code: "MAX-LOAN-MULT", severity: "INFO", category: "financing", message: `Max loan capped at ${mult}× annual income`, resultingValue: fmtMoney(byIncome), source: pd.bankId });
+    }
+  }
   if (maxLoanCap !== Infinity && maxByLtv > maxLoanCap) {
     push({ code: "MAX-LOAN", severity: "WARN", category: "financing", message: `Loan capped at ${fmtMoney(maxLoanCap)} (product ceiling)`, previousValue: fmtMoney(maxByLtv), resultingValue: fmtMoney(maxLoanCap), source: pd.bankId });
   }
@@ -521,8 +533,8 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     if (needsIndex && ratePct == null) {
       /* An index-based cell matched but no EIBOR fix is published — we must not quote. */
       unknown = true;
-      recipe = "pricing unconfirmed — EIBOR fix unavailable";
-      push({ code: "EIBOR-UNKNOWN", severity: "WARN", category: "pricing", message: "Current EIBOR fix unavailable — index-based pricing cannot be confirmed", explanation: "Publish an EIBOR fix, then re-run. The engine never invents an index value." });
+      recipe = cell.index === "SCBLR" ? "pricing unconfirmed — SCBLR (SCB internal benchmark) not published" : "pricing unconfirmed — EIBOR fix unavailable";
+      push({ code: "EIBOR-UNKNOWN", severity: "WARN", category: "pricing", message: cell.index === "SCBLR" ? "SCB's variable rate is keyed to SCBLR — the bank's internal benchmark, which is never published, so the variable rate cannot be confirmed" : "Current EIBOR fix unavailable — index-based pricing cannot be confirmed", explanation: cell.index === "SCBLR" ? "Fixed introductory rates remain confirmable; only the post-intro variable leg is unconfirmed." : "Publish an EIBOR fix, then re-run. The engine never invents an index value." });
     } else {
       push({ code: "RATE", severity: "APPLIED", category: "pricing", message: `Indicative rate ${ratePct != null ? ratePct.toFixed(2) + "%" : "n/a"} — ${recipe}`, resultingValue: ratePct != null ? `${ratePct.toFixed(2)}%` : undefined, source: pd.bankId, explanation: cell.note });
       if (cell.stressRate != null)
@@ -579,6 +591,7 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     if (adj.ltvGt != null) conds.push(ltvPct > adj.ltvGt);
     if (adj.ageGt != null) conds.push(c.age > adj.ageGt);
     if (adj.lowDoc != null) conds.push((c.lowDoc ?? false) === adj.lowDoc);
+    if (adj.financeCount != null) conds.push(c.financeCount === adj.financeCount);
     if (conds.length && conds.every(Boolean)) {
       const before = ratePct;
       const sign = adj.bps >= 0 ? "+" : "−";

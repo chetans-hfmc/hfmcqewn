@@ -26,6 +26,7 @@ const STRUCTURES: { v: RateStructure; l: string; d: string }[] = [
 const INDICES: { v: RateIndex; l: string }[] = [
   { v: "EIBOR_1M", l: "1-month EIBOR" }, { v: "EIBOR_3M", l: "3-month EIBOR" },
   { v: "EIBOR_6M", l: "6-month EIBOR" }, { v: "EIBOR_1Y", l: "1-year EIBOR" },
+  { v: "SCBLR", l: "SCBLR (SCB internal)" },
 ];
 const LOAN_TYPES = [{ v: "ISLAMIC", l: "Islamic" }, { v: "CONVENTIONAL", l: "Conventional" }, { v: "BOTH", l: "Both" }];
 const CLASSES = [{ v: "SALARIED", l: "Salaried" }, { v: "SELF_EMPLOYED", l: "Self Employed" }];

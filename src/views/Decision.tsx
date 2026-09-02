@@ -139,6 +139,8 @@ export default function DecisionView() {
                   <Field label="Business age (LOB)"><NumInput value={profile.lobYears ?? 0} onChange={(n) => setProfile({ ...profile, lobYears: n || undefined })} suffix="yrs" /></Field>
                   <Field label="Service (LOS)"><NumInput value={profile.losMonths ?? 0} onChange={(n) => setProfile({ ...profile, losMonths: n || undefined })} suffix="mo" /></Field>
                   <Field label="Low doc?"><Select value={profile.lowDoc ? "1" : "0"} onChange={(v) => setProfile({ ...profile, lowDoc: v === "1" || undefined })} options={[{ v: "0", l: "Full doc" }, { v: "1", l: "Low doc" }]} /></Field>
+                  <Field label="Salary transfer"><Select value={profile.salaryTransfer == null ? "" : profile.salaryTransfer ? "STL" : "NSTL"} onChange={(v) => setProfile({ ...profile, salaryTransfer: v === "" ? undefined : v === "STL" })} options={[{ v: "", l: "Not decided" }, { v: "STL", l: "STL — transfers to bank" }, { v: "NSTL", l: "NSTL — no transfer" }]} /></Field>
+                  <Field label="Home insurance (RAK)"><Select value={profile.hio == null ? "" : profile.hio ? "HIO" : "NON_HIO"} onChange={(v) => setProfile({ ...profile, hio: v === "" ? undefined : v === "HIO" })} options={[{ v: "", l: "Not applicable" }, { v: "NON_HIO", l: "Non-HIO" }, { v: "HIO", l: "HIO" }]} /></Field>
                 </div>
               </div>
             )}

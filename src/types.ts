@@ -124,7 +124,7 @@ export interface EmailTemplate { id: string; name: string; purpose: string; subj
 
 /* ---------- Bank Rule Engine ---------- */
 export interface AxisDef { id: string; name: string; values: { v: string; l: string }[]; }
-export type RateIndex = "EIBOR_1M" | "EIBOR_3M" | "EIBOR_6M" | "EIBOR_1Y";
+export type RateIndex = "EIBOR_1M" | "EIBOR_3M" | "EIBOR_6M" | "EIBOR_1Y" | "SCBLR";
 export type RateStructure = "FIXED" | "MARGIN_INDEX" | "FIXED_THEN_VAR" | "VAR_DAY1";
 export interface RateCell {
   id: string; key: Record<string, string>; structure: RateStructure;
@@ -152,6 +152,9 @@ export interface ProductVersion {
   effectiveFrom?: string; source?: string; createdAt: string;
   eligibility: {
     minSalary?: number; minLoan?: number; maxLoan?: number;
+    /* RAKBANK-style: max loan as a multiple of annual income, per customer type
+       (e.g. NATIONAL ×8, EXPAT ×7), capped by maxLoan. */
+    maxLoanIncomeMultiple?: Record<string, number>;
     /* Keys tried in order: customerType → residency → STL/NSTL (salary transfer) → employment. */
     minSalaryMatrix?: Record<string, number>;  /* e.g. NATIONAL 8K / EXPAT 15K · or · STL 10K / NSTL 15K */
     maxAgeSalaried?: number; maxAgeSelfEmp?: number; maxLoanByNationality?: Record<string, number>;
@@ -211,9 +214,9 @@ export interface ProductVersion {
     employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
     /* Generic conditional rate adjustments — positive bps = surcharge, negative = discount.
        All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
-    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number; ageGt?: number; lowDoc?: boolean }[];
+    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number; ageGt?: number; lowDoc?: boolean; financeCount?: number }[];
   };
-  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
+  affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number; commissionPct?: number;
     dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */
     stressAddPct?: number;           /* formula-based stress: stress = indicative rate + X (e.g. Emirates Islamic "+2%") */
     stressRecipe?: { margin: number; index: RateIndex };  /* margin-based stress: stress = margin + index (e.g. ENBD "1.79% + 1M EIBOR") */
@@ -272,6 +275,7 @@ export interface ClientProfile {
   propertyValue: number; loanRequested: number; financeCount: 1 | 2;
   propertyType: "RESIDENTIAL" | "COMMERCIAL"; emirate: string; sector: string; yearsEmployed: number;
   propertyTenure?: "FREEHOLD" | "LEASEHOLD";
+  hio?: boolean;                       /* RAKBANK: home-insurance-owned pricing split (HIO vs non-HIO margins) */
   propertiesOwned?: number; developer?: string;
   segment?: string;                  /* bank segment: PRIV / ASPIRE / HOMESAVER / PREMIER… */
   employer?: string;                 /* drives employer-based rate discounts */

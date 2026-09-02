@@ -332,7 +332,7 @@ function FragmentRow({ d, bankShort, open, onToggle }: { d: ProductDecision; ban
             <div className="grid lg:grid-cols-3 gap-4 anim-tick">
               {/* why / why not */}
               <div className="bg-card border border-mist rounded-lg p-3.5">
-                <p className="font-display font-bold text-[12.5px] mb-2 flex items-center gap-1.5"><Ic n={m.icon} size={14} /> {d.verdict === "NOT_ELIGIBLE" || d.verdict === "REFER" ? "Why not eligible" : "Why eligible"}</p>
+                <p className="font-display font-bold text-[12.5px] mb-2 flex items-center gap-1.5"><Ic n={m.icon} size={14} /> {d.verdict === "NOT_ELIGIBLE" || d.verdict === "REFER" ? "Why not eligible" : d.verdict === "UNKNOWN" ? "What needs attention" : "Why eligible"}</p>
                 <div className="space-y-2">
                   {(d.headlineFindings.length ? d.headlineFindings : d.findings.slice(0, 3)).map((f, i) => (
                     <div key={i} className="border-l-2 pl-2.5 py-0.5" style={{ borderColor: f.severity === "BLOCK" ? "var(--color-rust-500)" : f.severity === "WARN" ? "var(--color-amber-500)" : "var(--color-pine-500)" }}>

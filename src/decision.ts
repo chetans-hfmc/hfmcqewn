@@ -643,8 +643,24 @@ function finish(
 }
 
 /* ---------- comparison + ranking ---------- */
+/* Each product is evaluated in isolation: a malformed rule set must never
+   crash the whole comparison grid. A thrown error degrades to an UNKNOWN
+   verdict for that one product, and the failure is surfaced as a finding. */
+function errorDecision(pd: ProductDef, e: unknown): ProductDecision {
+  const msg = e instanceof Error ? e.message : String(e);
+  return {
+    productDefId: pd.id, bankId: pd.bankId, productName: pd.name, productVersion: 0,
+    verdict: "UNKNOWN", eligibleAmount: 0, ltvPct: 0, dbrPct: 0, tenureMonths: 0,
+    ratePct: null, rateRecipe: "evaluation failed", fees: 0, tatDays: null,
+    headlineFindings: [{ code: "EVAL-ERROR", severity: "WARN", category: "eligibility", message: `Could not evaluate this product — ${msg}`, explanation: "Fix the product's rules in the Bank Rule Engine, then re-run." }],
+    findings: [], firedRules: [], conditions: [], remediations: [], score: 0,
+  };
+}
 export function evaluateAll(productDefs: ProductDef[], c: ClientProfile, ctx: EvalCtx): ProductDecision[] {
-  return productDefs.map((pd) => evaluateProduct(pd, c, ctx));
+  return productDefs.map((pd) => {
+    try { return evaluateProduct(pd, c, ctx); }
+    catch (e) { console.error(`evaluateProduct failed for ${pd.id}:`, e); return errorDecision(pd, e); }
+  });
 }
 export function rankDecisions(decisions: ProductDecision[], w: WeightingProfile["weights"]): ProductDecision[] {
   const eligible = decisions.filter((d) => d.eligibleAmount > 0);

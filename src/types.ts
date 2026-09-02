@@ -211,7 +211,7 @@ export interface ProductVersion {
     employerDiscounts?: { label: string; employers: string[]; bps: number }[];  /* rate discount for listed employers */
     /* Generic conditional rate adjustments — positive bps = surcharge, negative = discount.
        All present conditions must match (AND). Generalizes refinance +10bps, >10M +75bps, etc. */
-    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number }[];
+    rateAdjustments?: { id: string; label: string; bps: number; txTypes?: TxType[]; employment?: string; loanGt?: number; loanLt?: number; ltvGt?: number; ageGt?: number; lowDoc?: boolean }[];
   };
   affordability: { maxDBR?: number; ccPct?: number; rentalPct?: number; bonusPct?: number;
     dbrIncludesInsurance?: boolean;  /* e.g. DIB adds life-insurance cost to the EMI in the DBR calc */

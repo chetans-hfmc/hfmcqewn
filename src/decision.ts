@@ -577,6 +577,8 @@ export function evaluateProduct(pd: ProductDef, c: ClientProfile, ctx: EvalCtx):
     if (adj.loanGt != null) conds.push(c.loanRequested > adj.loanGt);
     if (adj.loanLt != null) conds.push(c.loanRequested < adj.loanLt);
     if (adj.ltvGt != null) conds.push(ltvPct > adj.ltvGt);
+    if (adj.ageGt != null) conds.push(c.age > adj.ageGt);
+    if (adj.lowDoc != null) conds.push((c.lowDoc ?? false) === adj.lowDoc);
     if (conds.length && conds.every(Boolean)) {
       const before = ratePct;
       const sign = adj.bps >= 0 ? "+" : "−";

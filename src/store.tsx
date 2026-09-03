@@ -48,12 +48,12 @@ export type Action =
 
 /* ---------- permissions (TO VERIFY with compliance) ---------- */
 export const ROLE_MODULES: Record<string, View[]> = {
-  ADMIN: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
-  HEAD: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
-  TL: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide", "audit"],
-  SPO: ["dashboard", "tracker", "tat", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide"],
-  VRM: ["dashboard", "tracker", "tat", "people", "leads", "cases", "decision", "proposals", "calculators", "templates", "guide"],
-  PA: ["dashboard", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "templates", "guide"],
+  ADMIN: ["dashboard", "capture", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
+  HEAD: ["dashboard", "capture", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "rules", "bankrules", "users", "audit", "guide"],
+  TL: ["dashboard", "capture", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide", "audit"],
+  SPO: ["dashboard", "capture", "tracker", "tat", "cases", "tasks", "documents", "queries", "decision", "proposals", "calculators", "templates", "guide"],
+  VRM: ["dashboard", "capture", "tracker", "tat", "people", "leads", "cases", "decision", "proposals", "calculators", "templates", "guide"],
+  PA: ["dashboard", "capture", "tracker", "tat", "people", "leads", "cases", "tasks", "documents", "templates", "guide"],
   TBD: ["dashboard"],
 };
 export const ROLE_LABEL: Record<string, string> = {
@@ -412,7 +412,7 @@ export function useMe(): User | null {
 
 /* ---------- navigation with back stack ---------- */
 const NAV_LABELS: Record<string, string> = {
-  dashboard: "Home", tracker: "Morning Board", tat: "TAT & Escalation", people: "People", leads: "Leads",
+  dashboard: "Home", capture: "New Client", tracker: "Morning Board", tat: "TAT & Escalation", people: "People", leads: "Leads",
   cases: "Cases", tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries",
   decision: "Decision Engine", calculators: "Calculator Centre", templates: "Desk Tools", rules: "Rule Centre",
   bankrules: "Bank Rule Engine", users: "Users & Roles", guide: "Guide Book", audit: "Audit Trail",

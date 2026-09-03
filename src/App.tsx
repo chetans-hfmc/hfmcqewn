@@ -3,6 +3,7 @@ import type { View } from "./types";
 import { NavProvider, ROLE_LABEL, ROLE_MODULES, StoreProvider, useMe, useNav, useStore } from "./store";
 import { Avatar, Ic, cx, fmtDate, todayISO } from "./ui";
 import { Bell, Home, Login } from "./views/Shell";
+import CaptureView from "./views/Capture";
 import { CasesView, Case360 } from "./views/Cases";
 import { PeopleView, LeadsView } from "./views/Crm";
 import { TasksView, DocumentsView, QueriesView, TrackerView, TatView } from "./views/Boards";
@@ -140,6 +141,7 @@ function Shell() {
 
         <main className="flex-1 px-4 lg:px-6 py-5 max-w-[1400px] w-full mx-auto">
           {view === "dashboard" && <Home />}
+          {view === "capture" && <CaptureView />}
           {view === "tracker" && <TrackerView />}
           {view === "tat" && <TatView />}
           {view === "people" && <PeopleView />}

@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 29;
+export const SEED_VERSION = 30;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -1868,6 +1868,67 @@ const PRODUCT_DEFS: ProductDef[] = [
       tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
     })],
   },
+  {
+    id: "pd-bob-sal", bankId: "b-bob", name: "Home Loan — Salaried", loanType: "CONVENTIONAL",
+    classes: ["SALARIED", "SELF_EMPLOYED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "TOPUP"],
+    axes: ["tenure"],
+    tags: ["Conventional", "STL = non-STL"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-30), source: "Bank of Baroda salaried pricing card",
+      eligibility: {
+        minSalary: 12000, minLoan: 200000, maxLoan: 15000000,
+        maxAgeSalaried: 65, maxAgeSelfEmp: 70,
+        minLosMonths: 6,
+        ltvMatrix: { NATIONAL: 85, EXPAT: 80 },
+        incomeRecognition: { rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+        gates: [
+          { id: "b1", kind: "FLAG", label: "STL and non-STL rates are the same", hardStop: false },
+          { id: "b2", kind: "FLAG", label: "Min salary AED 12k (listed employers) / AED 20k (other companies)", hardStop: false },
+          { id: "b3", kind: "FLAG", label: "LOS 6 months confirmed + employment history up to 1 year required", hardStop: false },
+          { id: "b4", kind: "FLAG", label: "Emirates: Dubai, Abu Dhabi & RAK only", hardStop: false },
+          { id: "b5", kind: "FLAG", label: "No non-spousal applicants on loan", hardStop: false },
+          { id: "b6", kind: "FLAG", label: "Life insurance NOT required (external insurance may be assigned if needed)", hardStop: false },
+          { id: "b7", kind: "FLAG", label: "Valuation is internal (ASAS); valuation fee payable at AL Hilal branch / digital account", hardStop: false },
+          { id: "b8", kind: "FLAG", label: "Concessional early-settlement for AECB 550+ (fresh NIL, top-up 0.50% cap AED 12,500 + VAT)", hardStop: false },
+          { id: "b9", kind: "FLAG", label: "Ajman property: local STL only min AED 15k / expat STL-NSTL min AED 20k (ready residential villa)", hardStop: false },
+          { id: "b10", kind: "FLAG", label: "UAE national program: local STL salary <30k or NSTL salary >30k", hardStop: false },
+        ],
+        notes: [
+          "SOURCE DATA-QUALITY NOTE: the supplied sheet's 'Other Notes' / 'Additional Notes' sections contain Al Hilal Bank content (AL Hilal branch, AHB digital account, Tharwa, 'Al-Hilal only does salaried') — likely copy-paste contamination. Those items were NOT hard-coded as Bank of Baroda rules. Verify before relying on them.",
+          "Max tenure 20 years (240 months).",
+          "Property insurance 1% of finance amount + VAT.",
+          "Early settlement: processing charges for AECB 550+ with satisfactory track record (AECB/RBR/CIBIL).",
+          "No bonus considered; commission not considered.",
+          "Buyout available — processing fee NIL; no equity release.",
+        ],
+      },
+      tenure: { maxMonths: 240 },
+      grid: { cells: [
+        /* STL and non-STL priced identically */
+        { id: "bb2", key: { tenure: "2" }, structure: "FIXED_THEN_VAR", fixedRate: 5.10, fixedMonths: 24, followOn: { margin: 2.00, index: "EIBOR_3M", floor: 4.50 }, note: "2yr fixed (reducing balance) — STL & non-STL same" },
+        { id: "bbv", key: {}, structure: "VAR_DAY1", margin: 2.00, index: "EIBOR_3M", floor: 3.50, note: "Fully variable day 1" },
+      ]},
+      fees: {
+        processingPct: 1.00, processingMax: 25000, valuation: 3150, preApproval: 5000, vatPct: 5,
+        earlySettlement: "Concessional for AECB 550+ (fresh NIL; top-up 0.50% of loan, max AED 12,500 + VAT)",
+        partialSettlement: "0.0225% monthly on reducing principal outstanding",
+        lifeInsurancePct: 0, lifeInsuranceNote: "Not required — external insurance can be assigned if needed",
+        propertyInsurancePct: 1.00, propertyInsuranceBasis: "PA", propertyInsuranceNote: "1% of finance amount + VAT",
+        feeFinancing: { allowed: false },
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Buyout processing fee NIL" }],
+        note: "Processing 1.00% of loan, ceiling AED 25,000 + VAT; pre-approval = legal + valuation AED 5,000 + VAT",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 2.00, index: "EIBOR_3M" }, rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+      documents: [
+        { name: "Passport, Visa & EID", required: true },
+        { name: "Application form — physical (no e-signature)", required: true },
+        { name: "Salary certificate (30-day validity)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
 ];
 
 const PROMOS: Promo[] = [
@@ -2301,6 +2362,18 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-uab-sal", verdict: "ELIGIBLE" }],
     note: "SE low-doc 5yr 5.99% row matches via docProgram=LOW_DOC; 80% expat LTV covers ~67% request.",
   },
+  {
+    id: "golden-28", name: "Bank of Baroda — clean expat 2yr fixed eligible",
+    client: { ...baseProfile, name: "Golden · BoB expat", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 2, age: 40, monthlyIncome: 25000, monthlyLiabilities: 2000, propertyValue: 1500000, loanRequested: 1100000 },
+    expected: [{ productDefId: "pd-bob-sal", verdict: "ELIGIBLE" }],
+    note: "2yr fixed 5.10% (follow-on 2.00% + 3M EIBOR, floor 4.50%); 80% expat LTV covers ~73% request; STL = non-STL.",
+  },
+  {
+    id: "golden-29", name: "Bank of Baroda — tenure capped at 20 years (65+ age)",
+    client: { ...baseProfile, name: "Golden · BoB senior", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 2, age: 62, monthlyIncome: 30000, monthlyLiabilities: 2000, propertyValue: 2000000, loanRequested: 1200000 },
+    expected: [{ productDefId: "pd-bob-sal", verdict: "ELIGIBLE" }],
+    note: "Max age at maturity 65 (salaried expat) → tenure squeezed to ~3 years; still within 240-month cap.",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -2360,6 +2433,14 @@ export function buildSeed(): AppState {
       { id: "a-dib", at: ts(-0.004), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "DIB · Home Finance — Salaried (pd-dib-sal v1)", detail: "STL/NSTL 3–5yr fixed + 12-cell FTV-banded day-1 variable grid, floors 1.0/1.5/1.75, Q1 stress 4.62/5.12, max loan 6M, land 70% & commercial 62% LTV, insurance-in-DBR, fee finance 6% DLD&broker, valuation 2,500/3,000, 3 promos" },
       { id: "a-ei", at: ts(-0.003), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Emirates Islamic · Home Finance — Salaried (pd-ei-opt1/opt2/buyout-equity v1)", detail: "Option 1 STL/NSTL 3–5yr fixed + FTV-banded under-construction/commercial/land rows · Option 2 variable-only floors · day-1 variable · formula stress (+2%) · Takaful PA-basis insurance · leasehold hard-stop · max loan 5M · min salary local 8k/expat 20k (listed 15k)" },
       { id: "a-arab", at: ts(-0.005), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Arab Bank · Home Finance — Salaried (pd-arab-sal/buyout/equity v1)", detail: "STL/NSTL × 2–3yr grids + ER & buyout-cashout rows, published stress rates, compound min-salary keys (STL 20k / NSTL:EXPAT 25k / NSTL:NATIONAL 15k), Ajman valuation 3,500, life assignment fee 5,000, TAT 12d" },
+      { id: "a-fab", at: ts(-0.0035), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "FAB · Home Finance — Salaried (pd-fab-sal v1)", detail: "STL 3.99%/NSTL 4.24–4.44% fixed grid, MBR-based floors, +0.25% age>standard surcharge, low-doc +25bps, 2% CC in DBR, max 20M, TAT 20d" },
+      { id: "a-hsbc", at: ts(-0.0032), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "HSBC · Home Finance — Salaried (pd-hsbc-sal v1)", detail: "Segment pricing (Private/Premier/Advance/Personal × residency), Q4'25 composite 3M-EIBOR margins, Iranian 60% LTV, green-home promo, fee finance, max 35M, TAT 15d" },
+      { id: "a-mash", at: ts(-0.0031), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Mashreq · Home Loan — Salaried (pd-mash-campaign v1)", detail: "Premium STL 3.99% (salary ≥50k & loan ≥3.5M), low-doc/SE/NR margins with floors, green/FTHB −25bps revert, 100bps rental>income surcharge, max 10M, TAT 18d" },
+      { id: "a-nbf", at: ts(-0.003), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "NBF · Home Finance — Salaried (pd-nbf-sal v1)", detail: "Bundle/Standard STL-NSTL 3–5yr grids, +25bps low-doc & +50bps ≥10M, value-banded LTV (≤5M 80/85 · >5M 60/65), Ajman 50% cap, min salary 30k full-LTV, max 12M, TAT 17d" },
+      { id: "a-rak", at: ts(-0.0025), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "RAKBANK · Home Finance — Salaried (pd-rak-sal v1)", detail: "Elite/non-elite × STL/NSTL × HIO/non-HIO 2–3yr grids + low-doc AIP rows, self-use LTV 70–80% by AECB, investment 60%, NR 50% Islamic-only, max loan = income multiple (8×/7× cap 18M), 5% CC in DBR, stress fixed+2%, TAT 17d" },
+      { id: "a-scb", at: ts(-0.0022), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "SCB · Home Finance — Standard & MOA/SOA (pd-scb-std/pd-scb-moas v1)", detail: "SCBLR-keyed variable (never published → UNKNOWN), Saadiq +0.05%, 2nd-property/>18M/<1M surcharges, fee finance as 9% personal loan, Indian/GCC/UAE-only nationality gate, LTV 75–78%, TAT 17d" },
+      { id: "a-uab", at: ts(-0.002), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "UAB · Home Finance — Salaried & SE (pd-uab-sal v1)", detail: "STL/NSTL/SE-full/SE-low 1–5yr grids, day-1 variable, stress 4.25%+3M EIBOR (=2.25+EIBOR+2), LTV 85/80, min 500k/max 60M, PAN-card & emirate-exclusion gates, life 0.18% PA, TAT 17d" },
+      { id: "a-bob", at: ts(-0.0018), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Bank of Baroda · Home Loan — Salaried (pd-bob-sal v1)", detail: "STL=non-STL 2yr 5.10% fixed + day-1 variable (2.00%+3M EIBOR, floor 3.50%), max tenure 20yr/age 65-70, LTV 85/80, proc 1% cap 25k, no life insurance required, AECB-550+ concessional settlement, TAT 17d. NOTE: source sheet contained Al Hilal contamination (documented, not hard-coded)" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

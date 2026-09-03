@@ -7,7 +7,7 @@ import type {
   ProductDef, ProductVersion, Promo, Rule, StageDef, Task, User, WeightingProfile,
 } from "./types";
 
-export const SEED_VERSION = 30;
+export const SEED_VERSION = 31;
 
 /* ---------- date helpers (relative to today, so the tower is always live) ---------- */
 const d = (offsetDays: number) => { const dt = new Date(); dt.setDate(dt.getDate() + offsetDays); return dt.toISOString().slice(0, 10); };
@@ -45,6 +45,8 @@ const BANKS: Bank[] = [
   { id: "b-scb", name: "Standard Chartered", short: "SCB" }, { id: "b-arab", name: "Arab Bank", short: "Arab" },
   { id: "b-nbf", name: "National Bank of Fujairah", short: "NBF" }, { id: "b-bob", name: "Bank of Baroda", short: "BOB" },
   { id: "b-adcb", name: "Abu Dhabi Commercial Bank", short: "ADCB" },
+  { id: "b-alhilal", name: "Al Hilal Bank", short: "Al Hilal" }, { id: "b-ajman", name: "Ajman Bank", short: "Ajman" },
+  { id: "b-sib", name: "Sharjah Islamic Bank", short: "SIB" },
 ];
 
 /* ---------- pricing axes registry ---------- */
@@ -1929,6 +1931,204 @@ const PRODUCT_DEFS: ProductDef[] = [
       tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
     })],
   },
+  {
+    id: "pd-ahl-sal", bankId: "b-alhilal", name: "Home Finance — Salaried", loanType: "ISLAMIC",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT", "BUYOUT_EQUITY", "EQUITY", "TOPUP"],
+    axes: ["customerType", "stl", "tenure"],
+    tags: ["Islamic", "Salaried only", "STL-conditional LTV"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-30), source: "Al Hilal salaried pricing card",
+      eligibility: {
+        minSalary: 15000, minLoan: 200000, maxLoan: 5000000,
+        maxAgeSalaried: 70, minLosMonths: 6,
+        /* STL-conditional LTV: National 85% with STL / 75% without; Expat 80% (STL not mandatory). */
+        ltvMatrix: { "NATIONAL:STL": 85, "NATIONAL:NSTL": 75, "EXPAT": 80 },
+        incomeRecognition: { bonusPct: 50, rentalPct: 83, commissionPct: 50 },
+        gates: [
+          { id: "h1", kind: "EMPLOYMENT_BLOCK", label: "Al Hilal finances salaried cases ONLY", values: ["SELF_EMPLOYED"], hardStop: true },
+          { id: "h2", kind: "FLAG", label: "Non-spousal applicants NOT allowed on loan", hardStop: false },
+          { id: "h3", kind: "FLAG", label: "Emirates: Dubai & Abu Dhabi only", hardStop: false },
+          { id: "h4", kind: "FLAG", label: "Tharwa = AED 50k+ salaried profile (expats included) — national-tier pricing", hardStop: false },
+          { id: "h5", kind: "FLAG", label: "STL not mandatory for expats; National without STL capped at 75% LTV", hardStop: false },
+          { id: "h6", kind: "FLAG", label: "LOS 6 months — must be confirmed in employment", hardStop: false },
+          { id: "h7", kind: "FLAG", label: "Equity release restricted to renovation & construction — proof (contract/invoices/quotation) at FOL stage", hardStop: false },
+          { id: "h8", kind: "FLAG", label: "Equity cash-to-client-account (AED 500k) stopped — payments direct to contractors; bank's discretion", hardStop: false },
+          { id: "h9", kind: "FLAG", label: "Buyout + Equity / Top-up: 1% of equity/top-up amount", hardStop: false },
+          { id: "h10", kind: "FLAG", label: "Valuation fee deposited at branch teller or Al Hilal digital account", hardStop: false },
+          { id: "h11", kind: "FLAG", label: "Company visit case-to-case; Govt CPV waived / non-Govt CPV on email or landline", hardStop: false },
+        ],
+        notes: [
+          "Fixed rates identical for UAE Nationals/Tharwa and all others; day-1 variable differs (National 1.50% vs others 1.75% + 3M EIBOR).",
+          "Buyout processing fee NIL.",
+          "Application fee NIL for all segments (STL/NSTL, 3yr/5yr).",
+          "AECB & FATCA forms required; e-signatures accepted.",
+          "AHB digital account opening via mobile app (within ~5 minutes).",
+          "Bonus: 2-year average (50%); rental 83%; variable 50% of 6-month average (Emirates Airline: 50% variable + 100% accommodation).",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "a-n3", key: { customerType: "NATIONAL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 36, followOn: { margin: 2.25, index: "EIBOR_3M", floor: 2.49 }, note: "3yr — UAE National / Tharwa" },
+        { id: "a-n5", key: { customerType: "NATIONAL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 2.49 }, note: "5yr — UAE National / Tharwa" },
+        { id: "a-e3", key: { customerType: "EXPAT", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 36, followOn: { margin: 2.25, index: "EIBOR_3M", floor: 2.49 }, note: "3yr — all others" },
+        { id: "a-e5", key: { customerType: "EXPAT", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 2.49 }, note: "5yr — all others" },
+        { id: "av-n", key: { customerType: "NATIONAL" }, structure: "VAR_DAY1", margin: 1.50, index: "EIBOR_3M", floor: 2.49, note: "Day-1 variable — UAE National / Tharwa" },
+        { id: "av-e", key: { customerType: "EXPAT" }, structure: "VAR_DAY1", margin: 1.75, index: "EIBOR_3M", floor: 2.49, note: "Day-1 variable — all others" },
+      ]},
+      fees: {
+        processingPct: 0.35, preApproval: 1050, valuation: 2625, vatPct: 5,
+        processingFeeTiers: [{ label: "STL", pct: 0 }, { label: "NSTL", pct: 0.35 }],
+        txOverrides: [
+          { txType: "BUYOUT", processingPct: 0, note: "Buyout PF NIL" },
+          { txType: "EQUITY", processingPct: 0.5, note: "STL 0.5%+VAT / NSTL 0.75%+VAT of approved finance amount" },
+        ],
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "Up to 25% every year, minimum AED 25,000",
+        lifeInsurancePct: 0.02, lifeInsuranceBasis: "PM",
+        propertyInsuranceNote: "FREE",
+        note: "STL zero processing fee; NSTL 0.35%",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 2.25, index: "EIBOR_3M" }, rentalPct: 83, bonusPct: 50, commissionPct: 50 },
+      documents: [
+        { name: "Passport, Visa & EID (PDF)", required: true },
+        { name: "Proof of residence (best-effort basis)", required: false },
+        { name: "Application form (e-signature accepted)", required: true },
+        { name: "AECB & FATCA forms", required: true },
+        { name: "Salary certificate (within 30 days)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months (e-statements)", required: true },
+        { name: "Latest CC / liability statements", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 30, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
+  {
+    id: "pd-ajm-sal", bankId: "b-ajman", name: "Home Finance — Salaried", loanType: "CONVENTIONAL",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT"],
+    axes: ["stl", "amountBand", "emirate", "tenure", "financeCount", "propertyStatus"],
+    tags: ["Amount-banded", "Ajman-property pricing"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-30), source: "Ajman Bank salaried pricing card",
+      eligibility: {
+        /* NOTE: source sheet's "Max LTV" field reads "25 years" — a data-entry error (that is the tenor).
+           No bank LTV is stated, so the engine applies the HFMC global LTV rule and flags it. */
+        minSalary: 20000, minLoan: 500000, maxLoan: 60000000,
+        minLosMonths: 3,
+        incomeRecognition: { rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+        gates: [
+          { id: "j1", kind: "FLAG", label: "⚠ Max LTV not specified on source sheet ('25 years' is the tenor, not LTV) — engine is using the HFMC global LTV rule; VERIFY with bank before quoting", hardStop: false },
+          { id: "j2", kind: "FLAG", label: "Min salary AED 20k — deviation to AED 15k on exception", hardStop: false },
+          { id: "j3", kind: "FLAG", label: "LOS: local 3 months + confirmation; expat 6 months + confirmation (previous employment if less)", hardStop: false },
+          { id: "j4", kind: "FLAG", label: "Non-spousal applicants NOT allowed on loan", hardStop: false },
+          { id: "j5", kind: "FLAG", label: "All emirates; pricing above AED 2M in Ajman same as other emirates", hardStop: false },
+          { id: "j6", kind: "FLAG", label: "Land financing: +1.00% on fixed rate & +0.50% on reverting spread", hardStop: false },
+          { id: "j7", kind: "FLAG", label: "Ajman property (ready residential villa): local STL min AED 15k / expat STL-NSTL min AED 20k — appears verbatim on multiple bank sheets, VERIFY", hardStop: false },
+        ],
+        notes: [
+          "SOURCE DATA-QUALITY NOTE: 'Other Notes' & 'Additional Notes' contain Al Hilal content (AHB digital account, Tharwa, 'Al-Hilal only does salaried cases') — copy-paste contamination, NOT hard-coded as Ajman Bank rules.",
+          "Bonus not considered; commission not considered.",
+          "Life insurance 0.0176% of PROPERTY VALUE p.a. (minimum AED 455) — unusual basis.",
+          "Valuation is internal (ASAS).",
+          "No equity release. Buyout PF NIL.",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        /* 3yr fixed — all emirates except Ajman, banded by loan amount */
+        { id: "j-s-g", key: { stl: "STL", amountBand: "GE35M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.70, fixedMonths: 36, followOn: { margin: 1.59, index: "EIBOR_3M" }, note: "STL ≥ AED 3.5M" },
+        { id: "j-s-m", key: { stl: "STL", amountBand: "2TO35M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.59, index: "EIBOR_3M" }, note: "STL 2M–3.49M" },
+        { id: "j-s-l", key: { stl: "STL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.59, index: "EIBOR_3M" }, note: "STL below 2M" },
+        { id: "j-n-g", key: { stl: "NSTL", amountBand: "GE35M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.05, fixedMonths: 36, followOn: { margin: 1.59, index: "EIBOR_3M", floor: 2.99 }, note: "NSTL ≥ AED 3.5M" },
+        { id: "j-n-m", key: { stl: "NSTL", amountBand: "2TO35M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.15, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M", floor: 2.99 }, note: "NSTL 2M–3.49M" },
+        { id: "j-n-l", key: { stl: "NSTL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 36, followOn: { margin: 1.69, index: "EIBOR_3M", floor: 2.99 }, note: "NSTL below 2M" },
+        /* Ajman-property special pricing (below 2M; above 2M uses the rows above) */
+        { id: "j-aj-s", key: { emirate: "AJMAN", stl: "STL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.59, index: "EIBOR_3M" }, note: "Ajman property — STL below 2M" },
+        { id: "j-aj-n", key: { emirate: "AJMAN", stl: "NSTL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.05, fixedMonths: 36, followOn: { margin: 1.65, index: "EIBOR_3M", floor: 2.99 }, note: "Ajman property — NSTL below 2M" },
+        /* Day-1 variable by mortgage degree & land */
+        { id: "jv-1", key: { financeCount: "1" }, structure: "VAR_DAY1", margin: 1.75, index: "EIBOR_3M", floor: 3.99, note: "First-degree mortgage" },
+        { id: "jv-2", key: { financeCount: "2" }, structure: "VAR_DAY1", margin: 2.75, index: "EIBOR_3M", floor: 4.89, note: "Second-degree mortgage" },
+        { id: "jv-l", key: { propertyStatus: "LAND" }, structure: "VAR_DAY1", margin: 2.50, index: "EIBOR_3M", floor: 5.49, note: "Land finance" },
+      ]},
+      fees: {
+        processingPct: 1.00, preApproval: 2100, valuation: 2625, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "1% or AED 10,000 — whichever lower",
+        lifeInsurancePct: 0.0176, lifeInsuranceBasis: "PA", lifeInsuranceNote: "of property value p.a., minimum AED 455",
+        propertyInsurancePct: 1.00, propertyInsuranceBasis: "PA", propertyInsuranceNote: "of finance amount + VAT",
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Buyout PF NIL" }],
+        note: "Pre-approval AED 2,100 (incl. VAT) — adjusted later against the 1% processing fee",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 1.69, index: "EIBOR_3M" }, rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+      documents: [
+        { name: "Passport, Visa & EID", required: true },
+        { name: "Application form — physical (no e-signature)", required: true },
+        { name: "Salary certificate (30-day validity)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
+  {
+    id: "pd-sib-sal", bankId: "b-sib", name: "Home Finance — Salaried", loanType: "ISLAMIC",
+    classes: ["SALARIED"], txTypes: ["PURCHASE", "RESALE", "BUYOUT"],
+    axes: ["stl", "tenure", "emirate", "amountBand"],
+    tags: ["Islamic", "Ajman special pricing"], createdAt: ts(-30), createdBy: "hfmm-15",
+    versions: [pv({
+      version: 1, status: "ACTIVE", effectiveFrom: d(-30), source: "Sharjah Islamic salaried pricing card",
+      eligibility: {
+        /* Same data-entry error as Ajman: "Max LTV: 25 years" is the tenor, not an LTV. */
+        minSalary: 20000, minLoan: 500000, maxLoan: 60000000,
+        minLosMonths: 3,
+        incomeRecognition: { rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+        gates: [
+          { id: "s1", kind: "FLAG", label: "⚠ Max LTV not specified on source sheet ('25 years' is the tenor, not LTV) — engine is using the HFMC global LTV rule; VERIFY with bank before quoting", hardStop: false },
+          { id: "s2", kind: "FLAG", label: "Min salary AED 20k — deviation to AED 15k on exception", hardStop: false },
+          { id: "s3", kind: "FLAG", label: "LOS: local 3 months + confirmation; expat 6 months + confirmation (previous employment if less)", hardStop: false },
+          { id: "s4", kind: "FLAG", label: "Non-spousal applicants NOT allowed on loan", hardStop: false },
+          { id: "s5", kind: "FLAG", label: "All emirates; special pricing for Ajman properties below 2M", hardStop: false },
+        ],
+        notes: [
+          "SOURCE DATA-QUALITY NOTE: 'Other Notes' & 'Additional Notes' contain Al Hilal content — copy-paste contamination, NOT hard-coded as Sharjah Islamic rules.",
+          "Variable rates carry a Min & Max: STL floor 3.99% / NSTL floor 4.25%, cap 25% (regulatory).",
+          "Fully variable day-1: N/A (not offered).",
+          "Bonus not considered; commission not considered; rental 70% of annual rent.",
+          "No equity release. Buyout PF NIL.",
+          "Valuation is internal (ASAS).",
+        ],
+      },
+      tenure: { maxMonths: 300 },
+      grid: { cells: [
+        { id: "s-s1", key: { stl: "STL", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 3.75, fixedMonths: 12, followOn: { margin: 1.75, index: "EIBOR_3M", floor: 3.99 }, note: "STL 1yr" },
+        { id: "s-s3", key: { stl: "STL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 36, followOn: { margin: 1.75, index: "EIBOR_3M", floor: 3.99 }, note: "STL 3yr" },
+        { id: "s-s5", key: { stl: "STL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 60, followOn: { margin: 1.75, index: "EIBOR_3M", floor: 3.99 }, note: "STL 5yr" },
+        { id: "s-n1", key: { stl: "NSTL", tenure: "1" }, structure: "FIXED_THEN_VAR", fixedRate: 3.99, fixedMonths: 12, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 4.25 }, note: "NSTL 1yr" },
+        { id: "s-n3", key: { stl: "NSTL", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.25, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 4.25 }, note: "NSTL 3yr" },
+        { id: "s-n5", key: { stl: "NSTL", tenure: "5" }, structure: "FIXED_THEN_VAR", fixedRate: 4.49, fixedMonths: 60, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 4.25 }, note: "NSTL 5yr" },
+        /* Ajman-property special pricing (below 2M) */
+        { id: "s-aj-s", key: { emirate: "AJMAN", stl: "STL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 3.90, fixedMonths: 36, followOn: { margin: 1.75, index: "EIBOR_3M", floor: 3.99 }, note: "Ajman property — STL below 2M" },
+        { id: "s-aj-n", key: { emirate: "AJMAN", stl: "NSTL", amountBand: "LT2M", tenure: "3" }, structure: "FIXED_THEN_VAR", fixedRate: 4.00, fixedMonths: 36, followOn: { margin: 1.99, index: "EIBOR_3M", floor: 4.25 }, note: "Ajman property — NSTL below 2M" },
+      ]},
+      fees: {
+        processingPct: 1.00, preApproval: 2100, valuation: 2625, vatPct: 5,
+        earlySettlement: "1.05% of outstanding (incl. VAT) or AED 10,500 — whichever lower",
+        partialSettlement: "1% or AED 10,000 — whichever lower",
+        lifeInsurancePct: 0.02, lifeInsuranceBasis: "PM",
+        propertyInsurancePct: 1.00, propertyInsuranceBasis: "PA", propertyInsuranceNote: "of finance amount + VAT",
+        txOverrides: [{ txType: "BUYOUT", processingPct: 0, note: "Buyout PF NIL" }],
+        note: "Pre-approval AED 2,100 (incl. VAT) — adjusted later against the 1% processing fee",
+      },
+      affordability: { maxDBR: 50, stressRecipe: { margin: 1.75, index: "EIBOR_3M" }, rentalPct: 70, bonusPct: 0, commissionPct: 0 },
+      documents: [
+        { name: "Passport, Visa & EID", required: true },
+        { name: "Application form — physical (no e-signature)", required: true },
+        { name: "Salary certificate (30-day validity)", required: true },
+        { name: "Payslips — 6 months (if salary varies)", required: false },
+        { name: "Bank statements — 6 months", required: true },
+      ],
+      tat: { paDays: 3, paValidityDays: 30, valuationDays: 3, valuationValidityDays: 60, accountOpeningDays: 1, folDays: 3, folValidityDays: 60, disbursalDays: 5, transferDays: 2, totalDays: 17 },
+    })],
+  },
 ];
 
 const PROMOS: Promo[] = [
@@ -2374,6 +2574,30 @@ const GOLDEN_CASES: GoldenCase[] = [
     expected: [{ productDefId: "pd-bob-sal", verdict: "ELIGIBLE" }],
     note: "Max age at maturity 65 (salaried expat) → tenure squeezed to ~3 years; still within 240-month cap.",
   },
+  {
+    id: "golden-30", name: "Al Hilal — National WITHOUT salary transfer capped at 75% LTV",
+    client: { ...baseProfile, name: "Golden · Al Hilal National NSTL", customerType: "NATIONAL" as const, salaryTransfer: false, preferredFixedYears: 3, age: 35, monthlyIncome: 40000, monthlyLiabilities: 3000, propertyValue: 2000000, loanRequested: 1400000 },
+    expected: [{ productDefId: "pd-ahl-sal", verdict: "ELIGIBLE" }],
+    note: "Compound LTV key NATIONAL:NSTL → 75% (would be 85% with STL). 70% request fits.",
+  },
+  {
+    id: "golden-31", name: "Al Hilal — self-employed is hard-blocked (salaried only)",
+    client: { ...baseProfile, name: "Golden · Al Hilal SE", customerType: "EXPAT" as const, employment: "SELF_EMPLOYED" as const, preferredFixedYears: 3, age: 38, monthlyIncome: 60000, monthlyLiabilities: 4000, propertyValue: 2500000, loanRequested: 1500000 },
+    expected: [{ productDefId: "pd-ahl-sal", verdict: "NOT_ELIGIBLE" }],
+    note: "EMPLOYMENT_BLOCK gate — 'Al Hilal finances salaried cases ONLY'.",
+  },
+  {
+    id: "golden-32", name: "Ajman Bank — NSTL below-2M priced at 4.25%, LTV from global rule",
+    client: { ...baseProfile, name: "Golden · Ajman NSTL <2M", customerType: "EXPAT" as const, salaryTransfer: false, preferredFixedYears: 3, emirate: "DUBAI", age: 36, monthlyIncome: 35000, monthlyLiabilities: 2500, propertyValue: 2500000, loanRequested: 1500000 },
+    expected: [{ productDefId: "pd-ajm-sal", verdict: "ELIGIBLE" }],
+    note: "Amount-band cell NSTL/<2M → 4.25%. Sheet's LTV field is a data error, so the engine falls back to the global EXPAT rule (80%) and flags it for verification.",
+  },
+  {
+    id: "golden-33", name: "Sharjah Islamic — STL 3yr at 3.99%",
+    client: { ...baseProfile, name: "Golden · SIB STL", customerType: "EXPAT" as const, salaryTransfer: true, preferredFixedYears: 3, age: 34, monthlyIncome: 38000, monthlyLiabilities: 2500, propertyValue: 2000000, loanRequested: 1300000 },
+    expected: [{ productDefId: "pd-sib-sal", verdict: "ELIGIBLE" }],
+    note: "STL 3yr 3.99% + 1.75% 3M EIBOR (floor 3.99%). LTV via global rule (sheet blank — flagged).",
+  },
 ];
 
 export const TRACKER_DATES = [-5, -4, -3, -2, -1, 0].map((o) => d(o));
@@ -2441,6 +2665,9 @@ export function buildSeed(): AppState {
       { id: "a-scb", at: ts(-0.0022), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "SCB · Home Finance — Standard & MOA/SOA (pd-scb-std/pd-scb-moas v1)", detail: "SCBLR-keyed variable (never published → UNKNOWN), Saadiq +0.05%, 2nd-property/>18M/<1M surcharges, fee finance as 9% personal loan, Indian/GCC/UAE-only nationality gate, LTV 75–78%, TAT 17d" },
       { id: "a-uab", at: ts(-0.002), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "UAB · Home Finance — Salaried & SE (pd-uab-sal v1)", detail: "STL/NSTL/SE-full/SE-low 1–5yr grids, day-1 variable, stress 4.25%+3M EIBOR (=2.25+EIBOR+2), LTV 85/80, min 500k/max 60M, PAN-card & emirate-exclusion gates, life 0.18% PA, TAT 17d" },
       { id: "a-bob", at: ts(-0.0018), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Bank of Baroda · Home Loan — Salaried (pd-bob-sal v1)", detail: "STL=non-STL 2yr 5.10% fixed + day-1 variable (2.00%+3M EIBOR, floor 3.50%), max tenure 20yr/age 65-70, LTV 85/80, proc 1% cap 25k, no life insurance required, AECB-550+ concessional settlement, TAT 17d. NOTE: source sheet contained Al Hilal contamination (documented, not hard-coded)" },
+      { id: "a-ahl", at: ts(-0.0015), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Al Hilal · Home Finance — Salaried (pd-ahl-sal v1)", detail: "Islamic, salaried-only (hard gate). STL-conditional LTV via new compound keys (National 85/75, Expat 80). 3yr/5yr fixed + day-1 variable (National 1.50 vs 1.75 + 3M EIBOR). STL PF zero/NSTL 0.35%, equity reno-only, max loan 5M, TAT 17d" },
+      { id: "a-ajm", at: ts(-0.0012), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Ajman Bank · Home Finance — Salaried (pd-ajm-sal v1)", detail: "Amount-banded (</2M/2–3.5M/≥3.5M) × STL/NSTL 3yr grid + Ajman-property special rows + first/second-degree & land day-1 variable (new amountBand/emirate axis mappings). LTV blank on sheet ('25 years' = tenor error) → global rule fallback, flagged. Al Hilal contamination documented" },
+      { id: "a-sib", at: ts(-0.0009), by: "hfmm-00", module: "IMPORT", action: "Bank sheet mapped", target: "Sharjah Islamic · Home Finance — Salaried (pd-sib-sal v1)", detail: "STL/NSTL 1/3/5yr fixed (floors 3.99/4.25, cap 25%), Ajman <2M special pricing, day-1 variable N/A, LTV blank → global fallback flagged. Al Hilal contamination documented" },
       { id: "a1", at: ts(-0.1), by: "hfmm-00", module: "IMPORT", action: "Tracker imported", target: `${CASES.length} case files from daily tracker` },
       { id: "a2", at: ts(-0.3), by: "hfmm-06", module: "CASE", action: "Daily tracker updated", target: CASES[0]?.ref ?? "", detail: "Chasing title deed from developer", caseId: CASES[0]?.id },
       { id: "a3", at: ts(-1), by: "hfmm-15", module: "RULE", action: "Rule updated", target: "DBR-MAX v1 → v2 (55% → 50%)", detail: "Strictly below 50% — TO VERIFY" },

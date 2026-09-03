@@ -78,6 +78,8 @@ function clientAxisValue(axis: string, c: ClientProfile): string | null {
     case "relationship": return c.relationship ?? null;
     case "hio": return c.hio == null ? null : c.hio ? "HIO" : "NON_HIO";
     case "docProgram": return c.lowDoc ? "LOW_DOC" : "STANDARD";
+    case "amountBand": return c.loanRequested < 2000000 ? "LT2M" : c.loanRequested <= 3490000 ? "2TO35M" : "GE35M";
+    case "emirate": return c.emirate || null;
     case "ftvBand": {
       /* Bands are matched inclusively in pickCell (a “≤60%” cell also serves a 45% client),
          so we report the client's actual band here for display/scoring. */
@@ -142,9 +144,13 @@ export function cellRecipe(cell: Pick<RateCell, "structure" | "fixedRate" | "fix
 export function resolveLtv(matrix: Record<string, number> | undefined, c: ClientProfile): { ltv: number; key: string } | null {
   if (!matrix || !Object.keys(matrix).length) return null;
   let bestKey = ""; let bestScore = -1;
+  const stlKey = c.salaryTransfer == null ? null : c.salaryTransfer ? "STL" : "NSTL";
   for (const key of Object.keys(matrix)) {
     let score = 0;
-    if (key === `${c.customerType}:${c.financeCount}`) score = 4;
+    /* Most specific first: customer-type × salary-transfer (e.g. Al Hilal:
+       National 85% with STL / 75% without). */
+    if (stlKey != null && key === `${c.customerType}:${stlKey}`) score = 5;
+    else if (key === `${c.customerType}:${c.financeCount}`) score = 4;
     else if (key === c.customerType) score = 3;
     else if (key === c.residency) score = 3;
     else if (key === String(c.financeCount)) score = 2;

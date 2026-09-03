@@ -13,20 +13,21 @@ import DecisionView from "./views/Decision";
 import ProposalsView from "./views/Proposals";
 
 const NAV: { g: string; items: { v: View; l: string; icon: string }[] }[] = [
-  { g: "Operate", items: [
-    { v: "dashboard", l: "Home", icon: "home" },
-    { v: "tracker", l: "Morning Board", icon: "calendar" },
-    { v: "tat", l: "TAT & Escalation", icon: "timer" },
+  { g: "Start Here", items: [
+    { v: "dashboard", l: "Today", icon: "home" },
+    { v: "capture", l: "New Client", icon: "spark" },
   ]},
   { g: "Pipeline", items: [
-    { v: "people", l: "People", icon: "users" },
+    { v: "people", l: "Clients", icon: "users" },
     { v: "leads", l: "Leads", icon: "funnel" },
-    { v: "cases", l: "Cases", icon: "briefcase" },
   ]},
   { g: "Execute", items: [
+    { v: "cases", l: "Stage Tracker", icon: "timer" },
     { v: "tasks", l: "Tasks", icon: "check" },
     { v: "documents", l: "Documents & QC", icon: "file" },
     { v: "queries", l: "Bank Queries", icon: "help" },
+    { v: "tracker", l: "Morning Board", icon: "calendar" },
+    { v: "tat", l: "TAT & Escalation", icon: "timer" },
   ]},
   { g: "Decide", items: [
     { v: "decision", l: "Decision Engine", icon: "spark" },
@@ -57,8 +58,8 @@ function Shell() {
   }, []);
 
   const titles: Record<View, string> = {
-    dashboard: "Home", tracker: "Morning Board", tat: "TAT & Escalation", people: "People", leads: "Leads",
-    cases: nav.caseId ? "Case 360" : "Cases", tasks: "Task Engine", documents: "Documents & QC", queries: "Bank Queries",
+    dashboard: "Today", capture: "New Client", tracker: "Morning Board", tat: "TAT & Escalation", people: "Clients", leads: "Leads",
+    cases: nav.caseId ? "Case 360" : "Pipeline", tasks: "Tasks", documents: "Documents & QC", queries: "Bank Queries",
     decision: "Decision Engine", proposals: "Proposal Desk", calculators: "Calculator Centre", templates: "Desk Tools", rules: "Rule Centre",
     bankrules: "Bank Rule Engine", users: "Users & Roles", guide: "Guide Book", audit: "Audit Trail",
   };

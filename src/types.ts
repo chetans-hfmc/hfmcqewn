@@ -340,5 +340,5 @@ export interface AppState {
 }
 
 export type View =
-  | "dashboard" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
+  | "dashboard" | "capture" | "tracker" | "tat" | "people" | "leads" | "cases" | "tasks" | "documents"
   | "queries" | "decision" | "proposals" | "calculators" | "templates" | "rules" | "bankrules" | "users" | "audit" | "guide";
